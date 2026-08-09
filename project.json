@@ -1,0 +1,10 @@
+{
+  "project": "Fetch",
+  "purpose": "Local-first cross-platform yt-dlp web interface",
+  "active_goal": "goals/PHASE_01_FOUNDATION.md",
+  "backend": "Rust + Axum + Tokio + SQLite",
+  "frontend": "Vue 3 + TypeScript + Vite + Tailwind + Pinia + Lucide",
+  "realtime": "SSE",
+  "runtime_components": ["yt-dlp", "ffmpeg", "ffprobe"],
+  "forbidden": ["Tauri", "Electron", "Node backend", "Redis", "PostgreSQL", "cloud backend", "auth system", "HLS/transcoding server"]
+}

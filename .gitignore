@@ -1,0 +1,12 @@
+target/
+node_modules/
+web/dist/
+.env
+.env.*
+*.sqlite
+*.sqlite3
+runtime/
+dist/
+coverage/
+.DS_Store
+Thumbs.db

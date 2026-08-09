@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0b0d10]">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fetch — yt-dlp Downloader Prototype</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            app: {
+              bg: '#0b0d10',
+              panel: '#111419',
+              panel2: '#15191f',
+              border: '#242a33',
+              muted: '#8b93a1',
+              text: '#f4f7fb',
+              accent: '#5eead4',
+              accent2: '#2dd4bf',
+              danger: '#fb7185',
+              warning: '#fbbf24'
+            }
+          },
+          boxShadow: {
+            soft: '0 18px 60px rgba(0,0,0,.24)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="h-full overflow-hidden bg-app-bg text-app-text antialiased">
+  <div id="app" class="h-full">
+    <div class="flex h-full">
+      <!-- Desktop sidebar -->
+      <aside class="hidden w-[248px] shrink-0 border-r border-app-border bg-[#0f1217] lg:flex lg:flex-col">
+        <div class="flex h-16 items-center gap-3 px-5">
+          <div class="flex size-9 items-center justify-center rounded-xl bg-teal-300 text-zinc-950 shadow-lg shadow-teal-400/10">
+            <i data-lucide="download-cloud" class="size-5"></i>
+          </div>
+          <div>
+            <div class="text-sm font-semibold tracking-wide">Fetch</div>
+            <div class="text-[11px] text-app-muted">yt-dlp interface</div>
+          </div>
+        </div>
+
+        <nav class="mt-4 flex-1 space-y-1 px-3">
+          <button class="nav-item is-active" data-view="new">
+            <i data-lucide="plus-circle"></i><span>New download</span>
+          </button>
+          <button class="nav-item" data-view="downloads">
+            <i data-lucide="activity"></i><span>Downloads</span>
+            <span class="ml-auto rounded-full bg-teal-300/10 px-2 py-0.5 text-[11px] font-medium text-teal-200">2</span>
+          </button>
+          <button class="nav-item" data-view="completed">
+            <i data-lucide="circle-check"></i><span>Completed</span>
+          </button>
+          <button class="nav-item" data-view="history">
+            <i data-lucide="history"></i><span>History</span>
+          </button>
+
+          <div class="px-3 pb-1 pt-5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">System</div>
+
+          <button class="nav-item" data-view="settings">
+            <i data-lucide="settings"></i><span>Settings</span>
+          </button>
+          <button class="nav-item" data-view="logs">
+            <i data-lucide="terminal-square"></i><span>Logs</span>
+          </button>
+        </nav>
+
+        <div class="border-t border-app-border p-3">
+          <div class="rounded-xl border border-app-border bg-app-panel px-3 py-3">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-medium">Runtime</div>
+              <div class="flex items-center gap-1.5 text-[11px] text-emerald-300">
+                <span class="size-1.5 rounded-full bg-emerald-400"></span> Ready
+              </div>
+            </div>
+            <div class="mt-2 space-y-1 text-[11px] text-app-muted">
+              <div class="flex justify-between"><span>yt-dlp</span><span>nightly</span></div>
+              <div class="flex justify-between"><span>FFmpeg</span><span>8.0</span></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="min-w-0 flex-1 overflow-y-auto pb-20 lg:pb-0">
+        <!-- Topbar -->
+        <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-app-border bg-[#0b0d10]/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+          <div class="flex items-center gap-3">
+            <div class="flex size-9 items-center justify-center rounded-xl bg-teal-300 text-zinc-950 lg:hidden">
+              <i data-lucide="download-cloud" class="size-5"></i>
+            </div>
+            <div>
+              <h1 id="pageTitle" class="text-sm font-semibold sm:text-base">New download</h1>
+              <p id="pageSubtitle" class="hidden text-xs text-app-muted sm:block">Paste any URL supported by yt-dlp.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="serverButton" class="toolbar-btn" title="Web server">
+              <span class="size-2 rounded-full bg-emerald-400"></span>
+              <span class="hidden sm:inline">192.168.0.103:8080</span>
+            </button>
+            <button class="icon-btn" data-view="settings" title="Settings"><i data-lucide="settings"></i></button>
+          </div>
+        </header>
+
+        <div class="mx-auto w-full max-w-[1360px] p-4 sm:p-6 lg:p-8">
+          <!-- NEW DOWNLOAD -->
+          <section class="view is-active" data-view-panel="new">
+            <div class="mx-auto max-w-5xl">
+              <div class="mb-7">
+                <p class="eyebrow">MEDIA SOURCE</p>
+                <h2 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">What do you want to download?</h2>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-app-muted">
+                  Paste any URL that your current yt-dlp runtime understands. The app does not hardcode supported websites.
+                </p>
+              </div>
+
+              <div class="card p-4 sm:p-5">
+                <div class="flex flex-col gap-3 sm:flex-row">
+                  <div class="relative flex-1">
+                    <i data-lucide="link-2" class="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-600"></i>
+                    <input id="urlInput" class="input h-12 pl-10 font-mono text-xs sm:text-sm" placeholder="https://example.com/video-or-playlist" />
+                  </div>
+                  <button id="analyzeBtn" class="primary-btn h-12 px-5">
+                    <i data-lucide="scan-search"></i>
+                    Analyze
+                  </button>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-app-muted">
+                  <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="size-3.5"></i> URL handled by yt-dlp</span>
+                  <span class="flex items-center gap-1.5"><i data-lucide="list-video" class="size-3.5"></i> Video, audio, playlists & more</span>
+                  <span class="flex items-center gap-1.5"><i data-lucide="cpu" class="size-3.5"></i> Current runtime: nightly</span>
+                </div>
+              </div>
+
+              <div id="analysisSkeleton" class="mt-5 hidden card p-5">
+                <div class="animate-pulse">
+                  <div class="flex gap-4">
+                    <div class="h-28 w-44 rounded-xl bg-zinc-800"></div>
+                    <div class="flex-1 space-y-3">
+                      <div class="h-4 w-2/3 rounded bg-zinc-800"></div>
+                      <div class="h-3 w-1/3 rounded bg-zinc-800"></div>
+                      <div class="h-3 w-1/2 rounded bg-zinc-800"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="analysisResult" class="mt-5 hidden space-y-5">
+                <div class="card overflow-hidden">
+                  <div class="flex flex-col sm:flex-row">
+                    <div class="relative aspect-video w-full shrink-0 overflow-hidden bg-zinc-900 sm:w-[300px]">
+                      <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(45,212,191,.32),transparent_35%),linear-gradient(135deg,#111827,#09090b)]"></div>
+                      <div class="absolute inset-0 flex items-center justify-center">
+                        <i data-lucide="play-circle" class="size-14 text-white/65"></i>
+                      </div>
+                      <span class="absolute bottom-2 right-2 rounded-md bg-black/70 px-2 py-1 text-[11px]">24:18</span>
+                    </div>
+                    <div class="flex min-w-0 flex-1 flex-col justify-between p-5">
+                      <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="badge">YouTube</span>
+                          <span class="badge badge-muted">Single video</span>
+                        </div>
+                        <h3 class="mt-3 truncate text-lg font-semibold">Building a ridiculously small self-hosted media tool</h3>
+                        <p class="mt-1 text-sm text-app-muted">Open Source Lab · 1.2M views</p>
+                      </div>
+                      <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-app-muted">
+                        <span class="flex items-center gap-1.5"><i data-lucide="clock-3" class="size-3.5"></i> 24:18</span>
+                        <span class="flex items-center gap-1.5"><i data-lucide="monitor-up" class="size-3.5"></i> Up to 2160p60</span>
+                        <span class="flex items-center gap-1.5"><i data-lucide="captions" class="size-3.5"></i> Subtitles available</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid gap-5 xl:grid-cols-[1fr_340px]">
+                  <div class="card p-5">
+                    <div class="segmented">
+                      <button class="segment is-active" data-media-type="video"><i data-lucide="video"></i> Video</button>
+                      <button class="segment" data-media-type="audio"><i data-lucide="music-2"></i> Audio</button>
+                    </div>
+
+                    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                      <label class="field">
+                        <span>Quality</span>
+                        <select class="select">
+                          <option>Best available</option>
+                          <option>2160p60</option>
+                          <option>1440p60</option>
+                          <option>1080p60</option>
+                          <option>1080p</option>
+                          <option>720p</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Container</span>
+                        <select class="select">
+                          <option>Auto</option>
+                          <option>MP4</option>
+                          <option>MKV</option>
+                          <option>WebM</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Video codec preference</span>
+                        <select class="select">
+                          <option>Auto</option>
+                          <option>H.264 / AVC</option>
+                          <option>AV1</option>
+                          <option>VP9</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Audio</span>
+                        <select class="select">
+                          <option>Best compatible audio</option>
+                          <option>AAC</option>
+                          <option>Opus</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div class="mt-5 border-t border-app-border pt-5">
+                      <div class="mb-3 text-xs font-medium text-zinc-300">Extras</div>
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <label class="check-row"><input type="checkbox" checked /> <span>Embed metadata</span></label>
+                        <label class="check-row"><input type="checkbox" checked /> <span>Embed thumbnail</span></label>
+                        <label class="check-row"><input type="checkbox" /> <span>Download subtitles</span></label>
+                        <label class="check-row"><input type="checkbox" /> <span>Keep intermediate files</span></label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card p-5">
+                    <div class="text-xs font-medium text-zinc-300">Output</div>
+                    <div class="mt-3 rounded-xl border border-app-border bg-black/15 p-3">
+                      <div class="flex items-start gap-2">
+                        <i data-lucide="folder" class="mt-0.5 size-4 shrink-0 text-teal-300"></i>
+                        <div class="min-w-0">
+                          <div class="truncate text-xs font-medium">Downloads / Fetch</div>
+                          <div class="mt-1 truncate font-mono text-[10px] text-app-muted">/home/user/Downloads/Fetch</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 space-y-2 text-xs">
+                      <div class="flex justify-between"><span class="text-app-muted">Estimated size</span><span>~ 1.48 GB</span></div>
+                      <div class="flex justify-between"><span class="text-app-muted">Selected</span><span>2160p60 + audio</span></div>
+                      <div class="flex justify-between"><span class="text-app-muted">Merge</span><span>FFmpeg</span></div>
+                    </div>
+
+                    <button id="addDownloadBtn" class="primary-btn mt-5 w-full justify-center py-3">
+                      <i data-lucide="download"></i>
+                      Add to downloads
+                    </button>
+                    <button class="secondary-btn mt-2 w-full justify-center py-3">
+                      Advanced options
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-8">
+                <div class="mb-3 flex items-center justify-between">
+                  <div>
+                    <p class="eyebrow">RECENT</p>
+                    <h3 class="mt-1 text-sm font-semibold">Recent activity</h3>
+                  </div>
+                  <button class="text-btn" data-view="history">View history</button>
+                </div>
+                <div class="space-y-2">
+                  <button class="recent-row">
+                    <div class="file-icon"><i data-lucide="video"></i></div>
+                    <div class="min-w-0 flex-1 text-left">
+                      <div class="truncate text-sm font-medium">Rust async explained in 15 minutes</div>
+                      <div class="mt-0.5 text-[11px] text-app-muted">1080p · MP4 · 482 MB</div>
+                    </div>
+                    <span class="text-[11px] text-app-muted">2h ago</span>
+                  </button>
+                  <button class="recent-row">
+                    <div class="file-icon"><i data-lucide="music-2"></i></div>
+                    <div class="min-w-0 flex-1 text-left">
+                      <div class="truncate text-sm font-medium">Dark ambient live set</div>
+                      <div class="mt-0.5 text-[11px] text-app-muted">Opus · 128 kbps · 84 MB</div>
+                    </div>
+                    <span class="text-[11px] text-app-muted">Yesterday</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- DOWNLOADS -->
+          <section class="view" data-view-panel="downloads">
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="eyebrow">QUEUE</p>
+                  <h2 class="mt-2 text-2xl font-semibold">Downloads</h2>
+                  <p class="mt-1 text-sm text-app-muted">2 active · 2 queued</p>
+                </div>
+                <div class="flex gap-2">
+                  <button class="secondary-btn"><i data-lucide="pause"></i> Stop all</button>
+                  <button class="primary-btn" data-view="new"><i data-lucide="plus"></i> Add</button>
+                </div>
+              </div>
+
+              <div class="grid gap-4 xl:grid-cols-2">
+                <article class="card p-4 sm:p-5">
+                  <div class="flex gap-4">
+                    <div class="hidden h-20 w-32 shrink-0 rounded-xl bg-gradient-to-br from-teal-300/20 to-indigo-500/10 sm:block"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <h3 class="truncate text-sm font-semibold">Linux gaming performance in 2026</h3>
+                          <p class="mt-1 text-[11px] text-app-muted">1080p60 · MP4</p>
+                        </div>
+                        <button class="icon-btn size-8"><i data-lucide="more-horizontal"></i></button>
+                      </div>
+                      <div class="mt-4">
+                        <div class="mb-2 flex justify-between text-[11px]"><span class="text-app-muted">482 MB / 631 MB</span><span>76%</span></div>
+                        <div class="progress"><div style="width:76%"></div></div>
+                        <div class="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-app-muted">
+                          <span>18.4 MB/s</span><span>ETA 00:08</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-4 flex justify-end">
+                    <button class="secondary-btn text-rose-300"><i data-lucide="square"></i> Stop</button>
+                  </div>
+                </article>
+
+                <article class="card p-4 sm:p-5">
+                  <div class="flex gap-4">
+                    <div class="hidden h-20 w-32 shrink-0 rounded-xl bg-gradient-to-br from-orange-300/15 to-pink-500/10 sm:block"></div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <h3 class="truncate text-sm font-semibold">Three hour dark ambient archive</h3>
+                          <p class="mt-1 text-[11px] text-app-muted">Audio · Opus</p>
+                        </div>
+                        <button class="icon-btn size-8"><i data-lucide="more-horizontal"></i></button>
+                      </div>
+                      <div class="mt-4">
+                        <div class="mb-2 flex justify-between text-[11px]"><span class="text-app-muted">64 MB / 312 MB</span><span>21%</span></div>
+                        <div class="progress"><div style="width:21%"></div></div>
+                        <div class="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-app-muted">
+                          <span>6.7 MB/s</span><span>ETA 00:37</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-4 flex justify-end">
+                    <button class="secondary-btn text-rose-300"><i data-lucide="square"></i> Stop</button>
+                  </div>
+                </article>
+              </div>
+
+              <div>
+                <div class="mb-3 text-xs font-semibold uppercase tracking-[.16em] text-zinc-600">Queued</div>
+                <div class="card divide-y divide-app-border overflow-hidden">
+                  <div class="queue-row"><div class="file-icon"><i data-lucide="video"></i></div><div class="min-w-0 flex-1"><div class="truncate text-sm font-medium">Game engine architecture talk</div><div class="text-[11px] text-app-muted">Best available · Auto container</div></div><span class="badge badge-muted">Waiting</span></div>
+                  <div class="queue-row"><div class="file-icon"><i data-lucide="list-video"></i></div><div class="min-w-0 flex-1"><div class="truncate text-sm font-medium">C++ conference playlist</div><div class="text-[11px] text-app-muted">18 items</div></div><span class="badge badge-muted">Waiting</span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- COMPLETED -->
+          <section class="view" data-view-panel="completed">
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div><p class="eyebrow">FILES</p><h2 class="mt-2 text-2xl font-semibold">Completed</h2><p class="mt-1 text-sm text-app-muted">Files downloaded by Fetch.</p></div>
+                <div class="flex gap-2">
+                  <button class="secondary-btn"><i data-lucide="folder-open"></i> Open folder</button>
+                  <button class="secondary-btn"><i data-lucide="search"></i> Search</button>
+                </div>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <article class="media-card">
+                  <div class="media-cover media-cover-a"><span class="badge absolute left-3 top-3">MP4</span><span class="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[10px]">15:42</span></div>
+                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Rust async explained in 15 minutes</h3><p class="mt-1 text-[11px] text-app-muted">1080p · 482 MB · 2h ago</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Watch</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
+                </article>
+
+                <article class="media-card">
+                  <div class="media-cover media-cover-b"><span class="badge absolute left-3 top-3">WEBM</span><span class="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[10px]">46:09</span></div>
+                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Low-level systems programming lecture</h3><p class="mt-1 text-[11px] text-app-muted">1440p · 1.2 GB · Yesterday</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Watch</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
+                </article>
+
+                <article class="media-card">
+                  <div class="media-cover media-cover-c flex items-center justify-center"><i data-lucide="music-2" class="size-14 text-white/40"></i><span class="badge absolute left-3 top-3">OPUS</span></div>
+                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Dark ambient live set</h3><p class="mt-1 text-[11px] text-app-muted">128 kbps · 84 MB · Yesterday</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Play</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- HISTORY -->
+          <section class="view" data-view-panel="history">
+            <div class="flex flex-col gap-6">
+              <div><p class="eyebrow">ACTIVITY</p><h2 class="mt-2 text-2xl font-semibold">History</h2><p class="mt-1 text-sm text-app-muted">Completed, failed and cancelled jobs.</p></div>
+              <div class="card overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[760px] text-left">
+                    <thead class="border-b border-app-border bg-white/[0.015] text-[10px] uppercase tracking-[.14em] text-zinc-600">
+                      <tr><th class="px-4 py-3 font-semibold">Media</th><th class="px-4 py-3 font-semibold">Source</th><th class="px-4 py-3 font-semibold">Format</th><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold">Date</th><th class="px-4 py-3"></th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-app-border text-xs">
+                      <tr><td class="px-4 py-4 font-medium">Rust async explained in 15 minutes</td><td class="px-4 py-4 text-app-muted">YouTube</td><td class="px-4 py-4 text-app-muted">1080p / MP4</td><td class="px-4 py-4"><span class="status-ok">Completed</span></td><td class="px-4 py-4 text-app-muted">Today, 10:14</td><td class="px-4 py-4"><button class="icon-btn size-8"><i data-lucide="more-horizontal"></i></button></td></tr>
+                      <tr><td class="px-4 py-4 font-medium">Dark ambient live set</td><td class="px-4 py-4 text-app-muted">SoundCloud</td><td class="px-4 py-4 text-app-muted">Opus</td><td class="px-4 py-4"><span class="status-ok">Completed</span></td><td class="px-4 py-4 text-app-muted">Yesterday</td><td class="px-4 py-4"><button class="icon-btn size-8"><i data-lucide="more-horizontal"></i></button></td></tr>
+                      <tr><td class="px-4 py-4 font-medium">Private archive</td><td class="px-4 py-4 text-app-muted">Unknown</td><td class="px-4 py-4 text-app-muted">—</td><td class="px-4 py-4"><span class="status-failed">Failed</span></td><td class="px-4 py-4 text-app-muted">Aug 7</td><td class="px-4 py-4"><button class="icon-btn size-8"><i data-lucide="more-horizontal"></i></button></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- SETTINGS -->
+          <section class="view" data-view-panel="settings">
+            <div class="flex flex-col gap-6">
+              <div><p class="eyebrow">CONFIGURATION</p><h2 class="mt-2 text-2xl font-semibold">Settings</h2><p class="mt-1 text-sm text-app-muted">Application, network and runtime preferences.</p></div>
+
+              <div class="grid gap-5 lg:grid-cols-[220px_1fr]">
+                <div class="card h-fit p-2">
+                  <button class="settings-tab is-active" data-settings-tab="general"><i data-lucide="sliders-horizontal"></i> General</button>
+                  <button class="settings-tab" data-settings-tab="downloads"><i data-lucide="download"></i> Downloads</button>
+                  <button class="settings-tab" data-settings-tab="network"><i data-lucide="network"></i> Network</button>
+                  <button class="settings-tab" data-settings-tab="runtime"><i data-lucide="cpu"></i> Runtime</button>
+                  <button class="settings-tab" data-settings-tab="advanced"><i data-lucide="wrench"></i> Advanced</button>
+                </div>
+
+                <div>
+                  <div class="settings-panel is-active" data-settings-panel="general">
+                    <div class="card p-5 sm:p-6">
+                      <h3 class="text-sm font-semibold">General</h3>
+                      <p class="mt-1 text-xs text-app-muted">Basic application behavior.</p>
+                      <div class="mt-6 space-y-5">
+                        <div class="setting-row"><div><div class="setting-title">Open browser on startup</div><div class="setting-help">Open the local web UI when Fetch starts.</div></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                        <div class="setting-row"><div><div class="setting-title">Theme</div><div class="setting-help">Prototype currently uses the dark application theme.</div></div><select class="select w-40"><option>Dark</option><option>System</option><option>Light</option></select></div>
+                        <div class="setting-row"><div><div class="setting-title">Language</div><div class="setting-help">Interface language.</div></div><select class="select w-40"><option>English</option><option>Русский</option></select></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-panel" data-settings-panel="downloads">
+                    <div class="card p-5 sm:p-6">
+                      <h3 class="text-sm font-semibold">Downloads</h3>
+                      <p class="mt-1 text-xs text-app-muted">Default output and queue behavior.</p>
+                      <div class="mt-6 space-y-5">
+                        <label class="field"><span>Download directory</span><div class="flex gap-2"><input class="input" value="/home/user/Downloads/Fetch"><button class="secondary-btn shrink-0">Browse</button></div></label>
+                        <label class="field max-w-xs"><span>Concurrent downloads</span><select class="select"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+                        <label class="field"><span>Filename template</span><input class="input font-mono text-xs" value="%(title)s [%(id)s].%(ext)s"></label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-panel" data-settings-panel="network">
+                    <div class="space-y-5">
+                      <div class="card p-5 sm:p-6">
+                        <div class="flex items-start justify-between gap-5">
+                          <div><h3 class="text-sm font-semibold">Web interface</h3><p class="mt-1 text-xs leading-5 text-app-muted">Allow other devices on your network to use this downloader.</p></div>
+                          <label class="switch"><input type="checkbox" checked><span></span></label>
+                        </div>
+                        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                          <label class="field"><span>Bind address</span><input class="input font-mono" value="0.0.0.0"></label>
+                          <label class="field"><span>Port</span><input class="input font-mono" value="8080"></label>
+                        </div>
+
+                        <div class="mt-5">
+                          <div class="mb-2 text-xs font-medium text-zinc-300">Allowed networks</div>
+                          <div id="networkList" class="space-y-2">
+                            <div class="cidr-row"><code>192.168.0.0/16</code><button class="icon-btn size-8 remove-cidr"><i data-lucide="x"></i></button></div>
+                          </div>
+                          <button id="addNetworkBtn" class="secondary-btn mt-2"><i data-lucide="plus"></i> Add network</button>
+                        </div>
+
+                        <div class="mt-5 rounded-xl border border-app-border bg-black/15 p-4">
+                          <div class="text-[10px] font-semibold uppercase tracking-[.15em] text-zinc-600">Available URLs</div>
+                          <div class="mt-3 space-y-2 font-mono text-xs">
+                            <div class="flex items-center justify-between gap-3"><span class="truncate">http://127.0.0.1:8080</span><button class="icon-btn size-8"><i data-lucide="copy"></i></button></div>
+                            <div class="flex items-center justify-between gap-3"><span class="truncate text-teal-300">http://192.168.0.103:8080</span><button class="icon-btn size-8"><i data-lucide="copy"></i></button></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="card border-amber-400/20 bg-amber-400/[0.03] p-5">
+                        <div class="flex gap-3">
+                          <i data-lucide="triangle-alert" class="mt-0.5 size-5 shrink-0 text-amber-300"></i>
+                          <div><div class="text-xs font-medium text-amber-100">Network access has no application login</div><p class="mt-1 text-xs leading-5 text-amber-100/60">Anyone from an allowed network who can reach this port can control downloads and access completed files.</p></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-panel" data-settings-panel="runtime">
+                    <div class="space-y-4">
+                      <div class="runtime-card">
+                        <div class="flex items-start gap-4"><div class="runtime-icon"><i data-lucide="terminal-square"></i></div><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h3 class="text-sm font-semibold">yt-dlp</h3><span class="status-ok">Up to date</span></div><p class="mt-1 text-xs text-app-muted">nightly · 2026.08.09.231025</p><div class="mt-4 flex flex-wrap gap-2"><button class="secondary-btn runtime-check" data-component="yt-dlp"><i data-lucide="refresh-cw"></i> Check update</button><button class="secondary-btn"><i data-lucide="rotate-ccw"></i> Reinstall</button></div></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                      </div>
+                      <div class="runtime-card">
+                        <div class="flex items-start gap-4"><div class="runtime-icon"><i data-lucide="film"></i></div><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><h3 class="text-sm font-semibold">FFmpeg</h3><span class="status-ok">Installed</span></div><p class="mt-1 text-xs text-app-muted">8.0 · includes ffprobe</p><div class="mt-4 flex flex-wrap gap-2"><button class="secondary-btn runtime-check" data-component="FFmpeg"><i data-lucide="refresh-cw"></i> Check update</button><button class="secondary-btn"><i data-lucide="rotate-ccw"></i> Reinstall</button></div></div></div>
+                      </div>
+                      <div class="card p-5">
+                        <div class="flex items-center justify-between gap-4"><div><div class="text-xs font-medium">Runtime directory</div><div class="mt-1 font-mono text-[11px] text-app-muted">~/.fetch/runtime</div></div><button class="secondary-btn"><i data-lucide="folder-open"></i> Open</button></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-panel" data-settings-panel="advanced">
+                    <div class="card p-5 sm:p-6">
+                      <h3 class="text-sm font-semibold">Advanced</h3>
+                      <p class="mt-1 text-xs text-app-muted">Low-level yt-dlp and diagnostic behavior.</p>
+                      <div class="mt-6 space-y-5">
+                        <div class="setting-row"><div><div class="setting-title">Keep verbose logs</div><div class="setting-help">Store full stdout/stderr from yt-dlp and FFmpeg.</div></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                        <label class="field"><span>Additional yt-dlp arguments</span><textarea class="input min-h-28 font-mono text-xs" placeholder="One argument per line"></textarea></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- LOGS -->
+          <section class="view" data-view-panel="logs">
+            <div class="flex flex-col gap-6">
+              <div class="flex items-end justify-between gap-4">
+                <div><p class="eyebrow">DIAGNOSTICS</p><h2 class="mt-2 text-2xl font-semibold">Logs</h2><p class="mt-1 text-sm text-app-muted">Application, yt-dlp and FFmpeg output.</p></div>
+                <button id="clearLogsBtn" class="secondary-btn"><i data-lucide="trash-2"></i> Clear</button>
+              </div>
+              <div class="card overflow-hidden">
+                <div class="flex items-center justify-between border-b border-app-border bg-black/15 px-4 py-3">
+                  <div class="flex items-center gap-2 text-xs"><span class="size-2 rounded-full bg-emerald-400"></span> Live log</div>
+                  <span class="font-mono text-[10px] text-app-muted">fetch.log</span>
+                </div>
+                <pre id="logOutput" class="min-h-[520px] overflow-auto p-4 font-mono text-[11px] leading-6 text-zinc-400"><span class="text-zinc-600">[12:18:01]</span> Fetch 1.0.0 starting
+<span class="text-zinc-600">[12:18:01]</span> Runtime directory: ~/.fetch/runtime
+<span class="text-emerald-300">[12:18:01] yt-dlp ready: nightly@2026.08.09.231025</span>
+<span class="text-emerald-300">[12:18:01] FFmpeg ready: 8.0</span>
+<span class="text-zinc-600">[12:18:01]</span> HTTP server listening on 0.0.0.0:8080
+<span class="text-teal-300">[12:18:01] Web UI: http://127.0.0.1:8080</span>
+<span class="text-teal-300">[12:18:01] LAN: http://192.168.0.103:8080</span></pre>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Mobile bottom navigation -->
+    <nav class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-app-border bg-[#0f1217]/95 px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
+      <button class="mobile-nav is-active" data-view="new"><i data-lucide="plus-circle"></i><span>New</span></button>
+      <button class="mobile-nav" data-view="downloads"><i data-lucide="activity"></i><span>Downloads</span></button>
+      <button class="mobile-nav" data-view="completed"><i data-lucide="circle-check"></i><span>Files</span></button>
+      <button class="mobile-nav" data-view="settings"><i data-lucide="settings"></i><span>Settings</span></button>
+    </nav>
+
+    <!-- Bootstrap modal -->
+    <div id="bootstrapModal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel max-w-lg">
+        <div class="flex size-11 items-center justify-center rounded-xl bg-teal-300 text-zinc-950"><i data-lucide="package-open"></i></div>
+        <h2 class="mt-5 text-xl font-semibold">Setting up Fetch</h2>
+        <p class="mt-2 text-sm leading-6 text-app-muted">Required runtime components are downloaded and managed automatically.</p>
+        <div class="mt-6 space-y-4">
+          <div>
+            <div class="mb-2 flex justify-between text-xs"><span>yt-dlp nightly</span><span class="text-emerald-300">Installed</span></div>
+            <div class="progress"><div style="width:100%"></div></div>
+          </div>
+          <div>
+            <div class="mb-2 flex justify-between text-xs"><span>FFmpeg + FFprobe</span><span id="ffmpegSetupPct">68%</span></div>
+            <div class="progress"><div id="ffmpegSetupBar" style="width:68%"></div></div>
+          </div>
+        </div>
+        <div class="mt-6 rounded-xl border border-app-border bg-black/15 p-3 font-mono text-[10px] text-app-muted">Runtime location: ~/.fetch/runtime</div>
+        <button id="finishSetupBtn" class="primary-btn mt-5 w-full justify-center py-3">Continue to Fetch</button>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">
+      <i data-lucide="circle-check" class="size-4"></i>
+      <span id="toastText">Done</span>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

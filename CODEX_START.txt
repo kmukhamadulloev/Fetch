@@ -1,0 +1,36 @@
+You are the primary implementation agent for this repository.
+
+Read in full before changing code:
+1. AGENTS.md
+2. GOAL.md
+3. docs/ARCHITECTURE.md
+4. docs/REQUIREMENTS.md
+5. docs/UI_SPEC.md
+6. docs/API.md
+7. docs/RUNTIME.md
+8. docs/DOWNLOAD_ENGINE.md
+9. docs/SECURITY.md
+10. docs/TESTING.md
+11. ISSUES.md
+
+Then inspect the repository.
+
+Execute GOAL.md completely.
+
+Rules:
+- Treat repository documentation as authoritative.
+- Do not introduce architecture not explicitly permitted.
+- Do not replace specified technologies.
+- Do not simplify acceptance criteria.
+- Do not stop after scaffolding when the goal requires working behavior.
+- Do not leave TODO placeholders for required acceptance behavior.
+- Do not fake production yt-dlp/download/runtime behavior.
+- Run formatting, linting and tests.
+- Fix failures caused by your changes.
+- Update docs and ISSUES.md when needed.
+
+At completion report:
+- implemented items;
+- exact tests executed and results;
+- remaining issues;
+- each acceptance criterion as PASS/FAIL.

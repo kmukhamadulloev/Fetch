@@ -1,0 +1,307 @@
+openapi: 3.1.0
+info:
+  title: Fetch API
+  version: 0.1.0
+servers:
+  - url: /
+paths:
+  /api/status:
+    get:
+      responses:
+        '200':
+          description: Application status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AppStatus'}
+  /api/media/analyze:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: {type: string}
+      responses:
+        '200':
+          description: Media analysis
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MediaInfo'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/downloads:
+    get:
+      responses:
+        '200':
+          description: Download jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DownloadJob'}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateDownloadRequest'}
+      responses:
+        '201':
+          description: Created job
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DownloadJob'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/downloads/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/DownloadId'}
+    get:
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DownloadJob'}
+        '404': {$ref: '#/components/responses/Error'}
+    delete:
+      responses:
+        '204': {description: Job metadata removed}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/downloads/{id}/stop:
+    post:
+      parameters: [{$ref: '#/components/parameters/DownloadId'}]
+      responses:
+        '200': {description: Stop requested}
+  /api/downloads/{id}/resume:
+    post:
+      parameters: [{$ref: '#/components/parameters/DownloadId'}]
+      responses:
+        '200': {description: Resume requested}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/downloads/{id}/retry:
+    post:
+      parameters: [{$ref: '#/components/parameters/DownloadId'}]
+      responses:
+        '200': {description: Retry requested}
+        '409': {$ref: '#/components/responses/Error'}
+  /api/completed:
+    get:
+      responses:
+        '200':
+          description: Completed files
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CompletedFile'}
+  /api/files/{id}/download:
+    get:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '200': {description: File download}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/stream:
+    get:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '200': {description: Full file}
+        '206': {description: Partial content}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/history:
+    get:
+      responses:
+        '200':
+          description: Job history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DownloadJob'}
+  /api/settings:
+    get:
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Settings'}
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Settings'}
+      responses:
+        '200':
+          description: Saved settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Settings'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/runtime:
+    get:
+      responses:
+        '200':
+          description: Runtime status
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/RuntimeComponent'}
+  /api/runtime/{component}/install:
+    post:
+      parameters: [{$ref: '#/components/parameters/RuntimeComponent'}]
+      responses:
+        '202': {description: Installation started}
+  /api/runtime/{component}/update:
+    post:
+      parameters: [{$ref: '#/components/parameters/RuntimeComponent'}]
+      responses:
+        '202': {description: Update started}
+  /api/runtime/{component}/repair:
+    post:
+      parameters: [{$ref: '#/components/parameters/RuntimeComponent'}]
+      responses:
+        '202': {description: Repair started}
+  /api/events:
+    get:
+      responses:
+        '200':
+          description: Server-Sent Event stream
+          content:
+            text/event-stream:
+              schema: {type: string}
+components:
+  parameters:
+    DownloadId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    FileId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    RuntimeComponent:
+      name: component
+      in: path
+      required: true
+      schema: {type: string, enum: [yt-dlp, ffmpeg]}
+  responses:
+    Error:
+      description: Application error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+  schemas:
+    AppStatus:
+      type: object
+      required: [version, server, runtime_ready]
+      properties:
+        version: {type: string}
+        server: {type: string}
+        runtime_ready: {type: boolean}
+    MediaInfo:
+      type: object
+      required: [kind, title, formats]
+      properties:
+        kind: {type: string, enum: [media, playlist]}
+        extractor: {type: string}
+        title: {type: string}
+        duration_seconds: {type: number}
+        thumbnail_url: {type: string}
+        formats:
+          type: array
+          items: {$ref: '#/components/schemas/MediaFormat'}
+    MediaFormat:
+      type: object
+      required: [id, label]
+      properties:
+        id: {type: string}
+        label: {type: string}
+        extension: {type: string}
+        video_codec: {type: string}
+        audio_codec: {type: string}
+        width: {type: integer}
+        height: {type: integer}
+        fps: {type: number}
+        bitrate_kbps: {type: number}
+        filesize_bytes: {type: integer}
+    CreateDownloadRequest:
+      type: object
+      required: [url, mode]
+      properties:
+        url: {type: string}
+        mode: {type: string, enum: [video, audio]}
+        format_id: {type: string}
+        quality: {type: string}
+        container: {type: string}
+        video_codec: {type: string}
+        audio_codec: {type: string}
+        embed_metadata: {type: boolean}
+        embed_thumbnail: {type: boolean}
+        subtitles: {type: boolean}
+        output_directory: {type: string}
+    DownloadJob:
+      type: object
+      required: [id, url, status]
+      properties:
+        id: {type: string, format: uuid}
+        url: {type: string}
+        title: {type: string}
+        status:
+          type: string
+          enum: [created, analyzing, ready, queued, downloading, postprocessing, completed, failed, stopped]
+        progress_percent: {type: number}
+        downloaded_bytes: {type: integer}
+        total_bytes: {type: integer}
+        speed_bytes_per_second: {type: integer}
+        eta_seconds: {type: integer}
+        error_code: {type: string}
+        error_message: {type: string}
+    CompletedFile:
+      type: object
+      required: [id, job_id, filename, path]
+      properties:
+        id: {type: string, format: uuid}
+        job_id: {type: string, format: uuid}
+        filename: {type: string}
+        path: {type: string}
+        size_bytes: {type: integer}
+        mime_type: {type: string}
+        title: {type: string}
+    Settings:
+      type: object
+      properties:
+        bind_address: {type: string, default: 0.0.0.0}
+        port: {type: integer, default: 8080}
+        allowed_networks:
+          type: array
+          items: {type: string}
+          default: [192.168.0.0/16]
+        download_directory: {type: string}
+        concurrent_downloads: {type: integer, minimum: 1, maximum: 16, default: 3}
+        open_browser_on_start: {type: boolean, default: true}
+        ytdlp_auto_update: {type: boolean, default: true}
+    RuntimeComponent:
+      type: object
+      required: [name, status]
+      properties:
+        name: {type: string}
+        version: {type: string}
+        status: {type: string, enum: [missing, installing, ready, updating, failed]}
+        progress_percent: {type: number}
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            details: {}

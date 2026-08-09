@@ -1,0 +1,16 @@
+[package]
+name = "fetch-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fetch-core = { path = "../fetch-core" }
+fetch-ytdlp = { path = "../fetch-ytdlp" }
+fetch-runtime = { path = "../fetch-runtime" }
+fetch-storage = { path = "../fetch-storage" }
+axum.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
