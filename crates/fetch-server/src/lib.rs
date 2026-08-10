@@ -1,4 +1,1245 @@
-//! fetch-server
-//!
-//! Implementation is driven by GOAL.md and AGENTS.md.
-//! Do not add fake production behavior to simulate later phases.
+//! Axum HTTP transport, SSE, and embedded production frontend.
+
+use std::{
+    convert::Infallible,
+    net::{IpAddr, SocketAddr},
+    sync::{Arc, RwLock},
+    time::Duration,
+};
+
+use axum::{
+    Json, Router,
+    body::Body,
+    extract::{ConnectInfo, Path, State},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri, header},
+    middleware::{Next, from_fn_with_state},
+    response::{IntoResponse, Response, Sse, sse::Event},
+    routing::{delete, get, post},
+};
+use fetch_core::{
+    ApplicationSettings, CompletedOperations, DiagnosticOperations, DownloadOperations,
+    DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus, FetchError, MediaAnalysis,
+    RuntimeStatus, SettingsOperations, StatusService,
+};
+use fetch_runtime::RuntimeManager;
+use rust_embed::Embed;
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio_util::{io::ReaderStream, sync::CancellationToken};
+
+#[derive(Clone)]
+pub struct ServerServices {
+    pub status: StatusService,
+    pub runtime: RuntimeManager,
+    pub media: Arc<dyn MediaAnalysis>,
+    pub downloads: Arc<dyn DownloadOperations>,
+    pub events: EventBus,
+    pub completed: Arc<dyn CompletedOperations>,
+    pub settings: Arc<dyn SettingsOperations>,
+    pub network_policy: NetworkPolicy,
+    pub diagnostics: Arc<dyn DiagnosticOperations>,
+    pub shutdown: CancellationToken,
+}
+
+#[derive(Clone)]
+pub struct NetworkPolicy {
+    networks: Arc<RwLock<Vec<ipnet::IpNet>>>,
+}
+
+impl NetworkPolicy {
+    pub fn new(networks: &[String]) -> Result<Self, FetchError> {
+        Ok(Self {
+            networks: Arc::new(RwLock::new(parse_networks(networks)?)),
+        })
+    }
+
+    pub fn allows(&self, address: IpAddr) -> bool {
+        address.is_loopback()
+            || self
+                .networks
+                .read()
+                .expect("network policy lock is not poisoned")
+                .iter()
+                .any(|network| network.contains(&address))
+    }
+
+    fn update(&self, networks: &[String]) -> Result<(), FetchError> {
+        *self
+            .networks
+            .write()
+            .expect("network policy lock is not poisoned") = parse_networks(networks)?;
+        Ok(())
+    }
+}
+
+fn parse_networks(networks: &[String]) -> Result<Vec<ipnet::IpNet>, FetchError> {
+    networks
+        .iter()
+        .map(|network| {
+            network.parse().map_err(|_| {
+                FetchError::InvalidSettings(format!("{network} is not a valid CIDR network"))
+            })
+        })
+        .collect()
+}
+
+fn is_host_client(address: IpAddr) -> bool {
+    address.is_loopback()
+        || if_addrs::get_if_addrs().is_ok_and(|interfaces| {
+            interfaces
+                .into_iter()
+                .any(|interface| interface.ip() == address)
+        })
+}
+
+#[derive(Clone)]
+struct AppState {
+    services: ServerServices,
+}
+
+#[derive(Embed)]
+#[folder = "../../web/dist"]
+struct WebAssets;
+
+pub fn router(services: ServerServices) -> Router {
+    let policy = services.network_policy.clone();
+    let state = AppState { services };
+    Router::new()
+        .route("/api/status", get(api_status))
+        .route("/api/media/analyze", post(analyze_media))
+        .route("/api/downloads", get(list_downloads).post(create_download))
+        .route(
+            "/api/downloads/{id}",
+            get(get_download).delete(delete_download),
+        )
+        .route("/api/downloads/{id}/stop", post(stop_download))
+        .route("/api/downloads/{id}/resume", post(resume_download))
+        .route("/api/downloads/{id}/retry", post(retry_download))
+        .route("/api/completed", get(list_completed))
+        .route("/api/history", get(history))
+        .route("/api/files/{id}", delete(delete_completed_file))
+        .route("/api/files/{id}/download", get(download_file))
+        .route("/api/files/{id}/stream", get(stream_file))
+        .route("/api/files/{id}/thumbnail", get(thumbnail_file))
+        .route("/api/files/{id}/reveal", post(reveal_completed_file))
+        .route("/api/settings", get(get_settings).put(put_settings))
+        .route("/api/network", get(network_info))
+        .route("/api/logs", get(logs).delete(clear_logs))
+        .route("/api/diagnostics", get(diagnostics))
+        .route("/api/runtime", get(runtime_status))
+        .route("/api/runtime/{component}/install", post(runtime_install))
+        .route("/api/runtime/{component}/update", post(runtime_update))
+        .route("/api/runtime/{component}/repair", post(runtime_repair))
+        .route("/api/events", get(events))
+        .nest("/api", Router::new().fallback(api_not_found))
+        .fallback(spa)
+        .with_state(state)
+        .layer(from_fn_with_state(policy, enforce_network))
+}
+
+async fn enforce_network(
+    State(policy): State<NetworkPolicy>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
+    if request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .is_some_and(|ConnectInfo(address)| !policy.allows(address.ip()))
+    {
+        return ApiError(FetchError::NetworkDenied).into_response();
+    }
+    next.run(request).await
+}
+
+async fn api_status(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.services.status.status())
+}
+
+#[derive(Debug, Deserialize)]
+struct AnalyzeRequest {
+    url: String,
+}
+
+async fn analyze_media(
+    State(state): State<AppState>,
+    Json(request): Json<AnalyzeRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.media.analyze(&request.url).await?))
+}
+
+async fn runtime_status(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.services.runtime.components().await)
+}
+
+async fn list_downloads(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.downloads.list().await?))
+}
+
+async fn create_download(
+    State(state): State<AppState>,
+    Json(request): Json<DownloadRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok((
+        StatusCode::CREATED,
+        Json(state.services.downloads.create(request).await?),
+    ))
+}
+
+async fn get_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.downloads.get(parse_uuid(&id)?).await?))
+}
+
+async fn stop_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.downloads.stop(parse_uuid(&id)?).await?))
+}
+
+async fn resume_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(
+        state.services.downloads.resume(parse_uuid(&id)?).await?,
+    ))
+}
+
+async fn retry_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(
+        state.services.downloads.retry(parse_uuid(&id)?).await?,
+    ))
+}
+
+async fn delete_download(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.services.downloads.delete(parse_uuid(&id)?).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn parse_uuid(value: &str) -> Result<uuid::Uuid, ApiError> {
+    value
+        .parse()
+        .map_err(|_| ApiError(FetchError::InvalidRequest("invalid identifier".into())))
+}
+
+async fn list_completed(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.completed.list_completed().await?))
+}
+
+async fn delete_completed_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    state
+        .services
+        .completed
+        .delete_completed(parse_uuid(&id)?)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn reveal_completed_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    request: axum::extract::Request,
+) -> Result<impl IntoResponse, ApiError> {
+    if !request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .is_some_and(|ConnectInfo(address)| is_host_client(address.ip()))
+    {
+        return Err(ApiError(FetchError::LocalClientRequired));
+    }
+    state
+        .services
+        .completed
+        .reveal_completed(parse_uuid(&id)?)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn history(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let jobs = state
+        .services
+        .downloads
+        .list()
+        .await?
+        .into_iter()
+        .filter(|job| {
+            matches!(
+                job.status,
+                DownloadStatus::Completed | DownloadStatus::Failed | DownloadStatus::Stopped
+            )
+        })
+        .collect::<Vec<_>>();
+    Ok(Json(jobs))
+}
+
+async fn download_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    serve_completed_file(state, id, headers, true).await
+}
+
+async fn stream_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    serve_completed_file(state, id, headers, false).await
+}
+
+async fn thumbnail_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Response, ApiError> {
+    let completed = state
+        .services
+        .completed
+        .get_completed(parse_uuid(&id)?)
+        .await?;
+    let path = completed.thumbnail_path.ok_or(FetchError::FileNotFound)?;
+    let metadata = tokio::fs::metadata(&path)
+        .await
+        .map_err(|_| ApiError(FetchError::FileNotFound))?;
+    if !metadata.is_file() {
+        return Err(ApiError(FetchError::FileNotFound));
+    }
+    let file = tokio::fs::File::open(&path)
+        .await
+        .map_err(|_| ApiError(FetchError::FileNotFound))?;
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            header::CONTENT_TYPE,
+            mime_guess::from_path(&path)
+                .first_or_octet_stream()
+                .as_ref(),
+        )
+        .header(header::CONTENT_LENGTH, metadata.len())
+        .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+        .body(Body::from_stream(ReaderStream::new(file)))
+        .expect("thumbnail response headers are valid"))
+}
+
+async fn serve_completed_file(
+    state: AppState,
+    id: String,
+    headers: HeaderMap,
+    attachment: bool,
+) -> Result<Response, ApiError> {
+    let completed = state
+        .services
+        .completed
+        .get_completed(parse_uuid(&id)?)
+        .await?;
+    let metadata = tokio::fs::metadata(&completed.path)
+        .await
+        .map_err(|_| ApiError(FetchError::FileNotFound))?;
+    if !metadata.is_file() {
+        return Err(ApiError(FetchError::FileNotFound));
+    }
+    let length = metadata.len();
+    let range = match headers.get(header::RANGE) {
+        Some(value) => match value
+            .to_str()
+            .ok()
+            .and_then(|value| parse_range(value, length))
+        {
+            Some(range) => Some(range),
+            None => {
+                return Ok(Response::builder()
+                    .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                    .header(header::CONTENT_RANGE, format!("bytes */{length}"))
+                    .body(Body::empty())
+                    .expect("range error response is valid"));
+            }
+        },
+        None => None,
+    };
+    let (start, end, status) = range
+        .map(|(start, end)| (start, end, StatusCode::PARTIAL_CONTENT))
+        .unwrap_or((0, length.saturating_sub(1), StatusCode::OK));
+    let response_length = if length == 0 { 0 } else { end - start + 1 };
+    let mut file = tokio::fs::File::open(&completed.path)
+        .await
+        .map_err(|_| ApiError(FetchError::FileNotFound))?;
+    file.seek(std::io::SeekFrom::Start(start))
+        .await
+        .map_err(|error| ApiError(FetchError::Internal(error.to_string())))?;
+    let stream = ReaderStream::new(file.take(response_length));
+    let mut builder = Response::builder()
+        .status(status)
+        .header(header::CONTENT_TYPE, completed.mime_type)
+        .header(header::CONTENT_LENGTH, response_length)
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+    if let Some((start, end)) = range {
+        builder = builder.header(
+            header::CONTENT_RANGE,
+            format!("bytes {start}-{end}/{length}"),
+        );
+    }
+    if attachment {
+        let safe_filename = completed
+            .filename
+            .chars()
+            .filter(|character| !character.is_control() && *character != '"' && *character != '\\')
+            .collect::<String>();
+        builder = builder.header(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&format!("attachment; filename=\"{safe_filename}\""))
+                .map_err(|error| ApiError(FetchError::Internal(error.to_string())))?,
+        );
+    }
+    Ok(builder
+        .body(Body::from_stream(stream))
+        .expect("file response headers are valid"))
+}
+
+fn parse_range(value: &str, length: u64) -> Option<(u64, u64)> {
+    let value = value.strip_prefix("bytes=")?;
+    if value.contains(',') || length == 0 {
+        return None;
+    }
+    let (start, end) = value.split_once('-')?;
+    if start.is_empty() {
+        let suffix = end.parse::<u64>().ok()?.min(length);
+        return (suffix > 0).then_some((length - suffix, length - 1));
+    }
+    let start = start.parse::<u64>().ok()?;
+    if start >= length {
+        return None;
+    }
+    let end = if end.is_empty() {
+        length - 1
+    } else {
+        end.parse::<u64>().ok()?.min(length - 1)
+    };
+    (start <= end).then_some((start, end))
+}
+
+async fn get_settings(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.settings.get_settings().await?))
+}
+
+async fn put_settings(
+    State(state): State<AppState>,
+    Json(settings): Json<ApplicationSettings>,
+) -> Result<impl IntoResponse, ApiError> {
+    settings.validate_basic()?;
+    let saved = state.services.settings.put_settings(settings).await?;
+    state
+        .services
+        .network_policy
+        .update(&saved.allowed_networks)?;
+    Ok(Json(saved))
+}
+
+#[derive(Debug, Serialize)]
+struct NetworkInfo {
+    bind_address: IpAddr,
+    port: u16,
+    urls: Vec<String>,
+    authentication: bool,
+    restart_required_after_bind_change: bool,
+    local_client: bool,
+}
+
+async fn network_info(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+) -> Result<impl IntoResponse, ApiError> {
+    let settings = state.services.settings.get_settings().await?;
+    let loopback = match settings.bind_address {
+        IpAddr::V6(_) => IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
+        IpAddr::V4(_) => IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+    };
+    let mut addresses =
+        if settings.bind_address.is_unspecified() || settings.bind_address.is_loopback() {
+            vec![loopback]
+        } else {
+            vec![]
+        };
+    if settings.bind_address.is_unspecified()
+        && let Ok(interfaces) = if_addrs::get_if_addrs()
+    {
+        for interface in interfaces {
+            let address = interface.ip();
+            if !address.is_loopback()
+                && state.services.network_policy.allows(address)
+                && !addresses.contains(&address)
+            {
+                addresses.push(address);
+            }
+        }
+    } else if !settings.bind_address.is_loopback()
+        && state.services.network_policy.allows(settings.bind_address)
+    {
+        addresses.push(settings.bind_address);
+    }
+    let urls = addresses
+        .into_iter()
+        .map(|address| {
+            if address.is_ipv6() {
+                format!("http://[{address}]:{}", settings.port)
+            } else {
+                format!("http://{address}:{}", settings.port)
+            }
+        })
+        .collect();
+    Ok(Json(NetworkInfo {
+        bind_address: settings.bind_address,
+        port: settings.port,
+        urls,
+        authentication: false,
+        restart_required_after_bind_change: true,
+        local_client: request
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .is_some_and(|ConnectInfo(address)| is_host_client(address.ip())),
+    }))
+}
+
+async fn logs(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.diagnostics.logs().await?))
+}
+
+async fn clear_logs(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    state.services.diagnostics.clear_logs().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn diagnostics(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(state.services.diagnostics.report().await?))
+}
+
+#[derive(Debug, Serialize)]
+struct OperationAccepted {
+    accepted: bool,
+}
+
+async fn runtime_install(
+    State(state): State<AppState>,
+    Path(component): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    start_runtime_action(state, component, RuntimeAction::Install).await
+}
+
+async fn runtime_update(
+    State(state): State<AppState>,
+    Path(component): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    start_runtime_action(state, component, RuntimeAction::Update).await
+}
+
+async fn runtime_repair(
+    State(state): State<AppState>,
+    Path(component): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    start_runtime_action(state, component, RuntimeAction::Repair).await
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RuntimeAction {
+    Install,
+    Update,
+    Repair,
+}
+
+async fn start_runtime_action(
+    state: AppState,
+    component: String,
+    action: RuntimeAction,
+) -> Result<impl IntoResponse, ApiError> {
+    if !matches!(component.as_str(), "yt-dlp" | "ffmpeg" | "ffprobe") {
+        return Err(ApiError(FetchError::InvalidRequest(
+            "unknown runtime component".into(),
+        )));
+    }
+    let manager = state.services.runtime.clone();
+    let status = state.services.status.clone();
+    tokio::spawn(async move {
+        let result = match (component.as_str(), action) {
+            ("yt-dlp", RuntimeAction::Install) => manager.install_ytdlp().await.map(|_| ()),
+            ("yt-dlp", RuntimeAction::Update) => manager.update_ytdlp().await.map(|_| ()),
+            ("yt-dlp", RuntimeAction::Repair) => manager.repair_ytdlp().await.map(|_| ()),
+            (_, RuntimeAction::Install) => manager.install_ffmpeg().await.map(|_| ()),
+            (_, RuntimeAction::Update) => manager.update_ffmpeg().await.map(|_| ()),
+            (_, RuntimeAction::Repair) => manager.repair_ffmpeg().await.map(|_| ()),
+        };
+        if result.is_ok() {
+            let components = manager.inspect_all().await;
+            status.set_runtime_ready(
+                components
+                    .iter()
+                    .all(|component| component.status == RuntimeStatus::Ready),
+            );
+        }
+    });
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(OperationAccepted { accepted: true }),
+    ))
+}
+
+async fn events(
+    State(state): State<AppState>,
+) -> Sse<impl futures::Stream<Item = Result<Event, Infallible>>> {
+    let mut runtime_events = state.services.runtime.subscribe();
+    let mut application_events = state.services.events.subscribe();
+    let shutdown = state.services.shutdown.clone();
+    let stream = async_stream::stream! {
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => break,
+                runtime = runtime_events.recv() => match runtime {
+                    Ok(component) => {
+                    let event_name = match component.status {
+                        RuntimeStatus::Installing => "runtime.installing",
+                        RuntimeStatus::Updating => "runtime.updating",
+                        RuntimeStatus::Ready => "runtime.ready",
+                        RuntimeStatus::Failed => "runtime.failed",
+                        RuntimeStatus::Missing => "runtime.missing",
+                    };
+                    if let Ok(event) = Event::default().event(event_name).json_data(component) {
+                        yield Ok(event);
+                    }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                },
+                application = application_events.recv() => match application {
+                    Ok(application) => {
+                        if let Ok(event) = Event::default().event(application.event_name()).json_data(application.job()) {
+                            yield Ok(event);
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                },
+            }
+        }
+    };
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive"),
+    )
+}
+
+async fn api_not_found() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse::new(
+            ErrorCode::NotFound,
+            "The requested API endpoint does not exist",
+        )),
+    )
+}
+
+struct ApiError(FetchError);
+
+impl From<FetchError> for ApiError {
+    fn from(value: FetchError) -> Self {
+        Self(value)
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let status = match self.0 {
+            FetchError::UnsupportedUrl
+            | FetchError::InvalidRequest(_)
+            | FetchError::InvalidSettings(_)
+            | FetchError::OutputDirectoryUnavailable(_) => StatusCode::BAD_REQUEST,
+            FetchError::AuthenticationRequired => StatusCode::UNAUTHORIZED,
+            FetchError::GeoRestricted | FetchError::MediaUnavailable => {
+                StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS
+            }
+            FetchError::RuntimeMissing(_) | FetchError::RuntimeCorrupt(_) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+            FetchError::FileNotFound | FetchError::NotFound => StatusCode::NOT_FOUND,
+            FetchError::NetworkDenied => StatusCode::FORBIDDEN,
+            FetchError::LocalClientRequired => StatusCode::FORBIDDEN,
+            FetchError::InvalidTransition { .. } => StatusCode::CONFLICT,
+            FetchError::ProcessFailed { .. } | FetchError::Internal(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        };
+        let response = ErrorResponse {
+            error: fetch_core::ErrorBody {
+                code: self.0.code(),
+                message: self.0.public_message(),
+                details: None,
+            },
+        };
+        (status, Json(response)).into_response()
+    }
+}
+
+async fn spa(uri: Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+    let asset_path = if path.is_empty() { "index.html" } else { path };
+    if let Some(response) = embedded_asset(asset_path) {
+        return response;
+    }
+    if !asset_path
+        .rsplit('/')
+        .next()
+        .is_some_and(|part| part.contains('.'))
+        && let Some(response) = embedded_asset("index.html")
+    {
+        return response;
+    }
+    (
+        StatusCode::NOT_FOUND,
+        "Embedded web UI was not found. Build web/ before compiling Fetch.",
+    )
+        .into_response()
+}
+
+fn embedded_asset(path: &str) -> Option<Response> {
+    let asset = WebAssets::get(path)?;
+    let mime = mime_guess::from_path(path).first_or_octet_stream();
+    // The entry document must always be revalidated so a browser cannot keep an
+    // old asset manifest after Fetch is upgraded. Vite fingerprints files in
+    // assets/, making those safe to cache for the lifetime of their URL.
+    let cache_control = if path == "index.html" {
+        "no-cache, no-store, must-revalidate"
+    } else if path.starts_with("assets/") {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-cache"
+    };
+    Some(
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, mime.as_ref())
+            .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+            .header(header::CACHE_CONTROL, cache_control)
+            .body(Body::from(asset.data.into_owned()))
+            .expect("static asset response headers are valid"),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use fetch_core::{MediaInfo, MediaKind};
+    use fetch_runtime::RuntimePaths;
+    use tower::ServiceExt;
+
+    struct TestMedia;
+    struct TestDownloads;
+    struct TestCompleted;
+    struct TestCompletedFile(fetch_core::CompletedFile);
+    struct TestSettings;
+    struct TestDiagnostics;
+
+    #[async_trait::async_trait]
+    impl MediaAnalysis for TestMedia {
+        async fn analyze(&self, _url: &str) -> Result<MediaInfo, FetchError> {
+            Ok(MediaInfo {
+                kind: MediaKind::Media,
+                id: Some("fixture".into()),
+                extractor: Some("Fixture".into()),
+                title: "Fixture".into(),
+                webpage_url: None,
+                duration_seconds: None,
+                thumbnail_url: None,
+                playlist_count: None,
+                entries: vec![],
+                formats: vec![],
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl DownloadOperations for TestDownloads {
+        async fn create(
+            &self,
+            _request: DownloadRequest,
+        ) -> Result<fetch_core::DownloadJob, FetchError> {
+            Err(FetchError::InvalidRequest(
+                "test service does not create jobs".into(),
+            ))
+        }
+        async fn list(&self) -> Result<Vec<fetch_core::DownloadJob>, FetchError> {
+            Ok(vec![])
+        }
+        async fn get(&self, _id: uuid::Uuid) -> Result<fetch_core::DownloadJob, FetchError> {
+            Err(FetchError::NotFound)
+        }
+        async fn stop(&self, id: uuid::Uuid) -> Result<fetch_core::DownloadJob, FetchError> {
+            self.get(id).await
+        }
+        async fn resume(&self, id: uuid::Uuid) -> Result<fetch_core::DownloadJob, FetchError> {
+            self.get(id).await
+        }
+        async fn retry(&self, id: uuid::Uuid) -> Result<fetch_core::DownloadJob, FetchError> {
+            self.get(id).await
+        }
+        async fn delete(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
+            Err(FetchError::NotFound)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl CompletedOperations for TestCompleted {
+        async fn list_completed(&self) -> Result<Vec<fetch_core::CompletedFile>, FetchError> {
+            Ok(vec![])
+        }
+        async fn get_completed(
+            &self,
+            _id: uuid::Uuid,
+        ) -> Result<fetch_core::CompletedFile, FetchError> {
+            Err(FetchError::FileNotFound)
+        }
+        async fn reveal_completed(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
+            Err(FetchError::FileNotFound)
+        }
+        async fn delete_completed(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
+            Err(FetchError::FileNotFound)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl CompletedOperations for TestCompletedFile {
+        async fn list_completed(&self) -> Result<Vec<fetch_core::CompletedFile>, FetchError> {
+            Ok(vec![self.0.clone()])
+        }
+        async fn get_completed(
+            &self,
+            id: uuid::Uuid,
+        ) -> Result<fetch_core::CompletedFile, FetchError> {
+            (self.0.id == id)
+                .then(|| self.0.clone())
+                .ok_or(FetchError::FileNotFound)
+        }
+        async fn reveal_completed(&self, id: uuid::Uuid) -> Result<(), FetchError> {
+            (self.0.id == id)
+                .then_some(())
+                .ok_or(FetchError::FileNotFound)
+        }
+        async fn delete_completed(&self, id: uuid::Uuid) -> Result<(), FetchError> {
+            (self.0.id == id)
+                .then_some(())
+                .ok_or(FetchError::FileNotFound)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SettingsOperations for TestSettings {
+        async fn get_settings(&self) -> Result<ApplicationSettings, FetchError> {
+            Ok(ApplicationSettings {
+                bind_address: "127.0.0.1".parse().unwrap(),
+                port: 8080,
+                allowed_networks: vec!["192.168.0.0/16".into()],
+                download_directory: "downloads".into(),
+                concurrent_downloads: 3,
+                open_browser_on_start: true,
+                ytdlp_auto_update: true,
+            })
+        }
+        async fn put_settings(
+            &self,
+            settings: ApplicationSettings,
+        ) -> Result<ApplicationSettings, FetchError> {
+            Ok(settings)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl DiagnosticOperations for TestDiagnostics {
+        async fn logs(&self) -> Result<Vec<fetch_core::DiagnosticLogEntry>, FetchError> {
+            Ok(vec![])
+        }
+        async fn clear_logs(&self) -> Result<(), FetchError> {
+            Ok(())
+        }
+        async fn report(&self) -> Result<fetch_core::DiagnosticsReport, FetchError> {
+            Ok(fetch_core::DiagnosticsReport { checks: vec![] })
+        }
+    }
+
+    fn app() -> Router {
+        app_with_completed(Arc::new(TestCompleted))
+    }
+
+    fn app_with_completed(completed: Arc<dyn CompletedOperations>) -> Router {
+        app_with_shutdown(completed, CancellationToken::new())
+    }
+
+    fn app_with_shutdown(
+        completed: Arc<dyn CompletedOperations>,
+        shutdown: CancellationToken,
+    ) -> Router {
+        let events = EventBus::default();
+        router(ServerServices {
+            status: StatusService::new("0.1.0", true, false),
+            runtime: RuntimeManager::new(RuntimePaths::new("test-runtime")).unwrap(),
+            media: Arc::new(TestMedia),
+            downloads: Arc::new(TestDownloads),
+            events,
+            completed,
+            settings: Arc::new(TestSettings),
+            network_policy: NetworkPolicy::new(&["192.168.0.0/16".into()]).unwrap(),
+            diagnostics: Arc::new(TestDiagnostics),
+            shutdown,
+        })
+    }
+
+    #[tokio::test]
+    async fn status_is_typed_json() {
+        let response = request(app(), "/api/status", "GET", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["server"], "ready");
+        assert_eq!(json["storage_ready"], true);
+        assert_eq!(json["runtime_ready"], false);
+    }
+
+    #[tokio::test]
+    async fn media_analysis_uses_application_service() {
+        let response = request(
+            app(),
+            "/api/media/analyze",
+            "POST",
+            Some(r#"{"url":"https://example.test/media"}"#),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["title"],
+            "Fixture"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_api_path_returns_json_and_never_spa() {
+        let response = request(app(), "/api/not-real", "GET", None).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+    }
+
+    #[tokio::test]
+    async fn client_route_uses_embedded_spa() {
+        let response = request(app(), "/settings", "GET", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            response.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/html")
+        );
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "no-cache, no-store, must-revalidate"
+        );
+    }
+
+    #[test]
+    fn fingerprinted_frontend_assets_are_immutable() {
+        let path = WebAssets::iter()
+            .find(|path| path.starts_with("assets/") && path.ends_with(".js"))
+            .expect("the embedded frontend includes a fingerprinted JavaScript asset");
+        let response = embedded_asset(path.as_ref()).expect("embedded asset exists");
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "public, max-age=31536000, immutable"
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_cancellation_closes_active_event_streams() {
+        let shutdown = CancellationToken::new();
+        let response = request(
+            app_with_shutdown(Arc::new(TestCompleted), shutdown.clone()),
+            "/api/events",
+            "GET",
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(
+            response.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with("text/event-stream")
+        );
+
+        let body = tokio::spawn(to_bytes(response.into_body(), usize::MAX));
+        tokio::task::yield_now().await;
+        shutdown.cancel();
+        tokio::time::timeout(Duration::from_secs(1), body)
+            .await
+            .expect("SSE body did not close after shutdown cancellation")
+            .expect("SSE body task panicked")
+            .expect("SSE body returned an error");
+    }
+
+    #[tokio::test]
+    async fn invalid_network_settings_return_a_typed_error() {
+        let response = request(
+            app(),
+            "/api/settings",
+            "PUT",
+            Some(r#"{"bind_address":"127.0.0.1","port":8080,"allowed_networks":["not-a-cidr"],"download_directory":"downloads","concurrent_downloads":3,"open_browser_on_start":false,"ytdlp_auto_update":true}"#),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"]["code"],
+            "INVALID_SETTINGS"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_errors_do_not_expose_raw_diagnostics() {
+        let response = ApiError(FetchError::ProcessFailed {
+            summary: "Download failed".into(),
+            details: "private process output and stack".into(),
+        })
+        .into_response();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let payload = serde_json::from_slice::<serde_json::Value>(&body).unwrap();
+        assert_eq!(payload["error"]["message"], "Download failed");
+        assert!(payload["error"]["details"].is_null());
+        assert!(!String::from_utf8_lossy(&body).contains("private process output"));
+    }
+
+    #[tokio::test]
+    async fn remote_clients_outside_the_allow_list_are_rejected() {
+        let mut denied = axum::http::Request::builder()
+            .uri("/api/status")
+            .body(Body::empty())
+            .unwrap();
+        denied
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([10, 0, 0, 2], 4000))));
+        let response = app().oneshot(denied).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+        let mut allowed = axum::http::Request::builder()
+            .uri("/api/status")
+            .body(Body::empty())
+            .unwrap();
+        allowed
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([192, 168, 2, 8], 4000))));
+        assert_eq!(
+            app().oneshot(allowed).await.unwrap().status(),
+            StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn opaque_file_endpoint_streams_exact_ranges() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("media.mp4");
+        tokio::fs::write(&path, b"0123456789").await.unwrap();
+        let file = fetch_core::CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: uuid::Uuid::new_v4(),
+            filename: "media.mp4".into(),
+            path,
+            thumbnail_path: None,
+            thumbnail_available: false,
+            size_bytes: 10,
+            mime_type: "video/mp4".into(),
+            title: Some("Media".into()),
+            browser_playable: true,
+            created_at: chrono::Utc::now(),
+        };
+        let id = file.id;
+        let mut range_request = axum::http::Request::builder()
+            .uri(format!("/api/files/{id}/stream"))
+            .header(header::RANGE, "bytes=2-5")
+            .body(Body::empty())
+            .unwrap();
+        range_request
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 4000))));
+        let response = app_with_completed(Arc::new(TestCompletedFile(file)))
+            .oneshot(range_request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-5/10");
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "2345"
+        );
+    }
+
+    #[tokio::test]
+    async fn opaque_thumbnail_endpoint_serves_cached_artwork() {
+        let directory = tempfile::tempdir().unwrap();
+        let media_path = directory.path().join("media.mp4");
+        let thumbnail_path = directory.path().join("thumbnail.jpg");
+        tokio::fs::write(&media_path, b"media").await.unwrap();
+        tokio::fs::write(&thumbnail_path, b"jpeg-bytes")
+            .await
+            .unwrap();
+        let file = fetch_core::CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: uuid::Uuid::new_v4(),
+            filename: "media.mp4".into(),
+            path: media_path,
+            thumbnail_path: Some(thumbnail_path),
+            thumbnail_available: true,
+            size_bytes: 5,
+            mime_type: "video/mp4".into(),
+            title: Some("Media".into()),
+            browser_playable: true,
+            created_at: chrono::Utc::now(),
+        };
+        let id = file.id;
+        let response = request(
+            app_with_completed(Arc::new(TestCompletedFile(file))),
+            &format!("/api/files/{id}/thumbnail"),
+            "GET",
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "public, max-age=31536000, immutable"
+        );
+        assert_eq!(
+            to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+            "jpeg-bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn reveal_is_loopback_only_while_completed_delete_is_available_to_allowed_clients() {
+        let file = fetch_core::CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: uuid::Uuid::new_v4(),
+            filename: "media.mp4".into(),
+            path: "media.mp4".into(),
+            thumbnail_path: None,
+            thumbnail_available: false,
+            size_bytes: 5,
+            mime_type: "video/mp4".into(),
+            title: Some("Media".into()),
+            browser_playable: true,
+            created_at: chrono::Utc::now(),
+        };
+        let id = file.id;
+        let completed: Arc<dyn CompletedOperations> = Arc::new(TestCompletedFile(file));
+
+        let local = request_from(
+            app_with_completed(completed.clone()),
+            &format!("/api/files/{id}/reveal"),
+            "POST",
+            ([127, 0, 0, 1], 4000).into(),
+        )
+        .await;
+        assert_eq!(local.status(), StatusCode::NO_CONTENT);
+
+        let remote = request_from(
+            app_with_completed(completed.clone()),
+            &format!("/api/files/{id}/reveal"),
+            "POST",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        assert_eq!(remote.status(), StatusCode::FORBIDDEN);
+
+        let delete = request_from(
+            app_with_completed(completed),
+            &format!("/api/files/{id}"),
+            "DELETE",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        assert_eq!(delete.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn network_info_identifies_the_host_browser() {
+        let local = request_from(app(), "/api/network", "GET", ([127, 0, 0, 1], 4000).into()).await;
+        let body = to_bytes(local.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["local_client"],
+            true
+        );
+
+        let remote = request_from(
+            app(),
+            "/api/network",
+            "GET",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        let body = to_bytes(remote.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["local_client"],
+            false
+        );
+    }
+
+    async fn request(app: Router, uri: &str, method: &str, body: Option<&str>) -> Response {
+        app.oneshot(
+            axum::http::Request::builder()
+                .uri(uri)
+                .method(method)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.unwrap_or_default().to_owned()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+    }
+
+    async fn request_from(app: Router, uri: &str, method: &str, address: SocketAddr) -> Response {
+        let mut request = axum::http::Request::builder()
+            .uri(uri)
+            .method(method)
+            .body(Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(ConnectInfo(address));
+        app.oneshot(request).await.unwrap()
+    }
+
+    #[test]
+    fn range_parser_handles_bounded_open_and_suffix_ranges() {
+        assert_eq!(parse_range("bytes=2-5", 10), Some((2, 5)));
+        assert_eq!(parse_range("bytes=7-", 10), Some((7, 9)));
+        assert_eq!(parse_range("bytes=-3", 10), Some((7, 9)));
+        assert_eq!(parse_range("bytes=10-", 10), None);
+        assert_eq!(parse_range("bytes=1-2,4-5", 10), None);
+    }
+
+    #[test]
+    fn network_policy_allows_loopback_and_configured_cidr_only() {
+        let policy = NetworkPolicy::new(&["192.168.0.0/16".into()]).unwrap();
+        assert!(policy.allows("127.0.0.1".parse().unwrap()));
+        assert!(policy.allows("192.168.4.20".parse().unwrap()));
+        assert!(!policy.allows("10.0.0.2".parse().unwrap()));
+        assert!(NetworkPolicy::new(&["invalid".into()]).is_err());
+    }
+}

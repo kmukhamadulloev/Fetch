@@ -40,6 +40,7 @@ Show real:
 ## Completed
 - List completed files.
 - Show metadata and size.
+- Cache and display available media thumbnails without exposing filesystem paths.
 - Download file to LAN client.
 - Browser preview where natively supported.
 - HTTP Range support.
@@ -47,6 +48,11 @@ Show real:
 
 ## History
 Persist completed, failed and stopped jobs.
+
+## Output organization
+- Keep standalone downloads directly under the configured output root.
+- Store playlist children under an ordered, sanitized playlist folder.
+- Keep UI thumbnail cache in application data rather than user media folders.
 
 ## Runtime Manager
 Manage:

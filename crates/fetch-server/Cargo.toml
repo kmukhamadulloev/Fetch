@@ -10,7 +10,22 @@ fetch-ytdlp = { path = "../fetch-ytdlp" }
 fetch-runtime = { path = "../fetch-runtime" }
 fetch-storage = { path = "../fetch-storage" }
 axum.workspace = true
+async-stream.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+uuid.workspace = true
+http.workspace = true
+if-addrs.workspace = true
+ipnet.workspace = true
+mime_guess.workspace = true
+rust-embed.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+tower.workspace = true
+chrono.workspace = true
+tempfile = "3"

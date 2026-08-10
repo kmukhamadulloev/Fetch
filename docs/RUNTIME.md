@@ -1,86 +1,36 @@
 # Runtime Manager
 
-Fetch keeps external media tools independent from the Fetch application version.
-
-## Managed components
-- yt-dlp
-- FFmpeg
-- FFprobe
-
-## Logical data layout
-Use OS-appropriate application data directories, conceptually:
+Fetch manages yt-dlp, FFmpeg, and FFprobe independently from the application
+version. A system executable can satisfy discovery, but managed executables
+under the application-data directory take precedence.
 
 ```text
-fetch-data/
-├── config/
-├── data/fetch.sqlite3
-└── runtime/
-    ├── yt-dlp/<executable>
-    └── ffmpeg/{ffmpeg,ffprobe}
+fetch-data/runtime/
+├── yt-dlp/yt-dlp[.exe]
+└── ffmpeg/
+    ├── ffmpeg[.exe]
+    ├── ffprobe[.exe]
+    ├── FFMPEG-LICENSE.txt
+    └── PROVIDER.txt
 ```
 
-## First run
+## Sources and safety
 
-```text
-detect OS/arch
-→ locate runtime
-→ inspect components
-→ install missing components
-→ health check
-→ runtime ready
-```
+- yt-dlp uses the official latest standalone asset and official
+  `SHA2-256SUMS` document.
+- FFmpeg and FFprobe use matching platform assets from the latest
+  `eugeneware/ffmpeg-static` GitHub release. GitHub-published SHA-256 asset
+  digests are mandatory.
+- Supported runtime targets are Linux x86_64/aarch64, macOS x86_64/arm64, and
+  Windows x86_64.
 
-## Safe install/update
-Never delete the last known-working component before validating the replacement.
+Artifacts are downloaded to temporary files, checksum-verified, marked
+executable where applicable, and version-checked before replacement. Existing
+files are renamed to backups. A replacement or post-install health failure
+restores the last working file or FFmpeg/FFprobe pair. Runtime operations are
+serialized to prevent first-run and UI actions from racing.
 
-```text
-download temporary artifact
-→ verify checksum/metadata
-→ extract temporary files
-→ execute version/health check
-→ atomic replace
-→ clean previous backup when safe
-```
-
-A failed network/update operation must not leave Fetch without a working runtime.
-
-## yt-dlp
-Support:
-- initial install;
-- version check;
-- update;
-- repair/reinstall;
-- automatic update preference;
-- optional channel selection if implemented.
-
-Using yt-dlp's supported self-updater is acceptable if wrapped with proper error handling, post-update verification and fallback/rollback behavior.
-
-## FFmpeg
-Do not download FFmpeg from arbitrary search results. Use explicit trusted provider manifests per platform/architecture. Provider and license must be documented before release.
-
-## Manifest abstraction
-Runtime source metadata should be data-driven with conceptual fields:
-- component
-- platform
-- architecture
-- version
-- URL
-- archive format
-- expected files
-- checksum
-
-Do not scatter platform URLs throughout business logic.
-
-## Health check
-A component is healthy when expected files exist, executable startup/version succeeds and companion files are present.
-
-## UI
-Expose real:
-- component name;
-- version;
-- status;
-- install/update progress;
-- update/repair actions;
-- errors.
-
-Do not fake progress.
+The runtime manager broadcasts actual installing/updating/ready/failed state
+over SSE. yt-dlp automatic update is checked at most daily when enabled.
+Install, update, and repair are also available in Settings. Fetch does not fake
+runtime versions or progress.

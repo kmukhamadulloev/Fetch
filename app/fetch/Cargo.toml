@@ -11,6 +11,22 @@ fetch-runtime = { path = "../../crates/fetch-runtime" }
 fetch-storage = { path = "../../crates/fetch-storage" }
 fetch-server = { path = "../../crates/fetch-server" }
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+chrono.workspace = true
+directories.workspace = true
+mime_guess.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+uuid.workspace = true
+webbrowser.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

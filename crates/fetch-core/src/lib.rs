@@ -1,4 +1,17 @@
-//! fetch-core
-//!
-//! Implementation is driven by GOAL.md and AGENTS.md.
-//! Do not add fake production behavior to simulate later phases.
+//! Domain types and application rules shared by Fetch adapters.
+
+mod diagnostics;
+mod downloads;
+mod errors;
+mod media;
+mod runtime;
+mod settings;
+mod status;
+
+pub use diagnostics::*;
+pub use downloads::*;
+pub use errors::*;
+pub use media::*;
+pub use runtime::*;
+pub use settings::*;
+pub use status::*;

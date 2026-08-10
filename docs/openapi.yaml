@@ -2,8 +2,12 @@ openapi: 3.1.0
 info:
   title: Fetch API
   version: 0.1.0
+  license:
+    name: MIT
+    identifier: MIT
 servers:
   - url: /
+security: []
 paths:
   /api/status:
     get:
@@ -96,6 +100,12 @@ paths:
               schema:
                 type: array
                 items: {$ref: '#/components/schemas/CompletedFile'}
+  /api/files/{id}:
+    delete:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '204': {description: Completed media and cached artwork deleted; job history retained}
+        '404': {$ref: '#/components/responses/Error'}
   /api/files/{id}/download:
     get:
       parameters: [{$ref: '#/components/parameters/FileId'}]
@@ -108,6 +118,19 @@ paths:
       responses:
         '200': {description: Full file}
         '206': {description: Partial content}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/thumbnail:
+    get:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '200': {description: Cached media thumbnail}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/reveal:
+    post:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '204': {description: Containing folder opened on the Fetch host}
+        '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
   /api/history:
     get:
@@ -140,6 +163,35 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/Settings'}
         '400': {$ref: '#/components/responses/Error'}
+  /api/network:
+    get:
+      responses:
+        '200':
+          description: Local and LAN access information
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NetworkInfo'}
+  /api/logs:
+    get:
+      responses:
+        '200':
+          description: Retained structured process logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DiagnosticLogEntry'}
+    delete:
+      responses:
+        '204': {description: Logs cleared}
+  /api/diagnostics:
+    get:
+      responses:
+        '200':
+          description: Database, runtime, and output checks
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DiagnosticsReport'}
   /api/runtime:
     get:
       responses:
@@ -189,7 +241,7 @@ components:
       name: component
       in: path
       required: true
-      schema: {type: string, enum: [yt-dlp, ffmpeg]}
+      schema: {type: string, enum: [yt-dlp, ffmpeg, ffprobe]}
   responses:
     Error:
       description: Application error
@@ -199,26 +251,33 @@ components:
   schemas:
     AppStatus:
       type: object
-      required: [version, server, runtime_ready]
+      required: [version, server, runtime_ready, storage_ready]
       properties:
         version: {type: string}
         server: {type: string}
         runtime_ready: {type: boolean}
+        storage_ready: {type: boolean}
     MediaInfo:
       type: object
-      required: [kind, title, formats]
+      required: [kind, title, entries, formats]
       properties:
         kind: {type: string, enum: [media, playlist]}
+        id: {type: string}
         extractor: {type: string}
         title: {type: string}
         duration_seconds: {type: number}
         thumbnail_url: {type: string}
+        webpage_url: {type: string}
+        playlist_count: {type: integer}
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/PlaylistEntry'}
         formats:
           type: array
           items: {$ref: '#/components/schemas/MediaFormat'}
     MediaFormat:
       type: object
-      required: [id, label]
+      required: [id, label, has_video, has_audio]
       properties:
         id: {type: string}
         label: {type: string}
@@ -230,11 +289,24 @@ components:
         fps: {type: number}
         bitrate_kbps: {type: number}
         filesize_bytes: {type: integer}
+        has_video: {type: boolean}
+        has_audio: {type: boolean}
+    PlaylistEntry:
+      type: object
+      required: [title]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        url: {type: string}
+        duration_seconds: {type: number}
+        thumbnail_url: {type: string}
     CreateDownloadRequest:
       type: object
-      required: [url, mode]
+      required: [url, mode, embed_metadata, embed_thumbnail, subtitles]
       properties:
         url: {type: string}
+        title: {type: string}
+        duration_seconds: {type: number, minimum: 0}
         mode: {type: string, enum: [video, audio]}
         format_id: {type: string}
         quality: {type: string}
@@ -244,14 +316,34 @@ components:
         embed_metadata: {type: boolean}
         embed_thumbnail: {type: boolean}
         subtitles: {type: boolean}
+        playlist: {$ref: '#/components/schemas/PlaylistContext'}
         output_directory: {type: string}
+    PlaylistContext:
+      type: object
+      required: [id, title, index]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        index: {type: integer, minimum: 1}
     DownloadJob:
       type: object
-      required: [id, url, status]
+      required: [id, url, mode, status, embed_metadata, embed_thumbnail, subtitles, created_at, updated_at]
       properties:
         id: {type: string, format: uuid}
         url: {type: string}
         title: {type: string}
+        duration_seconds: {type: number, minimum: 0}
+        mode: {type: string, enum: [video, audio]}
+        format_id: {type: string}
+        quality: {type: string}
+        container: {type: string}
+        video_codec: {type: string}
+        audio_codec: {type: string}
+        embed_metadata: {type: boolean}
+        embed_thumbnail: {type: boolean}
+        subtitles: {type: boolean}
+        playlist: {$ref: '#/components/schemas/PlaylistContext'}
+        output_directory: {type: string}
         status:
           type: string
           enum: [created, analyzing, ready, queued, downloading, postprocessing, completed, failed, stopped]
@@ -262,21 +354,26 @@ components:
         eta_seconds: {type: integer}
         error_code: {type: string}
         error_message: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
     CompletedFile:
       type: object
-      required: [id, job_id, filename, path]
+      required: [id, job_id, filename, thumbnail_available, size_bytes, mime_type, browser_playable, created_at]
       properties:
         id: {type: string, format: uuid}
         job_id: {type: string, format: uuid}
         filename: {type: string}
-        path: {type: string}
+        thumbnail_available: {type: boolean}
         size_bytes: {type: integer}
         mime_type: {type: string}
         title: {type: string}
+        browser_playable: {type: boolean}
+        created_at: {type: string, format: date-time}
     Settings:
       type: object
+      required: [bind_address, port, allowed_networks, download_directory, concurrent_downloads, open_browser_on_start, ytdlp_auto_update]
       properties:
-        bind_address: {type: string, default: 0.0.0.0}
+        bind_address: {type: string, default: 127.0.0.1}
         port: {type: integer, default: 8080}
         allowed_networks:
           type: array
@@ -294,6 +391,42 @@ components:
         version: {type: string}
         status: {type: string, enum: [missing, installing, ready, updating, failed]}
         progress_percent: {type: number}
+        error: {type: string}
+    NetworkInfo:
+      type: object
+      required: [bind_address, port, urls, authentication, restart_required_after_bind_change, local_client]
+      properties:
+        bind_address: {type: string}
+        port: {type: integer}
+        urls:
+          type: array
+          items: {type: string, format: uri}
+        authentication: {type: boolean, const: false}
+        restart_required_after_bind_change: {type: boolean}
+        local_client: {type: boolean}
+    DiagnosticLogEntry:
+      type: object
+      required: [id, level, subsystem, message, created_at]
+      properties:
+        id: {type: integer}
+        level: {type: string}
+        subsystem: {type: string}
+        message: {type: string}
+        details: {type: string}
+        created_at: {type: string, format: date-time}
+    DiagnosticsReport:
+      type: object
+      required: [checks]
+      properties:
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, healthy, message]
+            properties:
+              name: {type: string}
+              healthy: {type: boolean}
+              message: {type: string}
     ErrorResponse:
       type: object
       required: [error]

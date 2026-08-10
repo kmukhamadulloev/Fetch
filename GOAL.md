@@ -1,7 +1,11 @@
 # Active Goal
 
-Execute in full:
+Complete the Fetch product through Phase 09 release acceptance:
 
-`goals/PHASE_01_FOUNDATION.md`
+- implement every phase in `goals/PHASE_01_FOUNDATION.md` through
+  `goals/PHASE_09_RELEASE.md`;
+- validate the full Rust, frontend, browser, managed-runtime, and packaging
+  paths;
+- keep `docs/ACCEPTANCE.md` and `ISSUES.md` aligned with verified behavior.
 
-Do not start later phases unless work is strictly required to satisfy Phase 01 architecture or acceptance criteria.
+Do not regress the mandatory architecture or introduce a forbidden component.

@@ -1,40 +1,47 @@
 # Release
 
-## Initial targets
-- Windows x86_64
-- Linux x86_64
-- Linux aarch64
-- macOS arm64
-- macOS x86_64 where practical
+## Supported archives
 
-## Build sequence
+- Windows x86_64 (`.zip`)
+- Linux x86_64 and aarch64 (`.tar.gz`)
+- macOS arm64 and x86_64 (`.tar.gz`)
 
-```text
-frontend install/check/test/build
-→ embed frontend assets
-→ cargo build --release
-→ package
-→ checksums
-→ publish
-```
+Every archive contains the single Fetch executable, README, MIT license, and
+third-party notices. Every archive has a `.sha256` sidecar. yt-dlp, FFmpeg, and
+FFprobe are not bundled; the checked runtime manager downloads platform assets
+on first use.
 
-Release runtime requires no Node.js.
-
-## Version independence
+## Build and publish sequence
 
 ```text
-Fetch 1.x
-Managed yt-dlp independent version
-Managed FFmpeg independent version
+npm ci → typecheck/lint/unit/browser tests → Vite production build
+→ embedded Rust release build → packaged-binary startup smoke
+→ archive + SHA-256 → tagged GitHub release
 ```
 
-A yt-dlp update must not require a Fetch release.
+`.github/workflows/release.yml` uses native hosted runners for every target,
+including the GitHub `ubuntu-24.04-arm` runner. A tag matching `v*` publishes
+only after all five native builds start and answer `/api/status`. Manual runs
+produce downloadable workflow artifacts without publishing a release.
 
-## Artifacts
-Initially archive-based artifacts are acceptable. Installers may be added later.
+Local Linux packaging:
 
-## Signing
-Before broad public distribution, review Windows code signing and macOS Developer ID/notarization.
+```bash
+cd web && npm ci && npm run build && cd ..
+cargo build --release --locked --target x86_64-unknown-linux-gnu
+./scripts/smoke-release.sh target/x86_64-unknown-linux-gnu/release/fetch
+./scripts/package.sh x86_64-unknown-linux-gnu linux-x86_64
+```
 
-## Licenses
-Before distributing FFmpeg builds, document the exact provider/build/license and include required notices/Open Source Licenses.
+Release runtime requires no Node.js. Fetch, yt-dlp, and FFmpeg versions remain
+independent. Signing/notarization is not currently provided; review Windows
+code signing and Apple Developer ID notarization before broad public
+distribution.
+
+## Runtime licensing
+
+Fetch downloads official yt-dlp release artifacts and FFmpeg/FFprobe artifacts
+from the documented `eugeneware/ffmpeg-static` provider. SHA-256 values are
+verified before execution. The FFmpeg provider license and identity are stored
+beside each managed installation. See `THIRD_PARTY_NOTICES.md` for sources and
+license boundaries.

@@ -1,0 +1,226 @@
+export interface AppStatus {
+  version: string
+  server: 'ready'
+  runtime_ready: boolean
+  storage_ready: boolean
+}
+
+export type RuntimeStatus = 'missing' | 'installing' | 'ready' | 'updating' | 'failed'
+export interface RuntimeComponent {
+  name: 'yt-dlp' | 'ffmpeg' | 'ffprobe'
+  version: string | null
+  status: RuntimeStatus
+  progress_percent: number | null
+  error: string | null
+}
+
+export interface MediaFormat {
+  id: string
+  label: string
+  extension: string | null
+  video_codec: string | null
+  audio_codec: string | null
+  width: number | null
+  height: number | null
+  fps: number | null
+  bitrate_kbps: number | null
+  filesize_bytes: number | null
+  has_video: boolean
+  has_audio: boolean
+}
+
+export interface PlaylistEntry {
+  id: string | null
+  title: string
+  url: string | null
+  duration_seconds: number | null
+  thumbnail_url: string | null
+}
+
+export interface MediaInfo {
+  kind: 'media' | 'playlist'
+  id: string | null
+  extractor: string | null
+  title: string
+  webpage_url: string | null
+  duration_seconds: number | null
+  thumbnail_url: string | null
+  playlist_count: number | null
+  entries: PlaylistEntry[]
+  formats: MediaFormat[]
+}
+
+export type DownloadStatus = 'created' | 'analyzing' | 'ready' | 'queued' | 'downloading' | 'postprocessing' | 'completed' | 'failed' | 'stopped'
+export interface DownloadRequest {
+  url: string
+  title?: string | null
+  duration_seconds?: number | null
+  mode: 'video' | 'audio'
+  format_id?: string | null
+  quality?: string | null
+  container?: string | null
+  video_codec?: string | null
+  audio_codec?: string | null
+  embed_metadata: boolean
+  embed_thumbnail: boolean
+  subtitles: boolean
+  playlist?: { id: string; title: string; index: number } | null
+  output_directory?: string | null
+}
+export interface DownloadJob extends DownloadRequest {
+  id: string
+  status: DownloadStatus
+  progress_percent: number | null
+  downloaded_bytes: number | null
+  total_bytes: number | null
+  speed_bytes_per_second: number | null
+  eta_seconds: number | null
+  error_code: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+export interface CompletedFile {
+  id: string
+  job_id: string
+  filename: string
+  thumbnail_available: boolean
+  size_bytes: number
+  mime_type: string
+  title: string | null
+  browser_playable: boolean
+  created_at: string
+}
+export interface ApplicationSettings {
+  bind_address: string
+  port: number
+  allowed_networks: string[]
+  download_directory: string
+  concurrent_downloads: number
+  open_browser_on_start: boolean
+  ytdlp_auto_update: boolean
+}
+export interface NetworkInfo {
+  bind_address: string
+  port: number
+  urls: string[]
+  authentication: false
+  restart_required_after_bind_change: boolean
+  local_client: boolean
+}
+export interface DiagnosticLogEntry {
+  id: number
+  level: string
+  subsystem: string
+  message: string
+  details: string | null
+  created_at: string
+}
+export interface DiagnosticsReport {
+  checks: { name: string; healthy: boolean; message: string }[]
+}
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message)
+  }
+}
+
+const requestTimeoutMs = 10_000
+
+async function fetchApi(path: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs)
+  const abortFromCaller = () => controller.abort()
+  init?.signal?.addEventListener('abort', abortFromCaller, { once: true })
+  try {
+    return await fetch(path, { ...init, signal: controller.signal })
+  } catch (cause) {
+    if (controller.signal.aborted && !init?.signal?.aborted) {
+      throw new ApiError(0, 'Fetch server did not respond within 10 seconds')
+    }
+    if (cause instanceof ApiError) throw cause
+    throw new ApiError(0, 'Fetch server is unavailable')
+  } finally {
+    window.clearTimeout(timeout)
+    init?.signal?.removeEventListener('abort', abortFromCaller)
+  }
+}
+
+export async function getStatus(signal?: AbortSignal): Promise<AppStatus> {
+  const response = await fetchApi('/api/status', { headers: { Accept: 'application/json' }, signal })
+  if (!response.ok) throw new ApiError(response.status, `Status request failed (${response.status})`)
+  return response.json() as Promise<AppStatus>
+}
+
+async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchApi(path, {
+    ...init,
+    headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    throw new ApiError(response.status, payload?.error?.message ?? `Request failed (${response.status})`)
+  }
+  return response.json() as Promise<T>
+}
+
+export function getRuntime(): Promise<RuntimeComponent[]> {
+  return jsonRequest('/api/runtime')
+}
+
+export function startRuntimeAction(component: RuntimeComponent['name'], action: 'install' | 'update' | 'repair'): Promise<{ accepted: boolean }> {
+  return jsonRequest(`/api/runtime/${component}/${action}`, { method: 'POST' })
+}
+
+export function analyzeMedia(url: string): Promise<MediaInfo> {
+  return jsonRequest('/api/media/analyze', { method: 'POST', body: JSON.stringify({ url }) })
+}
+
+export function getDownloads(): Promise<DownloadJob[]> {
+  return jsonRequest('/api/downloads')
+}
+
+export function createDownload(request: DownloadRequest): Promise<DownloadJob> {
+  return jsonRequest('/api/downloads', { method: 'POST', body: JSON.stringify(request) })
+}
+
+export function downloadAction(id: string, action: 'stop' | 'resume' | 'retry'): Promise<DownloadJob> {
+  return jsonRequest(`/api/downloads/${id}/${action}`, { method: 'POST' })
+}
+
+export function getCompleted(): Promise<CompletedFile[]> {
+  return jsonRequest('/api/completed')
+}
+
+export async function revealCompleted(id: string): Promise<void> {
+  const response = await fetchApi(`/api/files/${id}/reveal`, { method: 'POST' })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    throw new ApiError(response.status, payload?.error?.message ?? `Could not open folder (${response.status})`)
+  }
+}
+
+export async function deleteCompleted(id: string): Promise<void> {
+  const response = await fetchApi(`/api/files/${id}`, { method: 'DELETE' })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    throw new ApiError(response.status, payload?.error?.message ?? `Could not delete file (${response.status})`)
+  }
+}
+
+export function getHistory(): Promise<DownloadJob[]> {
+  return jsonRequest('/api/history')
+}
+
+export function getSettings(): Promise<ApplicationSettings> { return jsonRequest('/api/settings') }
+export function putSettings(settings: ApplicationSettings): Promise<ApplicationSettings> {
+  return jsonRequest('/api/settings', { method: 'PUT', body: JSON.stringify(settings) })
+}
+export function getNetworkInfo(): Promise<NetworkInfo> { return jsonRequest('/api/network') }
+export function getLogs(): Promise<DiagnosticLogEntry[]> { return jsonRequest('/api/logs') }
+export function getDiagnostics(): Promise<DiagnosticsReport> { return jsonRequest('/api/diagnostics') }
+export async function clearLogs(): Promise<void> {
+  const response = await fetchApi('/api/logs', { method: 'DELETE' })
+  if (!response.ok) throw new ApiError(response.status, `Could not clear logs (${response.status})`)
+}
