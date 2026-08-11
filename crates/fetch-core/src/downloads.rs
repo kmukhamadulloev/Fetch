@@ -15,6 +15,11 @@ pub trait DownloadOperations: Send + Sync {
     async fn resume(&self, id: Uuid) -> Result<DownloadJob, FetchError>;
     async fn retry(&self, id: Uuid) -> Result<DownloadJob, FetchError>;
     async fn delete(&self, id: Uuid) -> Result<(), FetchError>;
+    async fn update_defaults(
+        &self,
+        download_directory: PathBuf,
+        concurrent_downloads: u8,
+    ) -> Result<(), FetchError>;
 }
 
 #[async_trait::async_trait]
@@ -40,6 +45,8 @@ pub enum ApplicationEvent {
     DownloadFailed(DownloadJob),
     #[serde(rename = "download.stopped")]
     DownloadStopped(DownloadJob),
+    #[serde(rename = "library.completed")]
+    CompletedFileCreated(CompletedFile),
 }
 
 impl ApplicationEvent {
@@ -51,17 +58,26 @@ impl ApplicationEvent {
             Self::DownloadCompleted(_) => "download.completed",
             Self::DownloadFailed(_) => "download.failed",
             Self::DownloadStopped(_) => "download.stopped",
+            Self::CompletedFileCreated(_) => "library.completed",
         }
     }
 
-    pub fn job(&self) -> &DownloadJob {
+    pub fn job(&self) -> Option<&DownloadJob> {
         match self {
             Self::DownloadCreated(job)
             | Self::DownloadProgress(job)
             | Self::DownloadPostprocessing(job)
             | Self::DownloadCompleted(job)
             | Self::DownloadFailed(job)
-            | Self::DownloadStopped(job) => job,
+            | Self::DownloadStopped(job) => Some(job),
+            Self::CompletedFileCreated(_) => None,
+        }
+    }
+
+    pub fn completed_file(&self) -> Option<&CompletedFile> {
+        match self {
+            Self::CompletedFileCreated(file) => Some(file),
+            _ => None,
         }
     }
 }

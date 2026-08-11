@@ -114,7 +114,7 @@ async function copyUrl(url: string) {
             <label class="field"><span>Download directory</span><input v-model="form.download_directory" class="input font-mono text-xs" autocomplete="off" /></label>
             <label class="field max-w-xs"><span>Concurrent downloads</span><select v-model.number="form.concurrent_downloads" class="select"><option v-for="count in 16" :key="count" :value="count">{{ count }}</option></select></label>
           </div>
-          <div class="info-panel mt-5"><Download :size="18" class="shrink-0" /><span>The download manager applies these values after Fetch restarts. Individual jobs can still choose another output directory.</span></div>
+          <div class="info-panel mt-5"><Download :size="18" class="shrink-0" /><span>New jobs use the directory immediately, and queued jobs react to concurrency changes. Active downloads continue without interruption.</span></div>
         </section>
 
         <section v-else-if="active === 'network'" class="space-y-5" aria-labelledby="settings-network">
@@ -133,7 +133,7 @@ async function copyUrl(url: string) {
                 <button class="icon-btn shrink-0" type="button" :aria-label="`Copy ${url}`" @click="copyUrl(url)"><Check v-if="copiedUrl === url" :size="15" /><Clipboard v-else :size="15" /></button>
               </div>
             </div>
-            <p class="mt-4 text-[11px] leading-5 text-muted">Allowed networks update immediately. Bind address and port take effect after restart.</p>
+            <p class="mt-4 text-[11px] leading-5 text-muted">Network changes apply immediately. If the address changes, Fetch moves this tab to the new URL automatically.</p>
           </div>
           <div class="warning-panel"><TriangleAlert class="shrink-0 text-amber-500" :size="20" /><div><div class="text-xs font-medium">Network access has no application login</div><p class="mt-1 text-xs leading-5 opacity-70">Every allowed client can control downloads and access completed files. Fetch never opens router ports or public tunnels.</p></div></div>
         </section>

@@ -267,3 +267,87 @@ stroke aligns with the left text inset after accounting for the SVG's internal
 whitespace. They reserve text space for the indicator and expose a clear
 disabled state. Browser coverage verifies the normalized appearance and
 reserved padding.
+
+## UX-013 — Keyboard focus falls back to inconsistent browser outlines
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Keyboard navigation retains a clear, consistent focus indicator that
+matches Fetch in light and dark themes without outlining layout containers.
+
+Actual: Links and other controls could use the browser's white default outline
+when reached with Tab, while form controls used a different focus treatment.
+Programmatically focused layout containers could also inherit a large outline.
+
+Resolution: Fetch now provides one accent-colored `:focus-visible` ring for
+keyboard-focusable controls, suppresses outlines for negative-tab-index layout
+targets, and retains the existing border/shadow treatment for text inputs and
+selects without adding a duplicate ring. Browser coverage verifies the rendered
+keyboard outline color and style.
+
+## UX-014 — Player lacks efficient keyboard controls
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Desktop users can seek, adjust volume, and toggle fullscreen without
+leaving the keyboard, with discoverable controls and clear feedback.
+
+Actual: The player exposed only native browser controls and Escape-to-close;
+behavior and shortcut discovery varied between browsers.
+
+Resolution: The player now maps Left/Right to five-second seeking, Up/Down to
+ten-percent volume changes, and F to fullscreen entry/exit for both video and
+audio. Actions are clamped, provide transient accessible feedback, are listed
+in the footer, and do not intercept modified shortcuts or editable fields.
+
+## BUG-015 — Open Completed page remains stale after a download finishes
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: A completed download appears in the Completed library immediately,
+including when that page is already open in a primary or secondary browser tab.
+
+Actual: The realtime `download.completed` event updated only the Downloads
+store. The Library store loaded on page mount, so it did not observe files
+inserted into SQLite after the Completed view was already mounted.
+
+Resolution: The backend now emits a dedicated `library.completed` event carrying
+the completed-file record only after it is persisted. Primary and secondary
+tabs merge that record directly into the Library store, while download events
+update History and Downloads independently. This removes the cache and request-
+ordering dependency of the initial refresh-based correction. Store, manager,
+and browser tests cover the complete path.
+
+## UX-016 — Operational settings require a terminal restart
+
+Status: RESOLVED
+
+Affected:
+- app/fetch
+- fetch-core
+- fetch-server
+- web
+
+Expected: Saving operational settings applies them safely without asking users
+to stop and restart Fetch from a terminal.
+
+Actual: Download directory, concurrency, bind address, and port were captured
+when services were constructed. Only the CIDR allow-list and browser-local
+theme changed while Fetch was running.
+
+Resolution: New jobs now read a live default directory and queued jobs use an
+adjustable concurrency gate; active jobs are not interrupted. Listener changes
+bind and start the replacement address before retiring the old listener, and
+the save response moves the browser tab to the new URL. Failed binds roll back
+persistence and live download defaults while the original listener stays
+available. Browser-open and yt-dlp auto-update preferences remain saved inputs
+to their next relevant startup/update action.

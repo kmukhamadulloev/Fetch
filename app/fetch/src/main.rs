@@ -3,19 +3,20 @@ mod diagnostics;
 mod downloads;
 mod library;
 
-use std::{future::IntoFuture, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use config::FetchConfig;
 use diagnostics::DiagnosticsService;
 use downloads::DownloadManager;
 use fetch_core::{
-    ApplicationSettings, EventBus, FetchError, MediaAnalysis, MediaInfo, RuntimeStatus,
-    StatusService,
+    ApplicationSettings, EventBus, FetchError, ListenerOperations, MediaAnalysis, MediaInfo,
+    RuntimeStatus, StatusService,
 };
 use fetch_runtime::{RuntimeManager, RuntimePaths};
 use fetch_storage::Storage;
 use library::CompletedLibrary;
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -79,6 +80,15 @@ async fn main() -> anyhow::Result<()> {
     });
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;
     let shutdown = CancellationToken::new();
+    let address = SocketAddr::new(settings.bind_address, settings.port);
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .with_context(|| format!("could not bind HTTP server to {address}"))?;
+    let (rebind_sender, rebind_receiver) = mpsc::channel(4);
+    let listener_control = Arc::new(ListenerControl {
+        current: Arc::new(RwLock::new(address)),
+        sender: rebind_sender,
+    });
     let app = fetch_server::router(fetch_server::ServerServices {
         status: status.clone(),
         runtime: runtime.clone(),
@@ -87,15 +97,12 @@ async fn main() -> anyhow::Result<()> {
         events,
         completed: Arc::new(CompletedLibrary::new(storage.clone())),
         settings: storage.clone(),
+        listener: listener_control,
         network_policy,
         diagnostics: Arc::new(DiagnosticsService::new(storage.clone(), runtime.clone())),
         shutdown: shutdown.clone(),
     });
     start_runtime_bootstrap(runtime, status, storage, settings.clone());
-    let address = std::net::SocketAddr::new(settings.bind_address, settings.port);
-    let listener = tokio::net::TcpListener::bind(address)
-        .await
-        .with_context(|| format!("could not bind HTTP server to {address}"))?;
 
     info!(%address, database = %database_path.display(), "Fetch server ready");
     if !address.ip().is_loopback() {
@@ -108,25 +115,138 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let server = axum::serve(
+    let tasks = Arc::new(Mutex::new(Vec::new()));
+    let (server_error_sender, mut server_error_receiver) = mpsc::unbounded_channel();
+    let initial_listener_shutdown = CancellationToken::new();
+    spawn_http_server(
         listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        app.clone(),
+        initial_listener_shutdown.clone(),
+        shutdown.clone(),
+        server_error_sender.clone(),
+        tasks.clone(),
     )
-    .with_graceful_shutdown(shutdown_signal(shutdown.clone()))
-    .into_future();
-    tokio::pin!(server);
-    let force_shutdown = async {
-        shutdown.cancelled().await;
-        tokio::time::sleep(GRACEFUL_SHUTDOWN_TIMEOUT).await;
+    .await;
+    tokio::spawn(rebind_listeners(
+        rebind_receiver,
+        app,
+        initial_listener_shutdown,
+        shutdown.clone(),
+        server_error_sender,
+        tasks.clone(),
+    ));
+
+    let unexpected_error = tokio::select! {
+        () = shutdown_signal(shutdown.clone()) => None,
+        error = server_error_receiver.recv() => error,
     };
-    tokio::pin!(force_shutdown);
-    tokio::select! {
-        result = &mut server => result.context("HTTP server stopped unexpectedly")?,
-        () = &mut force_shutdown => {
-            warn!(timeout_seconds = GRACEFUL_SHUTDOWN_TIMEOUT.as_secs(), "graceful shutdown timed out; closing remaining connections");
+    shutdown.cancel();
+    let active_tasks = std::mem::take(&mut *tasks.lock().await);
+    if tokio::time::timeout(GRACEFUL_SHUTDOWN_TIMEOUT, async {
+        for task in active_tasks {
+            let _ = task.await;
         }
+    })
+    .await
+    .is_err()
+    {
+        warn!(
+            timeout_seconds = GRACEFUL_SHUTDOWN_TIMEOUT.as_secs(),
+            "graceful shutdown timed out; closing remaining connections"
+        );
+    }
+    if let Some(error) = unexpected_error {
+        return Err(anyhow::anyhow!(error).context("HTTP server stopped unexpectedly"));
     }
     Ok(())
+}
+
+struct RebindRequest {
+    address: SocketAddr,
+    response: oneshot::Sender<Result<(), String>>,
+}
+
+#[derive(Clone)]
+struct ListenerControl {
+    current: Arc<RwLock<SocketAddr>>,
+    sender: mpsc::Sender<RebindRequest>,
+}
+
+#[async_trait::async_trait]
+impl ListenerOperations for ListenerControl {
+    async fn rebind(&self, address: SocketAddr) -> Result<bool, FetchError> {
+        if *self.current.read().await == address {
+            return Ok(false);
+        }
+        let (response, result) = oneshot::channel();
+        self.sender
+            .send(RebindRequest { address, response })
+            .await
+            .map_err(|_| FetchError::Internal("listener controller is unavailable".into()))?;
+        result
+            .await
+            .map_err(|_| FetchError::Internal("listener controller stopped unexpectedly".into()))?
+            .map_err(FetchError::InvalidSettings)?;
+        *self.current.write().await = address;
+        Ok(true)
+    }
+}
+
+async fn spawn_http_server(
+    listener: tokio::net::TcpListener,
+    app: axum::Router,
+    local_shutdown: CancellationToken,
+    global_shutdown: CancellationToken,
+    errors: mpsc::UnboundedSender<String>,
+    tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+) {
+    let task = tokio::spawn(async move {
+        let server = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(global_shutdown.cancelled_owned());
+        tokio::select! {
+            result = server => if let Err(error) = result {
+                let _ = errors.send(error.to_string());
+            },
+            () = local_shutdown.cancelled() => {}
+        }
+    });
+    tasks.lock().await.push(task);
+}
+
+async fn rebind_listeners(
+    mut requests: mpsc::Receiver<RebindRequest>,
+    app: axum::Router,
+    mut active_shutdown: CancellationToken,
+    shutdown: CancellationToken,
+    errors: mpsc::UnboundedSender<String>,
+    tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+) {
+    loop {
+        tokio::select! {
+            _ = shutdown.cancelled() => break,
+            request = requests.recv() => {
+                let Some(request) = request else { break };
+                match tokio::net::TcpListener::bind(request.address).await {
+                    Ok(listener) => {
+                        let next_shutdown = CancellationToken::new();
+                        spawn_http_server(listener, app.clone(), next_shutdown.clone(), shutdown.clone(), errors.clone(), tasks.clone()).await;
+                        let previous_shutdown = std::mem::replace(&mut active_shutdown, next_shutdown);
+                        let _ = request.response.send(Ok(()));
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            previous_shutdown.cancel();
+                        });
+                    }
+                    Err(error) => {
+                        let _ = request.response.send(Err(format!("could not bind Fetch to {}: {error}", request.address)));
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn start_runtime_bootstrap(
@@ -216,4 +336,57 @@ async fn shutdown_signal(shutdown: CancellationToken) {
     }
     info!("shutdown requested");
     shutdown.cancel();
+}
+
+#[cfg(test)]
+mod listener_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn listener_control_hands_off_to_a_new_port() {
+        let initial = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let initial_address = initial.local_addr().unwrap();
+        let reservation = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let next_address = reservation.local_addr().unwrap();
+        drop(reservation);
+
+        let (sender, receiver) = mpsc::channel(1);
+        let control = ListenerControl {
+            current: Arc::new(RwLock::new(initial_address)),
+            sender,
+        };
+        let app = axum::Router::new().route("/", axum::routing::get(|| async { "ready" }));
+        let shutdown = CancellationToken::new();
+        let initial_shutdown = CancellationToken::new();
+        let tasks = Arc::new(Mutex::new(Vec::new()));
+        let (errors, mut error_receiver) = mpsc::unbounded_channel();
+        spawn_http_server(
+            initial,
+            app.clone(),
+            initial_shutdown.clone(),
+            shutdown.clone(),
+            errors.clone(),
+            tasks.clone(),
+        )
+        .await;
+        tokio::spawn(rebind_listeners(
+            receiver,
+            app,
+            initial_shutdown,
+            shutdown.clone(),
+            errors,
+            tasks,
+        ));
+
+        assert!(control.rebind(next_address).await.unwrap());
+        assert!(tokio::net::TcpStream::connect(next_address).await.is_ok());
+        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+        assert!(
+            tokio::net::TcpStream::connect(initial_address)
+                .await
+                .is_err()
+        );
+        assert!(error_receiver.try_recv().is_err());
+        shutdown.cancel();
+    }
 }

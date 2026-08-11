@@ -79,7 +79,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
       <div v-else class="mt-6 rounded-xl border border-border bg-panel-2 p-6 text-center">
         <Smartphone class="mx-auto text-muted" :size="36" />
         <h3 class="mt-4 text-sm font-semibold">No reachable LAN address</h3>
-        <p class="mt-2 text-xs leading-5 text-muted">Bind Fetch to a LAN interface and allow your local CIDR in Network settings, then restart Fetch.</p>
+        <p class="mt-2 text-xs leading-5 text-muted">Bind Fetch to a LAN interface and allow your local CIDR in Network settings. Fetch applies the new listener when you save.</p>
         <RouterLink class="secondary-btn mt-4" to="/settings#network" @click="emit('close')">Open Network settings</RouterLink>
       </div>
       <p v-if="settings.error" class="error-panel mt-4" role="alert">{{ settings.error }}</p>

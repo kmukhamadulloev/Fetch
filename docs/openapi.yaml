@@ -161,7 +161,7 @@ paths:
           description: Saved settings
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/Settings'}
+              schema: {$ref: '#/components/schemas/SettingsSaveResponse'}
         '400': {$ref: '#/components/responses/Error'}
   /api/network:
     get:
@@ -383,6 +383,13 @@ components:
         concurrent_downloads: {type: integer, minimum: 1, maximum: 16, default: 3}
         open_browser_on_start: {type: boolean, default: true}
         ytdlp_auto_update: {type: boolean, default: true}
+    SettingsSaveResponse:
+      allOf:
+        - {$ref: '#/components/schemas/Settings'}
+        - type: object
+          required: [listener_changed]
+          properties:
+            listener_changed: {type: boolean}
     RuntimeComponent:
       type: object
       required: [name, status]

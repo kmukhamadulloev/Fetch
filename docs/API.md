@@ -69,9 +69,11 @@ the completed-file record while retaining the associated job history.
 
 Settings include bind IP, port, allowed CIDRs, output directory, concurrency,
 browser-open preference, and yt-dlp auto-update preference. Invalid IP, port,
-CIDR, concurrency, and directory values return `INVALID_SETTINGS`. CIDRs apply
-immediately; bind/port and download-manager construction settings apply after a
-restart. Network info advertises only addresses compatible with the active bind
+CIDR, concurrency, directory, and unavailable listener values return
+`INVALID_SETTINGS`. CIDRs, new-job download defaults, concurrency, and listener
+changes apply immediately. A successful listener change returns
+`listener_changed: true` so the browser can replace its location with the new
+address. Network info advertises only addresses compatible with the active bind
 and allow-list, reports whether the requesting browser is on the Fetch host via
 `local_client`, and explicitly reports that authentication is disabled. The UI
 uses these URLs to generate local QR codes; no external QR service is contacted.
@@ -92,9 +94,11 @@ FFmpeg and FFprobe actions operate on the managed pair.
 
 - `download.created`, `download.progress`, `download.postprocessing`,
   `download.completed`, `download.failed`, `download.stopped`
+- `library.completed`
 - `runtime.missing`, `runtime.installing`, `runtime.updating`, `runtime.ready`,
   `runtime.failed`
 
-Download event data is the current job. Runtime event data is the current
-component. Unknown `/api/*` paths always return typed JSON 404 responses and
-are never handled by the SPA fallback.
+Download event data is the current job, `library.completed` data is the newly
+persisted completed file, and runtime event data is the current component.
+Unknown `/api/*` paths always return typed JSON 404 responses and are never
+handled by the SPA fallback.

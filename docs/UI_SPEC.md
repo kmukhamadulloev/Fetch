@@ -78,6 +78,9 @@ browser-compatible, and a guarded permanent-delete action. On the Fetch host,
 the primary file action opens the containing folder; on LAN clients it downloads
 the original. Playback uses the same host/remote distinction. Unsupported media
 can still open the original stream without attempting transcoding.
+The player provides keyboard controls: Left/Right seek backward or forward five
+seconds, Up/Down adjust volume, F enters or exits fullscreen, and Escape closes
+the dialog. Shortcuts must not intercept modified commands or editable fields.
 
 The QR dialog lists reachable allowed LAN URLs, generates the QR locally, lets
 the user switch addresses or copy one, and repeats the no-authentication warning.
@@ -93,6 +96,9 @@ Sections:
 - Advanced
 
 Network includes bind address, port, allowed networks, current URLs and no-auth warning.
+Download directory, concurrency, and allowed networks apply without restarting.
+Listener changes bind the replacement address before retiring the old listener;
+the current browser tab then replaces its location with the new URL.
 
 Runtime includes yt-dlp and FFmpeg/FFprobe version/status/update/repair controls.
 

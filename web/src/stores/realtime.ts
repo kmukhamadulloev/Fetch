@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useDownloadsStore } from '@/stores/downloads'
+import { useLibraryStore } from '@/stores/library'
 import { useRuntimeStore } from '@/stores/runtime'
 
 const channelName = 'fetch.realtime.v1'
@@ -24,7 +25,8 @@ const runtimeEvents = new Set([
   'runtime.failed',
   'runtime.missing',
 ])
-const eventNames = [...downloadEvents, ...runtimeEvents]
+const libraryEvents = new Set(['library.completed'])
+const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents]
 
 type RealtimeRole = 'electing' | 'primary' | 'secondary'
 type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -41,6 +43,7 @@ function createTabId() {
 
 export const useRealtimeStore = defineStore('realtime', () => {
   const downloads = useDownloadsStore()
+  const library = useLibraryStore()
   const runtime = useRuntimeStore()
   const tabId = createTabId()
   const role = ref<RealtimeRole>('electing')
@@ -95,8 +98,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
   function applyEvent(name: string, data: string) {
     try {
       const payload = JSON.parse(data) as unknown
-      if (downloadEvents.has(name)) downloads.applyEvent(payload)
+      if (downloadEvents.has(name)) {
+        downloads.applyEvent(payload)
+        library.applyDownload(payload)
+      }
       else if (runtimeEvents.has(name)) runtime.applyEvent(payload)
+      else if (libraryEvents.has(name)) library.applyCompleted(payload)
     } catch {
       setConnection('reconnecting', 'Fetch received an invalid realtime update. Reconnecting…')
     }

@@ -2,6 +2,15 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getNetworkInfo, getSettings, putSettings, type ApplicationSettings, type NetworkInfo } from '@/app/api/client'
 
+export function reconnectUrl(settings: ApplicationSettings, currentUrl: string) {
+  const destination = new URL(currentUrl)
+  destination.port = String(settings.port)
+  if (!['0.0.0.0', '::'].includes(settings.bind_address)) {
+    destination.hostname = settings.bind_address.includes(':') ? `[${settings.bind_address}]` : settings.bind_address
+  }
+  return destination.toString()
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const value = ref<ApplicationSettings | null>(null)
   const network = ref<NetworkInfo | null>(null)
@@ -17,7 +26,17 @@ export const useSettingsStore = defineStore('settings', () => {
   }
   async function save(settings: ApplicationSettings) {
     saving.value = true; saved.value = false
-    try { value.value = await putSettings(settings); network.value = await getNetworkInfo(); error.value = null; saved.value = true }
+    try {
+      const { listener_changed: listenerChanged, ...savedSettings } = await putSettings(settings)
+      value.value = savedSettings
+      error.value = null
+      saved.value = true
+      if (listenerChanged) {
+        window.location.replace(reconnectUrl(savedSettings, window.location.href))
+        return
+      }
+      network.value = await getNetworkInfo()
+    }
     catch (cause) { error.value = cause instanceof Error ? cause.message : 'Settings could not be saved' }
     finally { saving.value = false }
   }

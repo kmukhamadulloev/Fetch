@@ -1,4 +1,12 @@
-use std::{collections::HashMap, path::PathBuf, process::ExitStatus, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    process::ExitStatus,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use chrono::Utc;
 use fetch_core::{
@@ -10,7 +18,7 @@ use fetch_storage::Storage;
 use fetch_ytdlp::{DownloadArtifacts, ProcessLine, YtDlp, map_process_error, parse_process_line};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
-    sync::{Mutex, Semaphore, mpsc},
+    sync::{Mutex, Notify, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -25,9 +33,9 @@ struct Inner {
     storage: Arc<Storage>,
     runtime: RuntimeManager,
     events: EventBus,
-    semaphore: Arc<Semaphore>,
+    concurrency: Arc<ConcurrencyGate>,
     controls: Mutex<HashMap<Uuid, CancellationToken>>,
-    default_output: PathBuf,
+    default_output: RwLock<PathBuf>,
     thumbnail_directory: PathBuf,
 }
 
@@ -45,9 +53,9 @@ impl DownloadManager {
                 storage,
                 runtime,
                 events,
-                semaphore: Arc::new(Semaphore::new(concurrency.clamp(1, 16))),
+                concurrency: Arc::new(ConcurrencyGate::new(concurrency)),
                 controls: Mutex::new(HashMap::new()),
-                default_output,
+                default_output: RwLock::new(default_output),
                 thumbnail_directory,
             }),
         }
@@ -99,7 +107,7 @@ impl DownloadOperations for DownloadManager {
         let output_root = request
             .output_directory
             .clone()
-            .unwrap_or_else(|| self.inner.default_output.clone());
+            .unwrap_or(self.inner.default_output.read().await.clone());
         let output = match request.playlist.as_ref() {
             Some(playlist) => playlist_output_directory(&output_root, playlist)?,
             None => output_root,
@@ -187,6 +195,68 @@ impl DownloadOperations for DownloadManager {
             Err(FetchError::NotFound)
         }
     }
+
+    async fn update_defaults(
+        &self,
+        download_directory: PathBuf,
+        concurrent_downloads: u8,
+    ) -> Result<(), FetchError> {
+        validate_output_directory(&download_directory).await?;
+        *self.inner.default_output.write().await = download_directory;
+        self.inner
+            .concurrency
+            .set_limit(concurrent_downloads as usize);
+        Ok(())
+    }
+}
+
+struct ConcurrencyGate {
+    limit: AtomicUsize,
+    active: AtomicUsize,
+    changed: Notify,
+}
+
+impl ConcurrencyGate {
+    fn new(limit: usize) -> Self {
+        Self {
+            limit: AtomicUsize::new(limit.clamp(1, 16)),
+            active: AtomicUsize::new(0),
+            changed: Notify::new(),
+        }
+    }
+
+    fn set_limit(&self, limit: usize) {
+        self.limit.store(limit.clamp(1, 16), Ordering::Release);
+        self.changed.notify_waiters();
+    }
+
+    async fn acquire(self: Arc<Self>) -> ConcurrencyPermit {
+        loop {
+            let notified = self.changed.notified();
+            let active = self.active.load(Ordering::Acquire);
+            let limit = self.limit.load(Ordering::Acquire);
+            if active < limit
+                && self
+                    .active
+                    .compare_exchange(active, active + 1, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+            {
+                return ConcurrencyPermit { gate: self.clone() };
+            }
+            notified.await;
+        }
+    }
+}
+
+struct ConcurrencyPermit {
+    gate: Arc<ConcurrencyGate>,
+}
+
+impl Drop for ConcurrencyPermit {
+    fn drop(&mut self) {
+        self.gate.active.fetch_sub(1, Ordering::AcqRel);
+        self.gate.changed.notify_waiters();
+    }
 }
 
 enum ProcessOutcome {
@@ -200,7 +270,7 @@ async fn run_job(
     cancellation: CancellationToken,
 ) -> Result<(), FetchError> {
     let permit = tokio::select! {
-        permit = inner.semaphore.clone().acquire_owned() => permit.map_err(|error| FetchError::Internal(error.to_string()))?,
+        permit = inner.concurrency.clone().acquire() => permit,
         _ = cancellation.cancelled() => {
             stop_job(&inner, id).await?;
             return Ok(());
@@ -345,6 +415,9 @@ async fn run_job(
     inner
         .events
         .publish(ApplicationEvent::DownloadCompleted(job.clone()));
+    inner
+        .events
+        .publish(ApplicationEvent::CompletedFileCreated(file.clone()));
     info!(job_id = %id, file_id = %file.id, path = %file.path.display(), "download completed");
     Ok(())
 }
@@ -632,6 +705,36 @@ fn storage_error(error: fetch_storage::StorageError) -> FetchError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn concurrency_gate_applies_limit_changes_without_restart() {
+        let gate = Arc::new(ConcurrencyGate::new(1));
+        let first = gate.clone().acquire().await;
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(20), gate.clone().acquire())
+                .await
+                .is_err()
+        );
+
+        gate.set_limit(2);
+        let second = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            gate.clone().acquire(),
+        )
+        .await
+        .expect("increased limit should release a queued job");
+        gate.set_limit(1);
+        drop(first);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(20), gate.clone().acquire())
+                .await
+                .is_err()
+        );
+        drop(second);
+        tokio::time::timeout(std::time::Duration::from_millis(100), gate.acquire())
+            .await
+            .expect("reduced limit should apply after active jobs finish");
+    }
     use fetch_core::DownloadMode;
 
     #[cfg(unix)]
@@ -711,12 +814,18 @@ mod tests {
         assert!(files[0].thumbnail_available);
         assert!(files[0].thumbnail_path.as_ref().unwrap().is_file());
         let mut saw_postprocessing = false;
+        let mut saw_completed_file = false;
         while let Ok(event) = event_receiver.try_recv() {
             saw_postprocessing |= matches!(event, ApplicationEvent::DownloadPostprocessing(_));
+            saw_completed_file |= matches!(event, ApplicationEvent::CompletedFileCreated(_));
         }
         assert!(
             saw_postprocessing,
             "post-processing was not emitted over the event bus"
+        );
+        assert!(
+            saw_completed_file,
+            "completed file was not emitted over the event bus"
         );
     }
 

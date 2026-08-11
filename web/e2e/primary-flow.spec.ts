@@ -10,6 +10,7 @@ const settings = {
   download_directory: 'downloads', concurrent_downloads: 3,
   open_browser_on_start: false, ytdlp_auto_update: true,
 }
+const completedFixture = [{ id: 'af2bf705-8425-4178-9c5c-805e62db4f64', job_id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', filename: 'media.mp4', thumbnail_available: true, size_bytes: 100, mime_type: 'video/mp4', title: 'Fixture media', browser_playable: true, created_at: '2026-08-09T00:00:00Z' }]
 
 async function mockApi(
   page: Page,
@@ -17,7 +18,7 @@ async function mockApi(
   network = { urls: ['http://127.0.0.1:8080'], local_client: false },
 ) {
   let jobs: unknown[] = []
-  let completed = [{ id: 'af2bf705-8425-4178-9c5c-805e62db4f64', job_id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', filename: 'media.mp4', thumbnail_available: true, size_bytes: 100, mime_type: 'video/mp4', title: 'Fixture media', browser_playable: true, created_at: '2026-08-09T00:00:00Z' }]
+  let completed = [...completedFixture]
   await page.route('**/*', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -39,11 +40,12 @@ async function mockApi(
     if (/^\/api\/files\/.+$/.test(path) && request.method() === 'DELETE') { completed = []; return route.fulfill({ status: 204 }) }
     if (/^\/api\/files\/.+\/reveal$/.test(path)) return route.fulfill({ status: network.local_client ? 204 : 403, json: network.local_client ? undefined : { error: { code: 'LOCAL_CLIENT_REQUIRED', message: 'Host only' } } })
     if (path === '/api/history' || path === '/api/logs') return route.fulfill({ json: [] })
-    if (path === '/api/settings') return route.fulfill({ json: request.method() === 'PUT' ? request.postDataJSON() : settings })
-    if (path === '/api/network') return route.fulfill({ json: { bind_address: settings.bind_address, port: settings.port, urls: network.urls, authentication: false, restart_required_after_bind_change: true, local_client: network.local_client } })
+    if (path === '/api/settings') return route.fulfill({ json: request.method() === 'PUT' ? { ...request.postDataJSON(), listener_changed: false } : settings })
+    if (path === '/api/network') return route.fulfill({ json: { bind_address: settings.bind_address, port: settings.port, urls: network.urls, authentication: false, restart_required_after_bind_change: false, local_client: network.local_client } })
     if (path === '/api/diagnostics') return route.fulfill({ json: { checks: [] } })
     return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } })
   })
+  return { setCompleted: (files: typeof completedFixture) => { completed = files } }
 }
 
 test('first run offers real managed runtime installation', async ({ page }) => {
@@ -114,6 +116,39 @@ test('playlist entries retain shared folder context and item order', async ({ pa
   ])
 })
 
+test('an open Completed page updates when a download finishes', async ({ page }) => {
+  await page.addInitScript(() => {
+    const sources: EventTarget[] = []
+    class BrowserEventSource extends EventTarget {
+      onopen: ((event: Event) => void) | null = null
+      onerror: ((event: Event) => void) | null = null
+      constructor(public readonly url: string) {
+        super()
+        sources.push(this)
+        setTimeout(() => this.onopen?.(new Event('open')), 0)
+      }
+      close() {}
+    }
+    Object.defineProperty(window, 'EventSource', { configurable: true, value: BrowserEventSource })
+    Object.defineProperty(window, '__emitFetchEvent', { configurable: true, value: (name: string, data: unknown) => {
+      sources.at(-1)?.dispatchEvent(new MessageEvent(name, { data: JSON.stringify(data) }))
+    } })
+  })
+  const api = await mockApi(page)
+  api.setCompleted([])
+  await page.goto('/completed')
+  await expect(page.getByText('No completed files')).toBeVisible()
+
+  api.setCompleted([...completedFixture])
+  await page.evaluate((file) => {
+    const emit = (window as typeof window & { __emitFetchEvent: (name: string, data: unknown) => void }).__emitFetchEvent
+    emit('download.completed', { id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', status: 'completed' })
+    emit('library.completed', file)
+  }, completedFixture[0])
+  await expect(page.getByText('Fixture media')).toBeVisible()
+  await expect(page.getByText('No completed files')).toHaveCount(0)
+})
+
 test('theme preference persists and mobile navigation exposes the primary flow', async ({ page }, testInfo) => {
   await mockApi(page)
   await page.goto('/settings#general')
@@ -123,6 +158,9 @@ test('theme preference persists and mobile navigation exposes the primary flow',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.keyboard.press('Tab')
+  await expect(page.locator(':focus-visible')).toHaveCSS('outline-color', 'rgb(8, 127, 114)')
+  await expect(page.locator(':focus-visible')).toHaveCSS('outline-style', 'solid')
 
   if (testInfo.project.name === 'mobile-chromium') {
     await expect(page.locator('.topbar h1')).toBeHidden()

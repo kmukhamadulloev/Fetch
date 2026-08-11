@@ -88,6 +88,7 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — out-of-policy remote addresses return typed `403`.
 - [x] PASS — invalid CIDRs cannot be saved.
 - [x] PASS — bind/port validation returns typed settings errors.
+- [x] PASS — download defaults, concurrency, allow-list, bind address, and port apply without restarting the process.
 - [x] PASS — every supported operational setting and managed runtime action is exposed in the UI.
 - [x] PASS — reachable LAN URLs can be copied or encoded locally as a scannable QR code.
 - [x] PASS — no authentication or pairing system was introduced.

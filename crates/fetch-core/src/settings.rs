@@ -1,4 +1,7 @@
-use std::{net::IpAddr, path::PathBuf};
+use std::{
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +14,11 @@ pub trait SettingsOperations: Send + Sync {
         &self,
         settings: ApplicationSettings,
     ) -> Result<ApplicationSettings, FetchError>;
+}
+
+#[async_trait::async_trait]
+pub trait ListenerOperations: Send + Sync {
+    async fn rebind(&self, address: SocketAddr) -> Result<bool, FetchError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

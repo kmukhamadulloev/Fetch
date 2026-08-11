@@ -18,8 +18,8 @@ use axum::{
 };
 use fetch_core::{
     ApplicationSettings, CompletedOperations, DiagnosticOperations, DownloadOperations,
-    DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus, FetchError, MediaAnalysis,
-    RuntimeStatus, SettingsOperations, StatusService,
+    DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus, FetchError,
+    ListenerOperations, MediaAnalysis, RuntimeStatus, SettingsOperations, StatusService,
 };
 use fetch_runtime::RuntimeManager;
 use rust_embed::Embed;
@@ -36,6 +36,7 @@ pub struct ServerServices {
     pub events: EventBus,
     pub completed: Arc<dyn CompletedOperations>,
     pub settings: Arc<dyn SettingsOperations>,
+    pub listener: Arc<dyn ListenerOperations>,
     pub network_policy: NetworkPolicy,
     pub diagnostics: Arc<dyn DiagnosticOperations>,
     pub shutdown: CancellationToken,
@@ -441,12 +442,60 @@ async fn put_settings(
     Json(settings): Json<ApplicationSettings>,
 ) -> Result<impl IntoResponse, ApiError> {
     settings.validate_basic()?;
-    let saved = state.services.settings.put_settings(settings).await?;
+    let previous = state.services.settings.get_settings().await?;
+    state
+        .services
+        .downloads
+        .update_defaults(
+            settings.download_directory.clone(),
+            settings.concurrent_downloads,
+        )
+        .await?;
+    let saved = match state.services.settings.put_settings(settings).await {
+        Ok(saved) => saved,
+        Err(error) => {
+            let _ = state
+                .services
+                .downloads
+                .update_defaults(
+                    previous.download_directory.clone(),
+                    previous.concurrent_downloads,
+                )
+                .await;
+            return Err(ApiError(error));
+        }
+    };
+    let address = SocketAddr::new(saved.bind_address, saved.port);
+    let listener_changed = match state.services.listener.rebind(address).await {
+        Ok(changed) => changed,
+        Err(error) => {
+            let _ = state.services.settings.put_settings(previous.clone()).await;
+            let _ = state
+                .services
+                .downloads
+                .update_defaults(
+                    previous.download_directory.clone(),
+                    previous.concurrent_downloads,
+                )
+                .await;
+            return Err(ApiError(error));
+        }
+    };
     state
         .services
         .network_policy
         .update(&saved.allowed_networks)?;
-    Ok(Json(saved))
+    Ok(Json(SettingsSaveResponse {
+        settings: saved,
+        listener_changed,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+struct SettingsSaveResponse {
+    #[serde(flatten)]
+    settings: ApplicationSettings,
+    listener_changed: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -506,7 +555,7 @@ async fn network_info(
         port: settings.port,
         urls,
         authentication: false,
-        restart_required_after_bind_change: true,
+        restart_required_after_bind_change: false,
         local_client: request
             .extensions()
             .get::<ConnectInfo<SocketAddr>>()
@@ -624,7 +673,14 @@ async fn events(
                 },
                 application = application_events.recv() => match application {
                     Ok(application) => {
-                        if let Ok(event) = Event::default().event(application.event_name()).json_data(application.job()) {
+                        let event = if let Some(job) = application.job() {
+                            Event::default().event(application.event_name()).json_data(job)
+                        } else if let Some(file) = application.completed_file() {
+                            Event::default().event(application.event_name()).json_data(file)
+                        } else {
+                            continue;
+                        };
+                        if let Ok(event) = event {
                             yield Ok(event);
                         }
                     }
@@ -750,6 +806,7 @@ mod tests {
     struct TestCompleted;
     struct TestCompletedFile(fetch_core::CompletedFile);
     struct TestSettings;
+    struct TestListener;
     struct TestDiagnostics;
 
     #[async_trait::async_trait]
@@ -797,6 +854,13 @@ mod tests {
         }
         async fn delete(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
             Err(FetchError::NotFound)
+        }
+        async fn update_defaults(
+            &self,
+            _download_directory: std::path::PathBuf,
+            _concurrent_downloads: u8,
+        ) -> Result<(), FetchError> {
+            Ok(())
         }
     }
 
@@ -866,6 +930,13 @@ mod tests {
     }
 
     #[async_trait::async_trait]
+    impl ListenerOperations for TestListener {
+        async fn rebind(&self, _address: SocketAddr) -> Result<bool, FetchError> {
+            Ok(false)
+        }
+    }
+
+    #[async_trait::async_trait]
     impl DiagnosticOperations for TestDiagnostics {
         async fn logs(&self) -> Result<Vec<fetch_core::DiagnosticLogEntry>, FetchError> {
             Ok(vec![])
@@ -899,6 +970,7 @@ mod tests {
             events,
             completed,
             settings: Arc::new(TestSettings),
+            listener: Arc::new(TestListener),
             network_policy: NetworkPolicy::new(&["192.168.0.0/16".into()]).unwrap(),
             diagnostics: Arc::new(TestDiagnostics),
             shutdown,

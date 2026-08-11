@@ -1,8 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDownloadsStore } from './downloads'
+import { useLibraryStore } from './library'
 import { useRealtimeStore } from './realtime'
-import type { DownloadJob } from '@/app/api/client'
+import type { CompletedFile, DownloadJob } from '@/app/api/client'
 
 const fixtureJob: DownloadJob = {
   id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310',
@@ -23,10 +24,27 @@ const fixtureJob: DownloadJob = {
   created_at: '2026-08-09T00:00:00Z',
   updated_at: '2026-08-09T00:00:00Z',
 }
+const fixtureFile: CompletedFile = {
+  id: 'af2bf705-8425-4178-9c5c-805e62db4f64',
+  job_id: fixtureJob.id,
+  filename: 'media.mp4',
+  thumbnail_available: true,
+  size_bytes: 100,
+  mime_type: 'video/mp4',
+  title: 'Media',
+  browser_playable: true,
+  created_at: '2026-08-09T00:00:00Z',
+}
 
 class TestBroadcastChannel extends EventTarget {
+  static instances: TestBroadcastChannel[] = []
   postMessage = vi.fn()
   close = vi.fn()
+
+  constructor() {
+    super()
+    TestBroadcastChannel.instances.push(this)
+  }
 }
 
 class TestEventSource extends EventTarget {
@@ -54,6 +72,7 @@ beforeEach(() => {
     },
   })
   TestEventSource.instances = []
+  TestBroadcastChannel.instances = []
   vi.useFakeTimers()
   vi.stubGlobal('BroadcastChannel', TestBroadcastChannel)
   vi.stubGlobal('EventSource', TestEventSource)
@@ -105,5 +124,30 @@ describe('realtime coordinator', () => {
     expect(realtime.role).toBe('primary')
     expect(TestEventSource.instances).toHaveLength(1)
     realtime.stop()
+  })
+
+  it('merges completed files for direct and relayed library events', async () => {
+    const realtime = useRealtimeStore()
+    const library = useLibraryStore()
+    realtime.start()
+    await vi.advanceTimersByTimeAsync(100)
+
+    const completed = { ...fixtureJob, status: 'completed', progress_percent: 100 } satisfies DownloadJob
+    TestEventSource.instances[0].dispatchEvent(new MessageEvent('download.completed', { data: JSON.stringify(completed) }))
+    TestEventSource.instances[0].dispatchEvent(new MessageEvent('library.completed', { data: JSON.stringify(fixtureFile) }))
+    expect(library.history[0]?.status).toBe('completed')
+    expect(library.completed).toEqual([fixtureFile])
+    realtime.stop()
+
+    setActivePinia(createPinia())
+    window.localStorage.setItem('fetch.realtime.primary', JSON.stringify({ tabId: 'other-tab', expiresAt: Date.now() + 10_000 }))
+    const secondaryRealtime = useRealtimeStore()
+    const secondaryLibrary = useLibraryStore()
+    secondaryRealtime.start()
+    TestBroadcastChannel.instances.at(-1)?.dispatchEvent(new MessageEvent('message', { data: {
+      type: 'event', sender: 'other-tab', name: 'library.completed', data: JSON.stringify(fixtureFile),
+    } }))
+    expect(secondaryLibrary.completed).toEqual([fixtureFile])
+    secondaryRealtime.stop()
   })
 })

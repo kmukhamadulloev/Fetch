@@ -108,6 +108,7 @@ export interface NetworkInfo {
   restart_required_after_bind_change: boolean
   local_client: boolean
 }
+export type SettingsSaveResponse = ApplicationSettings & { listener_changed: boolean }
 export interface DiagnosticLogEntry {
   id: number
   level: string
@@ -214,7 +215,7 @@ export function getHistory(): Promise<DownloadJob[]> {
 }
 
 export function getSettings(): Promise<ApplicationSettings> { return jsonRequest('/api/settings') }
-export function putSettings(settings: ApplicationSettings): Promise<ApplicationSettings> {
+export function putSettings(settings: ApplicationSettings): Promise<SettingsSaveResponse> {
   return jsonRequest('/api/settings', { method: 'PUT', body: JSON.stringify(settings) })
 }
 export function getNetworkInfo(): Promise<NetworkInfo> { return jsonRequest('/api/network') }

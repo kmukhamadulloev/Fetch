@@ -473,7 +473,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fetch"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fetch-core",
  "reqwest",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-ytdlp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "fetch-core",

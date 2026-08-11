@@ -40,5 +40,19 @@ export const useLibraryStore = defineStore('library', () => {
     } finally { actingId.value = null }
   }
 
-  return { completed, history, loading, error, actingId, refresh, reveal, remove }
+  function applyCompleted(payload: unknown) {
+    const file = payload as CompletedFile
+    const index = completed.value.findIndex((item) => item.id === file.id)
+    if (index === -1) completed.value.unshift(file)
+    else completed.value[index] = file
+  }
+
+  function applyDownload(payload: unknown) {
+    const job = payload as DownloadJob
+    const index = history.value.findIndex((item) => item.id === job.id)
+    if (index === -1) history.value.unshift(job)
+    else history.value[index] = job
+  }
+
+  return { completed, history, loading, error, actingId, refresh, reveal, remove, applyCompleted, applyDownload }
 })
