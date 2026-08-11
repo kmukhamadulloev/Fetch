@@ -21,6 +21,27 @@ the current archive release. `docs/RELEASE.md` calls out the required review
 before broad public distribution. This does not affect local execution or the
 native package startup gates.
 
+## BUG-011 — Windows release smoke can fail during temporary cleanup
+
+Status: RESOLVED
+
+Affected:
+- release automation
+
+Expected: A Windows archive passes its release gate after the packaged Fetch
+binary starts and returns a ready server status.
+
+Actual: Fetch begins managed-runtime bootstrap in the background. The smoke
+script force-stopped the ready server and immediately removed its temporary
+data directory, allowing a transient Windows file-handle race on the active
+`yt-dlp.download-*` file to override the successful smoke result.
+
+Resolution: The Windows smoke script no longer exits from inside its guarded
+probe. Cleanup waits for Fetch to terminate and retries directory removal while
+Windows releases transient handles. Exhausted best-effort cleanup emits a
+warning without converting a verified application startup into a release
+failure.
+
 ## BUG-001 — Ctrl+C waits indefinitely for SSE clients
 
 Status: RESOLVED
