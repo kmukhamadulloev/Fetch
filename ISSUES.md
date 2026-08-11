@@ -42,6 +42,24 @@ Windows releases transient handles. Exhausted best-effort cleanup emits a
 warning without converting a verified application startup into a release
 failure.
 
+## BUG-012 — Tagged release publisher lacks Git tag context
+
+Status: RESOLVED
+
+Affected:
+- release automation
+
+Expected: After all native archives pass, the tagged workflow verifies the tag
+and publishes one GitHub Release containing every archive and checksum.
+
+Actual: The publish job downloaded build artifacts into an otherwise empty
+runner. `gh release create --verify-tag` invokes Git to verify the release tag,
+so it failed because no repository had been checked out.
+
+Resolution: The publish job now checks out the triggering ref with complete tag
+history before downloading artifacts and invoking GitHub CLI. Tag verification
+remains enabled.
+
 ## BUG-001 — Ctrl+C waits indefinitely for SSE clients
 
 Status: RESOLVED
