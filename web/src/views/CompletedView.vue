@@ -1,26 +1,48 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { CircleCheck, Download, ExternalLink, FileVideo, FolderOpen, LoaderCircle, Music2, Play, Trash2, TriangleAlert, X } from '@lucide/vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
+import CompletedMediaCard from '@/components/CompletedMediaCard.vue'
 import MediaPlayerDialog from '@/components/MediaPlayerDialog.vue'
-import { useLibraryStore } from '@/stores/library'
+import { useLibraryStore, type CompletedPlaylistGroup } from '@/stores/library'
 import { useSettingsStore } from '@/stores/settings'
 import type { CompletedFile } from '@/app/api/client'
 
+type LibraryEntry =
+  | { kind: 'file'; file: CompletedFile; updated_at: string }
+  | { kind: 'playlist'; playlist: CompletedPlaylistGroup; updated_at: string }
+
 const library = useLibraryStore()
 const settings = useSettingsStore()
+const route = useRoute()
+const router = useRouter()
 const selected = ref<CompletedFile | null>(null)
 const pendingDelete = ref<CompletedFile | null>(null)
-const failedThumbnails = ref(new Set<string>())
+const failedPlaylistThumbnails = ref(new Set<string>())
+
+const requestedPlaylistId = computed(() => typeof route.query.playlist === 'string' ? route.query.playlist : null)
+const activePlaylist = computed(() => requestedPlaylistId.value ? library.playlists.find((playlist) => playlist.id === requestedPlaylistId.value) ?? null : null)
+const libraryEntries = computed<LibraryEntry[]>(() => [
+  ...library.standalone.map((file) => ({ kind: 'file' as const, file, updated_at: file.created_at })),
+  ...library.playlists.map((playlist) => ({ kind: 'playlist' as const, playlist, updated_at: playlist.latest_created_at })),
+].sort((left, right) => right.updated_at.localeCompare(left.updated_at)))
+
 onMounted(() => Promise.all([library.refresh(), settings.refresh()]))
 
 function bytes(value: number) {
-  const units = ['B', 'KB', 'MB', 'GB']
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let size = value, unit = 0
   while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++ }
   return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`
 }
-function thumbnailFailed(id: string) {
-  failedThumbnails.value = new Set([...failedThumbnails.value, id])
+function playlistThumbnailFailed(id: string) {
+  failedPlaylistThumbnails.value = new Set([...failedPlaylistThumbnails.value, id])
+}
+function openPlaylist(playlist: CompletedPlaylistGroup) {
+  void router.push({ name: 'completed', query: { playlist: playlist.id } })
+}
+function closePlaylist() {
+  void router.push({ name: 'completed' })
 }
 async function confirmDelete() {
   if (!pendingDelete.value) return
@@ -28,38 +50,58 @@ async function confirmDelete() {
   if (await library.remove(file)) {
     if (selected.value?.id === file.id) selected.value = null
     pendingDelete.value = null
+    if (requestedPlaylistId.value && !activePlaylist.value) closePlaylist()
   }
 }
 </script>
 
 <template>
-  <section>
-    <div class="flex items-end justify-between gap-4"><div><p class="eyebrow">Files</p><h2 class="mt-2 text-2xl font-semibold">Completed</h2><p class="mt-1 text-sm text-muted">Play compatible media, open it on the host, or download it remotely.</p></div><span v-if="library.completed.length" class="badge muted">{{ library.completed.length }} {{ library.completed.length === 1 ? 'file' : 'files' }}</span></div>
-    <p v-if="library.error" class="error-panel mt-5" role="alert">{{ library.error }}</p>
-    <div v-if="library.completed.length" class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <article v-for="file in library.completed" :key="file.id" class="media-card card overflow-hidden">
-        <button v-if="file.browser_playable" class="media-cover group w-full" type="button" :aria-label="`Play ${file.title ?? file.filename}`" @click="selected = file">
-          <img v-if="file.thumbnail_available && !failedThumbnails.has(file.id)" class="size-full object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" loading="lazy" @error="thumbnailFailed(file.id)" />
-          <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
-          <span class="play-button"><Play class="ml-0.5" fill="currentColor" :size="20" /></span>
-        </button>
-        <div v-else class="media-cover"><img v-if="file.thumbnail_available && !failedThumbnails.has(file.id)" class="size-full object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" loading="lazy" @error="thumbnailFailed(file.id)" /><Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" /></div>
-        <div class="p-4">
-          <div class="flex items-start gap-3"><div class="min-w-0 flex-1"><h3 class="truncate text-sm font-semibold" :title="file.title ?? file.filename">{{ file.title ?? file.filename }}</h3><p class="mt-1 truncate text-[11px] text-muted" :title="file.filename">{{ file.filename }} · {{ bytes(file.size_bytes) }}</p></div><button class="icon-btn size-8 shrink-0 text-rose-300" type="button" :aria-label="`Delete ${file.title ?? file.filename}`" @click="pendingDelete = file"><Trash2 :size="14" /></button></div>
-          <div class="mt-4 grid grid-cols-2 gap-2">
-            <button v-if="file.browser_playable" class="secondary-btn" type="button" @click="selected = file"><Play :size="15" />{{ file.mime_type.startsWith('audio/') ? 'Play' : 'Watch' }}</button>
-            <a v-else class="secondary-btn" :href="`/api/files/${file.id}/stream`" target="_blank" rel="noopener"><ExternalLink :size="15" />Open file</a>
-            <button v-if="settings.loading || !settings.network" class="secondary-btn" type="button" disabled><LoaderCircle class="animate-spin" :size="15" />Checking host…</button>
-            <button v-else-if="settings.network.local_client" class="primary-btn" type="button" :disabled="library.actingId === file.id" @click="library.reveal(file)"><LoaderCircle v-if="library.actingId === file.id" class="animate-spin" :size="15" /><FolderOpen v-else :size="15" />Open folder</button>
-            <a v-else class="primary-btn" :href="`/api/files/${file.id}/download`"><Download :size="15" />Download</a>
-          </div>
-          <p v-if="!file.browser_playable" class="mt-3 text-[11px] leading-5 text-muted">Preview is unavailable in this browser. Fetch serves the original file without transcoding.</p>
-        </div>
-      </article>
-    </div>
-    <div v-else class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><CircleCheck :size="22" /></div><h3 class="mt-4 text-sm font-semibold">No completed files</h3><p class="mt-2 text-xs text-muted">Completed downloads will appear here.</p></div>
-    <MediaPlayerDialog v-if="selected" :file="selected" :local-client="settings.network?.local_client ?? false" @close="selected = null" />
+  <section class="min-w-0">
+    <template v-if="requestedPlaylistId && activePlaylist">
+      <button class="secondary-btn mb-5" type="button" @click="closePlaylist"><ArrowLeft :size="15" />Back to completed</button>
+      <div class="flex min-w-0 flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
+        <div class="min-w-0"><p class="eyebrow">Playlist</p><h2 class="mt-2 truncate text-2xl font-semibold" :title="activePlaylist.title">{{ activePlaylist.title }}</h2><p class="mt-1 text-sm text-muted">{{ activePlaylist.files.length }} downloaded {{ activePlaylist.files.length === 1 ? 'video' : 'videos' }} · {{ bytes(activePlaylist.size_bytes) }}</p></div>
+        <span class="badge muted shrink-0"><ListVideo :size="12" />{{ activePlaylist.files.length }}</span>
+      </div>
+      <div class="mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3" data-playlist-gallery>
+        <CompletedMediaCard v-for="file in activePlaylist.files" :key="file.id" :file="file" @play="selected = $event" @delete="pendingDelete = $event" />
+      </div>
+    </template>
 
+    <template v-else-if="!requestedPlaylistId">
+      <div class="flex min-w-0 flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
+        <div class="min-w-0"><p class="eyebrow">Files</p><h2 class="mt-2 text-2xl font-semibold">Completed</h2><p class="mt-1 text-sm text-muted">Browse playlists and individual media downloaded by Fetch.</p></div>
+        <span v-if="library.completed.length" class="badge muted shrink-0 whitespace-nowrap">{{ library.completed.length }} {{ library.completed.length === 1 ? 'file' : 'files' }}</span>
+      </div>
+      <p v-if="library.error" class="error-panel mt-5" role="alert">{{ library.error }}</p>
+
+      <div v-if="library.loading && !library.completed.length" class="card mt-6 flex min-h-48 items-center justify-center gap-2 p-8 text-sm text-muted" role="status"><LoaderCircle class="animate-spin" :size="18" />Loading completed files…</div>
+      <div v-else-if="libraryEntries.length" class="completed-grid mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <template v-for="entry in libraryEntries" :key="entry.kind === 'file' ? entry.file.id : `playlist-${entry.playlist.id}`">
+          <CompletedMediaCard v-if="entry.kind === 'file'" :file="entry.file" @play="selected = $event" @delete="pendingDelete = $event" />
+          <article v-else class="playlist-card-shell min-w-0 w-full max-w-full" :data-playlist-id="entry.playlist.id">
+            <div class="playlist-media-card media-card card min-w-0 w-full max-w-full overflow-hidden">
+              <div class="media-cover">
+                <img v-if="entry.playlist.files[0].thumbnail_available && !failedPlaylistThumbnails.has(entry.playlist.files[0].id)" class="size-full object-cover" :src="`/api/files/${entry.playlist.files[0].id}/thumbnail`" alt="" loading="lazy" @error="playlistThumbnailFailed(entry.playlist.files[0].id)" />
+                <Music2 v-else-if="entry.playlist.files[0].mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
+                <span class="playlist-card-icon"><ListVideo :size="19" /></span>
+                <span class="playlist-card-count">{{ entry.playlist.files.length }} {{ entry.playlist.files.length === 1 ? 'item' : 'items' }}</span>
+                <span v-if="entry.playlist.progress_percent > 0" class="watch-progress"><span :style="{ width: `${entry.playlist.progress_percent}%` }"></span></span>
+              </div>
+              <div class="p-4">
+                <div class="min-w-0"><h3 class="truncate text-sm font-semibold" :title="entry.playlist.title">{{ entry.playlist.title }}</h3><p class="mt-1 truncate text-[11px] text-muted">Playlist · {{ bytes(entry.playlist.size_bytes) }}<template v-if="entry.playlist.watched_files"> · {{ entry.playlist.watched_files }}/{{ entry.playlist.files.length }} watched</template></p></div>
+                <button class="primary-btn mt-4 w-full" type="button" :aria-label="`Open playlist ${entry.playlist.title}`" @click="openPlaylist(entry.playlist)"><ListVideo :size="15" />Open playlist</button>
+              </div>
+            </div>
+          </article>
+        </template>
+      </div>
+      <div v-else-if="!library.loading" class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><CircleCheck :size="22" /></div><h3 class="mt-4 text-sm font-semibold">No completed files</h3><p class="mt-2 text-xs text-muted">Completed downloads will appear here.</p></div>
+    </template>
+
+    <div v-if="requestedPlaylistId && !activePlaylist && !library.loading" class="card mt-6 flex min-h-64 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><ListVideo :size="22" /></div><h3 class="mt-4 text-sm font-semibold">Playlist is unavailable</h3><p class="mt-2 text-xs text-muted">It may have no downloaded files remaining.</p><button class="secondary-btn mt-5" type="button" @click="closePlaylist"><ArrowLeft :size="15" />Back to completed</button></div>
+
+    <MediaPlayerDialog v-if="selected" :file="selected" :local-client="settings.network?.local_client ?? false" @close="selected = null" />
     <div v-if="pendingDelete" class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-file-title">
       <button class="modal-backdrop" type="button" aria-label="Cancel deletion" @click="pendingDelete = null"></button>
       <div class="modal-panel max-w-md">

@@ -27,12 +27,14 @@ const fixtureJob: DownloadJob = {
 const fixtureFile: CompletedFile = {
   id: 'af2bf705-8425-4178-9c5c-805e62db4f64',
   job_id: fixtureJob.id,
+  playlist: null,
   filename: 'media.mp4',
   thumbnail_available: true,
   size_bytes: 100,
   mime_type: 'video/mp4',
   title: 'Media',
   browser_playable: true,
+  playback: null,
   created_at: '2026-08-09T00:00:00Z',
 }
 
@@ -135,8 +137,10 @@ describe('realtime coordinator', () => {
     const completed = { ...fixtureJob, status: 'completed', progress_percent: 100 } satisfies DownloadJob
     TestEventSource.instances[0].dispatchEvent(new MessageEvent('download.completed', { data: JSON.stringify(completed) }))
     TestEventSource.instances[0].dispatchEvent(new MessageEvent('library.completed', { data: JSON.stringify(fixtureFile) }))
+    TestEventSource.instances[0].dispatchEvent(new MessageEvent('library.progress', { data: JSON.stringify({ file_id: fixtureFile.id, position_seconds: 50, duration_seconds: 100, completed: false, updated_at: '2026-08-09T01:00:00Z' }) }))
     expect(library.history[0]?.status).toBe('completed')
-    expect(library.completed).toEqual([fixtureFile])
+    expect(library.completed[0]).toEqual(expect.objectContaining({ id: fixtureFile.id }))
+    expect(library.completed[0].playback?.position_seconds).toBe(50)
     realtime.stop()
 
     setActivePinia(createPinia())

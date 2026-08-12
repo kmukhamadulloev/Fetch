@@ -98,6 +98,10 @@ async function copyUrl(url: string) {
               <input v-model="form.open_browser_on_start" type="checkbox" />
             </label>
             <label class="setting-row">
+              <span><span class="setting-title">Start Fetch with system</span><span class="setting-help">{{ settings.network && !settings.network.local_client ? 'Change this setting on the device running Fetch.' : 'Launch Fetch in the tray when you sign in, without opening a browser.' }}</span></span>
+              <input v-model="form.start_with_system" type="checkbox" :disabled="Boolean(settings.network && !settings.network.local_client)" />
+            </label>
+            <label class="setting-row">
               <span><span class="setting-title">Theme</span><span class="setting-help">System follows the appearance preference of this device.</span></span>
               <select class="select setting-control" :value="appearance.preference.value" aria-label="Theme" @change="changeTheme">
                 <option value="system">Use system</option><option value="dark">Dark</option><option value="light">Light</option>

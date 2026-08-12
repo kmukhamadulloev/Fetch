@@ -88,6 +88,26 @@ impl DownloadManager {
             inner.controls.lock().await.remove(&id);
         });
     }
+
+    pub async fn shutdown(&self) {
+        loop {
+            let tokens = self
+                .inner
+                .controls
+                .lock()
+                .await
+                .values()
+                .cloned()
+                .collect::<Vec<_>>();
+            if tokens.is_empty() {
+                return;
+            }
+            for token in tokens {
+                token.cancel();
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -686,6 +706,7 @@ async fn validate_completed_path(
     Ok(CompletedFile {
         id: Uuid::new_v4(),
         job_id: job.id,
+        playlist: job.request.playlist.clone(),
         filename,
         path: canonical,
         thumbnail_path: None,
@@ -694,6 +715,7 @@ async fn validate_completed_path(
         mime_type: mime,
         title: job.request.title.clone(),
         browser_playable,
+        playback: None,
         created_at: Utc::now(),
     })
 }
@@ -831,7 +853,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn stop_terminates_owned_fixture_process_and_persists_state() {
+    async fn shutdown_terminates_owned_fixture_process_and_persists_state() {
         use std::os::unix::fs::PermissionsExt;
 
         let temp = tempfile::tempdir().unwrap();
@@ -886,13 +908,9 @@ mod tests {
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
-        manager.stop(job.id).await.unwrap();
-        for _ in 0..100 {
-            if manager.get(job.id).await.unwrap().status == DownloadStatus::Stopped {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        tokio::time::timeout(std::time::Duration::from_secs(2), manager.shutdown())
+            .await
+            .expect("download manager did not stop during graceful shutdown");
         assert_eq!(
             manager.get(job.id).await.unwrap().status,
             DownloadStatus::Stopped

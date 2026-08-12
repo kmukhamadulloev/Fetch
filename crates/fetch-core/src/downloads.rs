@@ -28,6 +28,12 @@ pub trait CompletedOperations: Send + Sync {
     async fn get_completed(&self, id: Uuid) -> Result<CompletedFile, FetchError>;
     async fn reveal_completed(&self, id: Uuid) -> Result<(), FetchError>;
     async fn delete_completed(&self, id: Uuid) -> Result<(), FetchError>;
+    async fn save_playback_progress(
+        &self,
+        id: Uuid,
+        update: PlaybackProgressUpdate,
+    ) -> Result<PlaybackProgress, FetchError>;
+    async fn clear_playback_progress(&self, id: Uuid) -> Result<(), FetchError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -47,6 +53,10 @@ pub enum ApplicationEvent {
     DownloadStopped(DownloadJob),
     #[serde(rename = "library.completed")]
     CompletedFileCreated(CompletedFile),
+    #[serde(rename = "library.progress")]
+    PlaybackProgressUpdated(PlaybackProgress),
+    #[serde(rename = "library.progress-cleared")]
+    PlaybackProgressCleared(Uuid),
 }
 
 impl ApplicationEvent {
@@ -59,6 +69,8 @@ impl ApplicationEvent {
             Self::DownloadFailed(_) => "download.failed",
             Self::DownloadStopped(_) => "download.stopped",
             Self::CompletedFileCreated(_) => "library.completed",
+            Self::PlaybackProgressUpdated(_) => "library.progress",
+            Self::PlaybackProgressCleared(_) => "library.progress-cleared",
         }
     }
 
@@ -70,13 +82,29 @@ impl ApplicationEvent {
             | Self::DownloadCompleted(job)
             | Self::DownloadFailed(job)
             | Self::DownloadStopped(job) => Some(job),
-            Self::CompletedFileCreated(_) => None,
+            Self::CompletedFileCreated(_)
+            | Self::PlaybackProgressUpdated(_)
+            | Self::PlaybackProgressCleared(_) => None,
         }
     }
 
     pub fn completed_file(&self) -> Option<&CompletedFile> {
         match self {
             Self::CompletedFileCreated(file) => Some(file),
+            _ => None,
+        }
+    }
+
+    pub fn playback_progress(&self) -> Option<&PlaybackProgress> {
+        match self {
+            Self::PlaybackProgressUpdated(progress) => Some(progress),
+            _ => None,
+        }
+    }
+
+    pub fn cleared_playback_file(&self) -> Option<&Uuid> {
+        match self {
+            Self::PlaybackProgressCleared(id) => Some(id),
             _ => None,
         }
     }
@@ -234,6 +262,7 @@ impl DownloadJob {
 pub struct CompletedFile {
     pub id: Uuid,
     pub job_id: Uuid,
+    pub playlist: Option<PlaylistContext>,
     pub filename: String,
     #[serde(skip_serializing)]
     pub path: PathBuf,
@@ -244,7 +273,23 @@ pub struct CompletedFile {
     pub mime_type: String,
     pub title: Option<String>,
     pub browser_playable: bool,
+    pub playback: Option<PlaybackProgress>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaybackProgress {
+    pub file_id: Uuid,
+    pub position_seconds: f64,
+    pub duration_seconds: f64,
+    pub completed: bool,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct PlaybackProgressUpdate {
+    pub position_seconds: f64,
+    pub duration_seconds: f64,
 }
 
 #[cfg(test)]

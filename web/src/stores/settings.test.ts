@@ -10,7 +10,7 @@ describe('settings store', () => {
     const settings: ApplicationSettings = {
       bind_address: '0.0.0.0', port: 8080, allowed_networks: ['192.168.0.0/16'],
       download_directory: 'downloads', concurrent_downloads: 2,
-      open_browser_on_start: false, ytdlp_auto_update: true,
+      open_browser_on_start: false, start_with_system: false, ytdlp_auto_update: true,
     }
     const network = { bind_address: '0.0.0.0', port: 8080, urls: ['http://127.0.0.1:8080'], authentication: false, restart_required_after_bind_change: false }
     const fetchMock = vi.fn()
@@ -30,7 +30,7 @@ describe('settings store', () => {
     const settings: ApplicationSettings = {
       bind_address: '0.0.0.0', port: 9090, allowed_networks: ['192.168.0.0/16'],
       download_directory: 'downloads', concurrent_downloads: 2,
-      open_browser_on_start: false, ytdlp_auto_update: true,
+      open_browser_on_start: false, start_with_system: false, ytdlp_auto_update: true,
     }
     expect(reconnectUrl(settings, 'http://192.168.1.20:8080/settings#network'))
       .toBe('http://192.168.1.20:9090/settings#network')

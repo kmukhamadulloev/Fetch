@@ -11,7 +11,7 @@ trap cleanup EXIT
 mkdir -p "$smoke_root/data" "$smoke_root/downloads"
 config="$smoke_root/fetch.toml"
 printf 'bind_address = "127.0.0.1"\nport = 18991\ndata_directory = "%s"\ndownload_directory = "%s"\nopen_browser_on_start = false\n' "$smoke_root/data" "$smoke_root/downloads" > "$config"
-FETCH_CONFIG="$config" "$binary" >"$smoke_root/fetch.log" 2>&1 &
+FETCH_CONFIG="$config" "$binary" --no-tray >"$smoke_root/fetch.log" 2>&1 &
 fetch_pid=$!
 for _ in $(seq 1 100); do
   if curl --fail --silent http://127.0.0.1:18991/api/status | grep -q '"server":"ready"'; then

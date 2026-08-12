@@ -30,8 +30,12 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   checks, atomic updates, rollback, and repair.
 - Browse cached artwork and completed files without exposing filesystem paths
   to browser clients.
+- Browse completed playlists as stacked collection cards, then open an ordered
+  gallery containing the playlist's individual media cards.
 - Preview browser-compatible media using native playback and HTTP Range
-  requests. Unsupported formats remain available through Open and Download.
+  requests. Shared watch progress resumes across allowed devices, with visible
+  progress lines and a Start over action. Unsupported formats remain available
+  through Open and Download.
 - Use a responsive desktop/mobile UI with Dark, Light, and system themes.
 - Open Fetch on a phone by scanning the LAN QR code instead of typing an IP and
   port.
@@ -39,6 +43,10 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   devices, or permanently delete the media while retaining job history.
 - Share one realtime SSE connection safely between several open Fetch tabs,
   with visible ownership, takeover, automatic failover, and retry handling.
+- Keep Fetch available in the native system tray with Open Fetch, Open
+  downloads folder, and graceful Quit controls.
+- Optionally start Fetch in the tray when the current operating-system user
+  signs in, without forcing a browser window open.
 - Bind locally or to a trusted LAN with a CIDR allow-list.
 - Inspect retained process logs and database, runtime, and output diagnostics.
 
@@ -49,7 +57,7 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
 | Application | Rust, Tokio | Startup, configuration, process ownership, graceful shutdown |
 | HTTP | Axum, SSE | Typed REST API, realtime events, embedded UI, file streaming |
 | Downloads | yt-dlp, FFmpeg, FFprobe | Extraction, download, merge, remux, metadata, artwork |
-| Storage | SQLite + filesystem | Settings, jobs, history, diagnostics, completed media |
+| Storage | SQLite + filesystem | Settings, jobs, history, playback progress, diagnostics, completed media |
 | Interface | Vue 3, TypeScript, Pinia, Tailwind CSS | Responsive localhost and LAN experience |
 
 The production frontend is embedded in the native executable. Node.js is only
@@ -134,14 +142,19 @@ download_directory = "/path/to/downloads"
 concurrent_downloads = 3
 allowed_networks = ["192.168.0.0/16"]
 open_browser_on_start = true
+start_with_system = false
 ytdlp_auto_update = true
 log_filter = "fetch=info,fetch_server=info"
 ```
 
 Set `FETCH_CONFIG` to an explicit file. `FETCH_BIND_ADDRESS`, `FETCH_PORT`,
 `FETCH_DATA_DIRECTORY`, `FETCH_DOWNLOAD_DIRECTORY`, and `FETCH_LOG` override
-their corresponding startup values. Bind and port changes saved in the UI take
-effect after restart; CIDR changes take effect immediately.
+their corresponding startup values. Download defaults, concurrency, allowed
+CIDRs, bind address, and port changes saved in the UI take effect immediately.
+After a successful listener change, the current browser tab relocates to the
+new address; an unavailable replacement leaves the existing listener active.
+Start-with-system registration applies immediately on the host and launches
+Fetch in background mode. Use `--no-tray` for terminal-only or headless runs.
 
 Appearance remains a browser-local preference so desktop and mobile clients
 can independently use Dark, Light, or Use system.
@@ -161,6 +174,8 @@ See [Security](docs/SECURITY.md) before enabling LAN access.
 - [Download engine](docs/DOWNLOAD_ENGINE.md)
 - [Runtime management](docs/RUNTIME.md)
 - [Testing](docs/TESTING.md)
+- [Roadmap](ROADMAP.md)
+- [Release history](RELEASE.md)
 - [Release packaging](docs/RELEASE.md)
 - [Acceptance matrix](docs/ACCEPTANCE.md)
 

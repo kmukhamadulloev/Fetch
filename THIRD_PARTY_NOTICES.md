@@ -7,6 +7,10 @@ The embedded frontend uses `qrcode.vue`, distributed under the MIT License, to
 render LAN access QR codes entirely in the browser. See
 <https://github.com/scopewu/qrcode.vue>.
 
+Native lifecycle integration uses `tray-icon` (MIT OR Apache-2.0) on Windows
+and macOS and `ksni` (Unlicense) on Linux. Exact versions are recorded in
+`Cargo.lock`; per-user startup files/registry values use operating-system APIs.
+
 Fetch does not bundle yt-dlp, FFmpeg, or FFprobe in its release archive. At
 runtime it can download them into the local application-data directory:
 

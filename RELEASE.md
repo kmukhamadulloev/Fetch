@@ -3,7 +3,19 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## 0.1.1 — Current
+## 0.1.2 — Current
+
+- Grouped completed playlist downloads into stacked cards and focused galleries.
+- Preserved playlist titles and item order across reloads and realtime updates.
+- Reused responsive media cards and per-file actions inside every playlist.
+- Kept existing databases compatible by deriving collection data from persisted jobs.
+- Added shared watch progress, automatic resume, watched state, and start-over controls.
+- Added realtime progress lines for media and playlist cards across connected devices.
+- Prevented Completed media and playlist cards from overflowing narrow mobile screens.
+- Added native tray controls and optional per-user background startup.
+- Made tray Quit stop owned downloads and HTTP connections through bounded graceful shutdown.
+
+## 0.1.1
 
 - Added player shortcuts for seeking, volume, fullscreen, and accessible feedback.
 - Added immediate Completed-library updates through persisted-file SSE events.

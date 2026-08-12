@@ -11,7 +11,7 @@ download_directory = "$($smokeRoot.Replace('\', '\\'))/downloads"
 open_browser_on_start = false
 "@ | Set-Content -Encoding utf8 $config
 $env:FETCH_CONFIG = $config
-$process = Start-Process -FilePath $Binary -PassThru -RedirectStandardOutput "$smokeRoot/fetch.log" -RedirectStandardError "$smokeRoot/fetch-error.log"
+$process = Start-Process -FilePath $Binary -ArgumentList '--no-tray' -PassThru -RedirectStandardOutput "$smokeRoot/fetch.log" -RedirectStandardError "$smokeRoot/fetch-error.log"
 $ready = $false
 try {
   for ($attempt = 0; $attempt -lt 100; $attempt++) {

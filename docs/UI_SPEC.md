@@ -78,9 +78,26 @@ browser-compatible, and a guarded permanent-delete action. On the Fetch host,
 the primary file action opens the containing folder; on LAN clients it downloads
 the original. Playback uses the same host/remote distinction. Unsupported media
 can still open the original stream without attempting transcoding.
+
+Playlist downloads appear in the same responsive grid as individual media. A
+subtle three-layer offset at the playlist card's top-left, collection icon, and
+item count distinguish it without breaking the established card dimensions.
+**Open playlist** replaces the grid with a focused gallery whose entries use
+the regular media card and original playlist order; **Back to completed**
+returns to the mixed library. The selected playlist is represented in the URL,
+works across reloads, and updates immediately from completed-file events.
 The player provides keyboard controls: Left/Right seek backward or forward five
 seconds, Up/Down adjust volume, F enters or exits fullscreen, and Escape closes
 the dialog. Shortcuts must not intercept modified commands or editable fields.
+Fetch stores shared playback progress in SQLite for browser-playable media.
+Positions of at least ten seconds resume automatically; reaching the final five
+percent marks an item watched, and watched media restarts from the beginning.
+Cards show an accent progress line, playlist cards summarize watched items, and
+the player provides **Start over**. Saving is throttled and never interrupts
+playback; failures appear as a non-blocking player message.
+Completed cards, their action rows, and stacked-playlist decoration remain
+inside the content area at 320 CSS pixels and wider. Actions collapse to one
+column when two readable touch targets cannot fit.
 
 The QR dialog lists reachable allowed LAN URLs, generates the QR locally, lets
 the user switch addresses or copy one, and repeats the no-authentication warning.
@@ -104,6 +121,16 @@ Runtime includes yt-dlp and FFmpeg/FFprobe version/status/update/repair controls
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.
+General settings include **Start Fetch with system**. It applies immediately on
+the host, starts Fetch in its tray without opening the browser, and is disabled
+with explanatory copy for LAN clients.
+
+## Desktop tray
+When supported by the graphical session, the native tray uses the Fetch logo
+and offers **Open Fetch**, **Open downloads folder**, and **Quit Fetch**. Opening
+Fetch follows the current live listener after port changes. Quit uses bounded
+graceful shutdown and stops owned download processes. Tray failure falls back
+to browser/terminal operation rather than stopping the server.
 
 ## First run
 Show real RuntimeManager install state and retry errors. Never fake production setup progress.

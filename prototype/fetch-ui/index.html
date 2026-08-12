@@ -382,24 +382,23 @@
           <section class="view" data-view-panel="completed">
             <div class="flex flex-col gap-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div><p class="eyebrow">FILES</p><h2 class="mt-2 text-2xl font-semibold">Completed</h2><p class="mt-1 text-sm text-app-muted">Files downloaded by Fetch.</p></div>
-                <div class="flex gap-2">
-                  <button class="secondary-btn"><i data-lucide="folder-open"></i> Open folder</button>
-                  <button class="secondary-btn"><i data-lucide="search"></i> Search</button>
-                </div>
+                <div><p class="eyebrow">FILES</p><h2 class="mt-2 text-2xl font-semibold">Completed</h2><p class="mt-1 text-sm text-app-muted">Browse playlists and individual media downloaded by Fetch.</p></div>
+                <span class="badge badge-muted">5 files · 1 playlist</span>
               </div>
 
               <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <article class="media-card">
-                  <div class="media-cover media-cover-a"><span class="badge absolute left-3 top-3">MP4</span><span class="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[10px]">15:42</span></div>
-                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Rust async explained in 15 minutes</h3><p class="mt-1 text-[11px] text-app-muted">1080p · 482 MB · 2h ago</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Watch</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
+                  <div class="media-cover media-cover-a"><span class="badge absolute left-3 top-3">MP4</span><span class="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[10px]">15:42</span><span class="absolute inset-x-0 bottom-0 h-1 bg-white/20"><span class="block h-full w-[42%] bg-teal-300"></span></span></div>
+                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Rust async explained in 15 minutes</h3><p class="mt-1 text-[11px] text-app-muted">1080p · 482 MB · 2h ago</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Resume</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
                 </article>
-
-                <article class="media-card">
-                  <div class="media-cover media-cover-b"><span class="badge absolute left-3 top-3">WEBM</span><span class="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[10px]">46:09</span></div>
-                  <div class="p-4"><h3 class="truncate text-sm font-semibold">Low-level systems programming lecture</h3><p class="mt-1 text-[11px] text-app-muted">1440p · 1.2 GB · Yesterday</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Watch</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
+                <article class="relative isolate">
+                  <span class="absolute inset-0 -translate-x-2 -translate-y-2 rounded-2xl border border-app-border bg-app-panel opacity-50"></span>
+                  <span class="absolute inset-0 -translate-x-1 -translate-y-1 rounded-2xl border border-app-border bg-app-panel opacity-80"></span>
+                  <div class="media-card relative">
+                    <div class="media-cover media-cover-b flex items-center justify-center"><span class="absolute left-3 top-3 flex size-9 items-center justify-center rounded-xl border border-teal-300/30 bg-black/70 text-teal-200"><i data-lucide="list-video" class="size-5"></i></span><span class="absolute bottom-3 right-3 rounded-full bg-black/70 px-2 py-1 text-[10px]">3 items</span><span class="absolute inset-x-0 bottom-0 h-1 bg-white/20"><span class="block h-full w-1/3 bg-teal-300"></span></span></div>
+                    <div class="p-4"><h3 class="truncate text-sm font-semibold">Systems programming conference</h3><p class="mt-1 text-[11px] text-app-muted">Playlist · 1.7 GB · 1/3 watched</p><button class="primary-btn mt-4 w-full justify-center"><i data-lucide="list-video"></i> Open playlist</button></div>
+                  </div>
                 </article>
-
                 <article class="media-card">
                   <div class="media-cover media-cover-c flex items-center justify-center"><i data-lucide="music-2" class="size-14 text-white/40"></i><span class="badge absolute left-3 top-3">OPUS</span></div>
                   <div class="p-4"><h3 class="truncate text-sm font-semibold">Dark ambient live set</h3><p class="mt-1 text-[11px] text-app-muted">128 kbps · 84 MB · Yesterday</p><div class="mt-4 grid grid-cols-2 gap-2"><button class="secondary-btn justify-center"><i data-lucide="play"></i> Play</button><button class="primary-btn justify-center"><i data-lucide="download"></i> Download</button></div></div>
@@ -450,6 +449,7 @@
                       <p class="mt-1 text-xs text-app-muted">Basic application behavior.</p>
                       <div class="mt-6 space-y-5">
                         <div class="setting-row"><div><div class="setting-title">Open browser on startup</div><div class="setting-help">Open the local web UI when Fetch starts.</div></div><label class="switch"><input type="checkbox" checked><span></span></label></div>
+                        <div class="setting-row"><div><div class="setting-title">Start Fetch with system</div><div class="setting-help">Launch Fetch in the tray when you sign in, without opening a browser.</div></div><label class="switch"><input type="checkbox"><span></span></label></div>
                         <div class="setting-row"><div><div class="setting-title">Theme</div><div class="setting-help">Prototype currently uses the dark application theme.</div></div><select class="select w-40"><option>Dark</option><option>System</option><option>Light</option></select></div>
                         <div class="setting-row"><div><div class="setting-title">Language</div><div class="setting-help">Interface language.</div></div><select class="select w-40"><option>English</option><option>Русский</option></select></div>
                       </div>

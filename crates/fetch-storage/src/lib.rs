@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use fetch_core::{
     ApplicationSettings, CompletedFile, DiagnosticLogEntry, DownloadJob, DownloadStatus,
-    FetchError, SettingsOperations,
+    FetchError, PlaybackProgress, SettingsOperations,
 };
 use sqlx::{Row, SqlitePool, sqlite::SqlitePoolOptions};
 use thiserror::Error;
@@ -181,7 +181,7 @@ impl Storage {
     }
 
     pub async fn list_completed_files(&self) -> Result<Vec<CompletedFile>, StorageError> {
-        sqlx::query("SELECT * FROM completed_files ORDER BY created_at DESC")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id ORDER BY completed_files.created_at DESC")
             .fetch_all(&self.pool)
             .await?
             .into_iter()
@@ -193,7 +193,7 @@ impl Storage {
         &self,
         id: uuid::Uuid,
     ) -> Result<Option<CompletedFile>, StorageError> {
-        sqlx::query("SELECT * FROM completed_files WHERE id = ?")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.id = ?")
             .bind(id.to_string())
             .fetch_optional(&self.pool)
             .await?
@@ -205,7 +205,7 @@ impl Storage {
         &self,
         job_id: uuid::Uuid,
     ) -> Result<Option<CompletedFile>, StorageError> {
-        sqlx::query("SELECT * FROM completed_files WHERE job_id = ?")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.job_id = ?")
             .bind(job_id.to_string())
             .fetch_optional(&self.pool)
             .await?
@@ -220,6 +220,28 @@ impl Storage {
             .await?
             .rows_affected()
             > 0)
+    }
+
+    pub async fn save_playback_progress(
+        &self,
+        progress: &PlaybackProgress,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO playback_progress (file_id, position_seconds, duration_seconds, completed, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(file_id) DO UPDATE SET position_seconds = excluded.position_seconds, duration_seconds = excluded.duration_seconds, completed = excluded.completed, updated_at = excluded.updated_at")
+            .bind(progress.file_id.to_string())
+            .bind(progress.position_seconds)
+            .bind(progress.duration_seconds)
+            .bind(progress.completed)
+            .bind(progress.updated_at.to_rfc3339())
+            .execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn delete_playback_progress(&self, id: uuid::Uuid) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM playback_progress WHERE file_id = ?")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub async fn load_settings(&self) -> Result<Option<ApplicationSettings>, StorageError> {
@@ -315,12 +337,28 @@ fn decode_job(row: sqlx::sqlite::SqliteRow) -> Result<DownloadJob, StorageError>
 
 fn decode_completed(row: sqlx::sqlite::SqliteRow) -> Result<CompletedFile, StorageError> {
     let size: i64 = row.try_get("size_bytes")?;
+    let request: fetch_core::DownloadRequest = from_json(row.try_get("job_request_json")?)?;
     let thumbnail_path = row
         .try_get::<Option<String>, _>("thumbnail_path")?
         .map(PathBuf::from);
+    let playback = row
+        .try_get::<Option<f64>, _>("playback_position_seconds")?
+        .map(
+            |position_seconds| -> Result<PlaybackProgress, StorageError> {
+                Ok(PlaybackProgress {
+                    file_id: parse(row.try_get::<String, _>("id")?)?,
+                    position_seconds,
+                    duration_seconds: row.try_get("playback_duration_seconds")?,
+                    completed: row.try_get("playback_completed")?,
+                    updated_at: parse(row.try_get::<String, _>("playback_updated_at")?)?,
+                })
+            },
+        )
+        .transpose()?;
     Ok(CompletedFile {
         id: parse(row.try_get::<String, _>("id")?)?,
         job_id: parse(row.try_get::<String, _>("job_id")?)?,
+        playlist: request.playlist,
         filename: row.try_get("filename")?,
         path: PathBuf::from(row.try_get::<String, _>("path")?),
         thumbnail_available: thumbnail_path.is_some(),
@@ -331,6 +369,7 @@ fn decode_completed(row: sqlx::sqlite::SqliteRow) -> Result<CompletedFile, Stora
         mime_type: row.try_get("mime_type")?,
         title: row.try_get("title")?,
         browser_playable: row.try_get("browser_playable")?,
+        playback,
         created_at: parse(row.try_get::<String, _>("created_at")?)?,
     })
 }
@@ -361,7 +400,7 @@ mod tests {
             .fetch_one(storage.pool())
             .await
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 
     #[tokio::test]
@@ -380,7 +419,11 @@ mod tests {
             embed_metadata: false,
             embed_thumbnail: false,
             subtitles: false,
-            playlist: None,
+            playlist: Some(fetch_core::PlaylistContext {
+                id: "fixture-playlist".into(),
+                title: "Fixture playlist".into(),
+                index: 2,
+            }),
             output_directory: Some(PathBuf::from("/tmp")),
         });
         job.transition(DownloadStatus::Queued).unwrap();
@@ -393,6 +436,7 @@ mod tests {
         let completed = CompletedFile {
             id: uuid::Uuid::new_v4(),
             job_id: job.id,
+            playlist: job.request.playlist.clone(),
             filename: "media.mp4".into(),
             path: PathBuf::from("/tmp/media.mp4"),
             thumbnail_path: Some(PathBuf::from("/data/thumbnails/job.jpg")),
@@ -401,6 +445,7 @@ mod tests {
             mime_type: "video/mp4".into(),
             title: Some("Example".into()),
             browser_playable: true,
+            playback: None,
             created_at: chrono::Utc::now(),
         };
         storage.insert_completed_file(&completed).await.unwrap();
@@ -411,5 +456,21 @@ mod tests {
             .unwrap();
         assert_eq!(loaded.thumbnail_path, completed.thumbnail_path);
         assert!(loaded.thumbnail_available);
+        assert_eq!(loaded.playlist, completed.playlist);
+
+        let progress = PlaybackProgress {
+            file_id: completed.id,
+            position_seconds: 21.0,
+            duration_seconds: 42.0,
+            completed: false,
+            updated_at: chrono::Utc::now(),
+        };
+        storage.save_playback_progress(&progress).await.unwrap();
+        let loaded = storage
+            .get_completed_file(completed.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(loaded.playback, Some(progress));
     }
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import type { CompletedFile } from '../src/app/api/client'
 
 const readyRuntime = [
   { name: 'yt-dlp', version: '2026.08.09', status: 'ready', progress_percent: null, error: null },
@@ -8,9 +9,13 @@ const readyRuntime = [
 const settings = {
   bind_address: '127.0.0.1', port: 8080, allowed_networks: ['192.168.0.0/16'],
   download_directory: 'downloads', concurrent_downloads: 3,
-  open_browser_on_start: false, ytdlp_auto_update: true,
+  open_browser_on_start: false, start_with_system: false, ytdlp_auto_update: true,
 }
-const completedFixture = [{ id: 'af2bf705-8425-4178-9c5c-805e62db4f64', job_id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', filename: 'media.mp4', thumbnail_available: true, size_bytes: 100, mime_type: 'video/mp4', title: 'Fixture media', browser_playable: true, created_at: '2026-08-09T00:00:00Z' }]
+const completedFixture: CompletedFile[] = [{ id: 'af2bf705-8425-4178-9c5c-805e62db4f64', job_id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', playlist: null, filename: 'media.mp4', thumbnail_available: true, size_bytes: 100, mime_type: 'video/mp4', title: 'Fixture media', browser_playable: true, playback: null, created_at: '2026-08-09T00:00:00Z' }]
+const playlistCompletedFixture: CompletedFile[] = [
+  { ...completedFixture[0], id: '10000000-0000-4000-8000-000000000002', job_id: '20000000-0000-4000-8000-000000000002', playlist: { id: 'fixture-list', title: 'Fixture playlist', index: 2 }, filename: '002-second.mp4', title: 'Second item', size_bytes: 60, created_at: '2026-08-10T00:00:00Z' },
+  { ...completedFixture[0], id: '10000000-0000-4000-8000-000000000001', job_id: '20000000-0000-4000-8000-000000000001', playlist: { id: 'fixture-list', title: 'Fixture playlist', index: 1 }, filename: '001-first.mp4', title: 'First item', size_bytes: 40, created_at: '2026-08-09T00:00:00Z' },
+]
 
 async function mockApi(
   page: Page,
@@ -37,7 +42,13 @@ async function mockApi(
     if (path === '/api/media/analyze') return route.fulfill({ json: { kind: 'media', id: 'fixture', extractor: 'Generic', title: 'Fixture media', webpage_url: 'https://example.test/media', duration_seconds: 12, thumbnail_url: null, playlist_count: null, entries: [], formats: [{ id: '720', label: '720p', extension: 'mp4', video_codec: 'avc1', audio_codec: 'aac', width: 1280, height: 720, fps: 30, bitrate_kbps: 1000, filesize_bytes: 100, has_video: true, has_audio: true }] } })
     if (/^\/api\/files\/.+\/thumbnail$/.test(path)) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9"><rect width="16" height="9" fill="#0f766e"/></svg>' })
     if (path === '/api/completed') return route.fulfill({ json: completed })
-    if (/^\/api\/files\/.+$/.test(path) && request.method() === 'DELETE') { completed = []; return route.fulfill({ status: 204 }) }
+    if (/^\/api\/files\/.+\/progress$/.test(path) && request.method() === 'PUT') {
+      const id = path.split('/').at(-2); const body = request.postDataJSON(); const progress = { file_id: id, position_seconds: body.position_seconds, duration_seconds: body.duration_seconds, completed: body.position_seconds >= body.duration_seconds * .95, updated_at: '2026-08-10T00:00:00Z' }
+      completed = completed.map((file) => file.id === id ? { ...file, playback: progress } : file)
+      return route.fulfill({ json: progress })
+    }
+    if (/^\/api\/files\/.+\/progress$/.test(path) && request.method() === 'DELETE') { const id = path.split('/').at(-2); completed = completed.map((file) => file.id === id ? { ...file, playback: null } : file); return route.fulfill({ status: 204 }) }
+    if (/^\/api\/files\/.+$/.test(path) && request.method() === 'DELETE') { const id = path.split('/').at(-1); completed = completed.filter((file) => file.id !== id); return route.fulfill({ status: 204 }) }
     if (/^\/api\/files\/.+\/reveal$/.test(path)) return route.fulfill({ status: network.local_client ? 204 : 403, json: network.local_client ? undefined : { error: { code: 'LOCAL_CLIENT_REQUIRED', message: 'Host only' } } })
     if (path === '/api/history' || path === '/api/logs') return route.fulfill({ json: [] })
     if (path === '/api/settings') return route.fulfill({ json: request.method() === 'PUT' ? { ...request.postDataJSON(), listener_changed: false } : settings })
@@ -45,7 +56,7 @@ async function mockApi(
     if (path === '/api/diagnostics') return route.fulfill({ json: { checks: [] } })
     return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } })
   })
-  return { setCompleted: (files: typeof completedFixture) => { completed = files } }
+  return { setCompleted: (files: CompletedFile[]) => { completed = files } }
 }
 
 test('first run offers real managed runtime installation', async ({ page }) => {
@@ -86,7 +97,24 @@ test('analyze, configure, queue, and save settings', async ({ page }) => {
   await page.getByRole('button', { name: 'Network' }).click()
   await expect(page.getByText('Network access has no application login')).toBeVisible()
   await page.getByRole('button', { name: 'Save settings' }).click()
-  await expect(page.getByText('Saved')).toBeVisible()
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+})
+
+test('host settings can enable background system startup', async ({ page }) => {
+  await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
+  await page.goto('/settings#general')
+  await page.getByLabel('Start Fetch with system').check()
+  const startupSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/settings' && request.method() === 'PUT')
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  expect((await startupSave).postDataJSON().start_with_system).toBe(true)
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+})
+
+test('remote settings cannot change host system startup', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/settings#general')
+  await expect(page.getByLabel('Start Fetch with system')).toBeDisabled()
+  await expect(page.getByText('Change this setting on the device running Fetch.')).toBeVisible()
 })
 
 test('playlist entries retain shared folder context and item order', async ({ page }) => {
@@ -114,6 +142,70 @@ test('playlist entries retain shared folder context and item order', async ({ pa
     { id: 'fixture-list', title: 'Fixture playlist', index: 1 },
     { id: 'fixture-list', title: 'Fixture playlist', index: 2 },
   ])
+})
+
+test('completed playlists open from stacked cards into ordered media galleries', async ({ page }) => {
+  const api = await mockApi(page)
+  api.setCompleted([...playlistCompletedFixture, ...completedFixture])
+  await page.goto('/completed')
+
+  const playlist = page.locator('[data-playlist-id="fixture-list"]')
+  await expect(page.locator('.completed-grid .media-card')).toHaveCount(2)
+  await expect(playlist).toContainText('2 items')
+  await expect(playlist).toContainText('100 B')
+  await expect(playlist).toHaveCSS('position', 'relative')
+  expect(await playlist.evaluate((element) => [
+    getComputedStyle(element, '::before').transform !== 'none',
+    getComputedStyle(element, '::after').transform !== 'none',
+  ])).toEqual([true, true])
+
+  await playlist.getByRole('button', { name: 'Open playlist Fixture playlist' }).click()
+  await expect(page).toHaveURL(/\/completed\?playlist=fixture-list$/)
+  const gallery = page.locator('[data-playlist-gallery]')
+  await expect(gallery.locator('.media-card')).toHaveCount(2)
+  await expect(gallery.locator('.media-card').nth(0)).toContainText('First item')
+  await expect(gallery.locator('.media-card').nth(1)).toContainText('Second item')
+
+  await page.getByRole('button', { name: 'Back to completed' }).click()
+  await expect(page).toHaveURL(/\/completed$/)
+  await expect(page.getByText('Fixture media')).toBeVisible()
+})
+
+test('completed cards stay inside a narrow mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  const api = await mockApi(page)
+  api.setCompleted([...playlistCompletedFixture, ...completedFixture])
+  await page.goto('/completed')
+
+  const assertContained = async (selector: string) => {
+    expect(await page.locator(selector).evaluateAll((elements) => elements.every((element) => {
+      const card = element.getBoundingClientRect()
+      const viewportWidth = document.documentElement.clientWidth
+      return card.left >= 0 && card.right <= viewportWidth && element.scrollWidth <= element.clientWidth
+    }))).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  }
+
+  await assertContained('.completed-grid .media-card')
+  await assertContained('[data-playlist-id="fixture-list"] .media-card')
+  await page.getByRole('button', { name: 'Open playlist Fixture playlist' }).click()
+  await assertContained('[data-playlist-gallery] .media-card')
+})
+
+test('completed cards show saved watch progress and allow starting over', async ({ page }) => {
+  const api = await mockApi(page)
+  api.setCompleted([{ ...completedFixture[0], playback: { file_id: completedFixture[0].id, position_seconds: 30, duration_seconds: 100, completed: false, updated_at: '2026-08-10T00:00:00Z' } }])
+  await page.goto('/completed')
+
+  const card = page.locator('.media-card')
+  await expect(card.locator('.watch-progress > span')).toHaveCSS('width', /.+/)
+  await expect(card.getByRole('button', { name: 'Resume' })).toBeVisible()
+  await card.getByRole('button', { name: 'Resume' }).click()
+  const reset = page.waitForRequest((request) => request.url().endsWith('/progress') && request.method() === 'DELETE')
+  await page.getByRole('button', { name: 'Start over' }).click()
+  await reset
+  await page.getByRole('button', { name: 'Close player' }).click()
+  await expect(card.locator('.watch-progress')).toHaveCount(0)
 })
 
 test('an open Completed page updates when a download finishes', async ({ page }) => {

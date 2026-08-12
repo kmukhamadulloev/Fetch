@@ -51,6 +51,11 @@ export interface MediaInfo {
 }
 
 export type DownloadStatus = 'created' | 'analyzing' | 'ready' | 'queued' | 'downloading' | 'postprocessing' | 'completed' | 'failed' | 'stopped'
+export interface PlaylistContext {
+  id: string
+  title: string
+  index: number
+}
 export interface DownloadRequest {
   url: string
   title?: string | null
@@ -64,7 +69,7 @@ export interface DownloadRequest {
   embed_metadata: boolean
   embed_thumbnail: boolean
   subtitles: boolean
-  playlist?: { id: string; title: string; index: number } | null
+  playlist?: PlaylistContext | null
   output_directory?: string | null
 }
 export interface DownloadJob extends DownloadRequest {
@@ -83,13 +88,22 @@ export interface DownloadJob extends DownloadRequest {
 export interface CompletedFile {
   id: string
   job_id: string
+  playlist: PlaylistContext | null
   filename: string
   thumbnail_available: boolean
   size_bytes: number
   mime_type: string
   title: string | null
   browser_playable: boolean
+  playback: PlaybackProgress | null
   created_at: string
+}
+export interface PlaybackProgress {
+  file_id: string
+  position_seconds: number
+  duration_seconds: number
+  completed: boolean
+  updated_at: string
 }
 export interface ApplicationSettings {
   bind_address: string
@@ -98,6 +112,7 @@ export interface ApplicationSettings {
   download_directory: string
   concurrent_downloads: number
   open_browser_on_start: boolean
+  start_with_system: boolean
   ytdlp_auto_update: boolean
 }
 export interface NetworkInfo {
@@ -208,6 +223,18 @@ export async function deleteCompleted(id: string): Promise<void> {
     const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
     throw new ApiError(response.status, payload?.error?.message ?? `Could not delete file (${response.status})`)
   }
+}
+
+export function savePlaybackProgress(id: string, positionSeconds: number, durationSeconds: number): Promise<PlaybackProgress> {
+  return jsonRequest(`/api/files/${id}/progress`, {
+    method: 'PUT',
+    body: JSON.stringify({ position_seconds: positionSeconds, duration_seconds: durationSeconds }),
+  })
+}
+
+export async function clearPlaybackProgress(id: string): Promise<void> {
+  const response = await fetchApi(`/api/files/${id}/progress`, { method: 'DELETE' })
+  if (!response.ok) throw new ApiError(response.status, `Could not reset playback progress (${response.status})`)
 }
 
 export function getHistory(): Promise<DownloadJob[]> {

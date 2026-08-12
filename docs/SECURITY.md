@@ -32,10 +32,23 @@ Completed-file reveal accepts only an opaque ID and is restricted to clients
 whose source address belongs to the host itself. Remote allowed clients can
 download and delete completed media but cannot launch host applications. Delete
 removes only the persisted media and its cached artwork; it retains download
-history.
+history. Deleting a completed file also deletes its associated playback
+progress through the database relationship.
+
+Playback-progress endpoints accept only opaque completed-file IDs. Progress is
+shared application state rather than a private user profile: every client
+allowed to use the LAN API can see and change it. This follows Fetch's explicit
+no-accounts, no-application-authentication model and must be considered before
+granting network access.
 
 LAN QR codes are generated entirely in the embedded frontend from filtered
 `/api/network` URLs. Fetch does not send LAN addresses to an external QR service.
+
+System tray actions are local operating-system interactions and are not exposed
+as HTTP commands. In particular, LAN clients cannot remotely terminate Fetch.
+Changing the per-user system-start registration is also host-only. Registration
+uses the current executable path and a fixed `--background` argument; no client
+text is inserted into a startup command.
 
 ## Static assets
 Prevent path traversal and return correct content types.

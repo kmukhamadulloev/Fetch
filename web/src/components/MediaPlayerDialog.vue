@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Download, ExternalLink, Film, FolderOpen, Music2, X } from '@lucide/vue'
+import { Download, ExternalLink, Film, FolderOpen, Music2, RotateCcw, X } from '@lucide/vue'
 import type { CompletedFile } from '@/app/api/client'
 import { useLibraryStore } from '@/stores/library'
 
@@ -17,6 +17,9 @@ const controlFeedback = ref('')
 const previousOverflow = document.body.style.overflow
 const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
 let feedbackTimer: number | undefined
+let lastSaveAt = 0
+let pendingSave: { position: number; duration: number } | null = null
+let saving = false
 
 function close() { emit('close') }
 function announce(message: string) {
@@ -86,6 +89,42 @@ function bytes(value: number) {
   while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit++ }
   return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`
 }
+async function flushProgress() {
+  if (saving) return
+  saving = true
+  while (pendingSave) {
+    const snapshot = pendingSave
+    pendingSave = null
+    await library.saveProgress(props.file, snapshot.position, snapshot.duration)
+  }
+  saving = false
+}
+function saveCurrent(force = false) {
+  const element = media.value
+  if (!element || !Number.isFinite(element.duration) || element.duration <= 0 || !Number.isFinite(element.currentTime)) return
+  if (element.currentTime < 10 && !element.ended) return
+  const now = Date.now()
+  if (!force && now - lastSaveAt < 5_000) return
+  lastSaveAt = now
+  pendingSave = { position: Math.max(0, element.currentTime), duration: element.duration }
+  void flushProgress()
+}
+function resumePlayback() {
+  const element = media.value
+  const progress = props.file.playback
+  if (!element || !progress || progress.completed || progress.position_seconds < 10) return
+  if (progress.position_seconds < element.duration - 15) {
+    element.currentTime = progress.position_seconds
+    announce(`Resumed at ${Math.floor(progress.position_seconds / 60)}:${String(Math.floor(progress.position_seconds % 60)).padStart(2, '0')}`)
+  }
+}
+async function startOver() {
+  if (!await library.resetProgress(props.file)) return
+  if (media.value) media.value.currentTime = 0
+  pendingSave = null
+  lastSaveAt = Date.now()
+  announce('Started over')
+}
 
 onMounted(async () => {
   document.body.style.overflow = 'hidden'
@@ -94,6 +133,7 @@ onMounted(async () => {
   closeButton.value?.focus()
 })
 onBeforeUnmount(() => {
+  saveCurrent(true)
   document.body.style.overflow = previousOverflow
   document.removeEventListener('keydown', onKeydown)
   if (feedbackTimer !== undefined) window.clearTimeout(feedbackTimer)
@@ -112,18 +152,18 @@ onBeforeUnmount(() => {
         </header>
 
         <div ref="stage" class="player-stage">
-          <video v-if="!mediaFailed && file.mime_type.startsWith('video/')" ref="media" class="player-video" controls autoplay playsinline preload="metadata" :poster="file.thumbnail_available && !thumbnailFailed ? `/api/files/${file.id}/thumbnail` : undefined" :src="`/api/files/${file.id}/stream`" @error="mediaFailed = true"></video>
+          <video v-if="!mediaFailed && file.mime_type.startsWith('video/')" ref="media" class="player-video" controls autoplay playsinline preload="metadata" :poster="file.thumbnail_available && !thumbnailFailed ? `/api/files/${file.id}/thumbnail` : undefined" :src="`/api/files/${file.id}/stream`" @loadedmetadata="resumePlayback" @timeupdate="saveCurrent()" @pause="saveCurrent(true)" @seeked="saveCurrent(true)" @ended="saveCurrent(true)" @error="mediaFailed = true"></video>
           <div v-else class="player-audio-stage">
             <div class="player-art"><img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full rounded-[inherit] object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" @error="thumbnailFailed = true" /><Music2 v-else-if="file.mime_type.startsWith('audio/')" :size="52" /><Film v-else :size="52" /></div>
-            <audio v-if="!mediaFailed && file.mime_type.startsWith('audio/')" ref="media" class="w-full" controls autoplay preload="metadata" :src="`/api/files/${file.id}/stream`" @error="mediaFailed = true"></audio>
+            <audio v-if="!mediaFailed && file.mime_type.startsWith('audio/')" ref="media" class="w-full" controls autoplay preload="metadata" :src="`/api/files/${file.id}/stream`" @loadedmetadata="resumePlayback" @timeupdate="saveCurrent()" @pause="saveCurrent(true)" @seeked="saveCurrent(true)" @ended="saveCurrent(true)" @error="mediaFailed = true"></audio>
             <p v-if="mediaFailed" class="max-w-md text-center text-xs leading-5 text-muted">This browser could not play the file. You can still open or download the original without conversion.</p>
           </div>
           <div v-if="controlFeedback" class="player-feedback" role="status" aria-live="polite">{{ controlFeedback }}</div>
         </div>
 
         <footer class="player-footer">
-          <div class="min-w-0 flex-1"><div class="truncate text-xs font-medium">{{ file.filename }}</div><div class="mt-1 text-[11px] text-muted">{{ file.mime_type }} · {{ bytes(file.size_bytes) }}</div><div class="player-shortcuts" aria-label="Keyboard shortcuts"><span><kbd>←</kbd><kbd>→</kbd> seek 5s</span><span><kbd>↑</kbd><kbd>↓</kbd> volume</span><span><kbd>F</kbd> fullscreen</span></div></div>
-          <div class="flex shrink-0 gap-2"><a class="secondary-btn" :href="`/api/files/${file.id}/stream`" target="_blank" rel="noopener" aria-label="Open file"><ExternalLink :size="15" /><span class="hidden sm:inline">Open file</span></a><button v-if="localClient" class="primary-btn" type="button" aria-label="Open folder" @click="library.reveal(props.file)"><FolderOpen :size="15" /><span class="hidden sm:inline">Open folder</span></button><a v-else class="primary-btn" :href="`/api/files/${file.id}/download`" aria-label="Download"><Download :size="15" /><span class="hidden sm:inline">Download</span></a></div>
+          <div class="min-w-0 flex-1"><div class="truncate text-xs font-medium">{{ file.filename }}</div><div class="mt-1 text-[11px] text-muted">{{ file.mime_type }} · {{ bytes(file.size_bytes) }}</div><p v-if="library.playbackError" class="mt-1 text-[11px] text-rose-300" role="status">{{ library.playbackError }}</p><div class="player-shortcuts" aria-label="Keyboard shortcuts"><span><kbd>←</kbd><kbd>→</kbd> seek 5s</span><span><kbd>↑</kbd><kbd>↓</kbd> volume</span><span><kbd>F</kbd> fullscreen</span></div></div>
+          <div class="flex shrink-0 flex-wrap justify-end gap-2"><button v-if="file.playback" class="secondary-btn" type="button" aria-label="Start over" @click="startOver"><RotateCcw :size="15" /><span class="hidden sm:inline">Start over</span></button><a class="secondary-btn" :href="`/api/files/${file.id}/stream`" target="_blank" rel="noopener" aria-label="Open file"><ExternalLink :size="15" /><span class="hidden sm:inline">Open file</span></a><button v-if="localClient" class="primary-btn" type="button" aria-label="Open folder" @click="library.reveal(props.file)"><FolderOpen :size="15" /><span class="hidden sm:inline">Open folder</span></button><a v-else class="primary-btn" :href="`/api/files/${file.id}/download`" aria-label="Download"><Download :size="15" /><span class="hidden sm:inline">Download</span></a></div>
         </footer>
       </section>
     </div>

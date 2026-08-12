@@ -29,6 +29,8 @@ pub struct ApplicationSettings {
     pub download_directory: PathBuf,
     pub concurrent_downloads: u8,
     pub open_browser_on_start: bool,
+    #[serde(default)]
+    pub start_with_system: bool,
     pub ytdlp_auto_update: bool,
 }
 
@@ -71,8 +73,18 @@ mod tests {
             download_directory: PathBuf::from("downloads"),
             concurrent_downloads: 0,
             open_browser_on_start: true,
+            start_with_system: false,
             ytdlp_auto_update: true,
         };
         assert!(settings.validate_basic().is_err());
+    }
+
+    #[test]
+    fn older_persisted_settings_default_system_start_to_disabled() {
+        let settings: ApplicationSettings = serde_json::from_str(
+            r#"{"bind_address":"127.0.0.1","port":8080,"allowed_networks":[],"download_directory":"downloads","concurrent_downloads":3,"open_browser_on_start":true,"ytdlp_auto_update":true}"#,
+        )
+        .unwrap();
+        assert!(!settings.start_with_system);
     }
 }

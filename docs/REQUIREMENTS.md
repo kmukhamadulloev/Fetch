@@ -40,9 +40,16 @@ Show real:
 ## Completed
 - List completed files.
 - Show metadata and size.
+- Group completed playlist children into stacked collection cards and retain
+  their playlist title and item order.
+- Open a playlist as a focused gallery of its regular media cards, with a clear
+  route back to the complete library.
 - Cache and display available media thumbnails without exposing filesystem paths.
 - Download file to LAN client.
 - Browser preview where natively supported.
+- Persist shared playback position for completed video and audio.
+- Resume unfinished playback, display watch progress on media and playlist
+  cards, and provide a Start over action.
 - HTTP Range support.
 - No transcoding fallback: show Download/Open when unsupported.
 
@@ -71,7 +78,16 @@ Support:
 ## Web UI
 - Same UI on localhost and LAN.
 - Responsive desktop/mobile layouts.
+- Host settings can enable or disable per-user system startup.
 - No clipboard watcher requirement.
+
+## Desktop lifecycle
+- Provide a native tray entry when the desktop session supports one.
+- Tray actions open Fetch, open the configured download directory, and
+  gracefully quit the application.
+- A tray failure must not prevent the HTTP server from running.
+- System-start launches run in the tray without automatically opening a browser.
+- Terminal and headless operation remain available without a tray.
 
 ## Network
 - Configurable bind address.
@@ -91,7 +107,7 @@ Support:
 Not required unless later approved:
 - cloud backend;
 - accounts/auth/pairing;
-- media collections/watch history;
+- multi-user profiles, private per-user watch history, or recommendations;
 - HLS;
 - transcoding server;
 - GPU transcoding;

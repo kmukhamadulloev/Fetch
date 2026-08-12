@@ -22,6 +22,7 @@ pub struct FetchConfig {
     pub concurrent_downloads: usize,
     pub allowed_networks: Vec<String>,
     pub open_browser_on_start: bool,
+    pub start_with_system: bool,
     pub ytdlp_auto_update: bool,
 }
 
@@ -36,6 +37,7 @@ impl Default for FetchConfig {
             concurrent_downloads: 3,
             allowed_networks: vec!["192.168.0.0/16".into()],
             open_browser_on_start: true,
+            start_with_system: false,
             ytdlp_auto_update: true,
         }
     }
@@ -148,6 +150,7 @@ mod tests {
         let config = FetchConfig::default();
         assert!(config.bind_address.is_loopback());
         assert_eq!(config.port, 8080);
+        assert!(!config.start_with_system);
         assert!(config.database_path().ends_with("data/fetch.sqlite3"));
     }
 
@@ -163,12 +166,14 @@ mod tests {
                 concurrent_downloads = 2
                 allowed_networks = ["192.168.0.0/16"]
                 open_browser_on_start = false
+                start_with_system = true
                 ytdlp_auto_update = true
             "#,
         )
         .unwrap();
         assert_eq!(config.bind_address.to_string(), "0.0.0.0");
         assert_eq!(config.port, 9000);
+        assert!(config.start_with_system);
 
         assert!(toml::from_str::<FetchConfig>("surprise = true").is_err());
     }

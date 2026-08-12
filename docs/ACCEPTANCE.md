@@ -68,6 +68,10 @@ commands and live-smoke observations are recorded in the completion report.
 
 - [x] PASS — file routes accept only opaque persisted UUIDs.
 - [x] PASS — completed-file listing works without exposing paths.
+- [x] PASS — completed playlists retain collection identity and original item order across reloads and realtime updates.
+- [x] PASS — playback position persists in SQLite and resumes across browser sessions and LAN devices.
+- [x] PASS — completed cards and playlists expose realtime watch-progress indicators and reset controls.
+- [x] PASS — standalone, stacked-playlist, and focused-gallery cards remain contained at 320 CSS pixels.
 - [x] PASS — attachment download streams the original file.
 - [x] PASS — valid Range requests return exact `206` bytes and headers.
 - [x] PASS — compatible browser media can seek through Range responses.
@@ -89,6 +93,7 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — invalid CIDRs cannot be saved.
 - [x] PASS — bind/port validation returns typed settings errors.
 - [x] PASS — download defaults, concurrency, allow-list, bind address, and port apply without restarting the process.
+- [x] PASS — host settings synchronize per-user background startup while LAN clients cannot alter it.
 - [x] PASS — every supported operational setting and managed runtime action is exposed in the UI.
 - [x] PASS — reachable LAN URLs can be copied or encoded locally as a scannable QR code.
 - [x] PASS — no authentication or pairing system was introduced.
@@ -119,6 +124,8 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — no production mock, stub, TODO route, or fake state remains.
 - [x] PASS — architecture audit found no forbidden application component.
 - [x] PASS — release executable embeds the UI and requires no Node.js.
+- [x] PASS — explicit headless startup and tray-failure fallback preserve server operation.
+- [ ] PENDING RELEASE GATE — interactive tray creation, actions, and graceful Quit pass on every native release target.
 - [x] PASS — clean-data managed runtime preparation is scripted and live-tested.
 - [x] PASS — native target matrix smoke-tests every archive before publication.
 - [x] PASS — Fetch and managed-runtime license notices are included.

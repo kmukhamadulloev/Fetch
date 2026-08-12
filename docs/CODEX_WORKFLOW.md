@@ -4,13 +4,20 @@
 
 Use `CODEX_START.txt` as the first prompt.
 
-## Phase discipline
-Do not ask Codex to implement every phase in one giant run.
+## Version discipline
 
-When current acceptance criteria pass:
-1. point `GOAL.md` to the next phase file;
-2. commit the completed phase;
-3. start a new Codex task.
+1. Read `GOAL.md`, then the current version in `ROADMAP.md`.
+2. Work only on approved current-version scope and its acceptance criteria.
+3. Move roadmap work from planned to in progress and then completed only when
+   implementation and applicable verification are complete.
+4. Keep behavior documentation, `ISSUES.md`, `docs/ACCEPTANCE.md`, and
+   `RELEASE.md` aligned with the result.
+5. Run the checks required by `AGENTS.md` and report each acceptance criterion.
+6. Create commits, tags, or releases only when the user explicitly requests
+   them.
+
+`ROADMAP.md` is forward-looking. Do not use it as a substitute for the release
+history in `RELEASE.md` or the concrete defect register in `ISSUES.md`.
 
 ## Audit prompt
 

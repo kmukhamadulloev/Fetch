@@ -8,18 +8,19 @@ use std::{
 };
 
 use axum::{
-    Json, Router,
+    Extension, Json, Router,
     body::Body,
     extract::{ConnectInfo, Path, State},
     http::{HeaderMap, HeaderValue, StatusCode, Uri, header},
     middleware::{Next, from_fn_with_state},
     response::{IntoResponse, Response, Sse, sse::Event},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use fetch_core::{
-    ApplicationSettings, CompletedOperations, DiagnosticOperations, DownloadOperations,
-    DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus, FetchError,
-    ListenerOperations, MediaAnalysis, RuntimeStatus, SettingsOperations, StatusService,
+    ApplicationEvent, ApplicationSettings, CompletedOperations, DiagnosticOperations,
+    DownloadOperations, DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus,
+    FetchError, ListenerOperations, MediaAnalysis, PlaybackProgressUpdate, RuntimeStatus,
+    SettingsOperations, StatusService,
 };
 use fetch_runtime::RuntimeManager;
 use rust_embed::Embed;
@@ -123,6 +124,10 @@ pub fn router(services: ServerServices) -> Router {
         .route("/api/files/{id}/stream", get(stream_file))
         .route("/api/files/{id}/thumbnail", get(thumbnail_file))
         .route("/api/files/{id}/reveal", post(reveal_completed_file))
+        .route(
+            "/api/files/{id}/progress",
+            put(save_playback_progress).delete(clear_playback_progress),
+        )
         .route("/api/settings", get(get_settings).put(put_settings))
         .route("/api/network", get(network_info))
         .route("/api/logs", get(logs).delete(clear_logs))
@@ -266,6 +271,36 @@ async fn reveal_completed_file(
         .completed
         .reveal_completed(parse_uuid(&id)?)
         .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn save_playback_progress(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(update): Json<PlaybackProgressUpdate>,
+) -> Result<impl IntoResponse, ApiError> {
+    let progress = state
+        .services
+        .completed
+        .save_playback_progress(parse_uuid(&id)?, update)
+        .await?;
+    state
+        .services
+        .events
+        .publish(ApplicationEvent::PlaybackProgressUpdated(progress.clone()));
+    Ok(Json(progress))
+}
+
+async fn clear_playback_progress(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = parse_uuid(&id)?;
+    state.services.completed.clear_playback_progress(id).await?;
+    state
+        .services
+        .events
+        .publish(ApplicationEvent::PlaybackProgressCleared(id));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -439,10 +474,16 @@ async fn get_settings(State(state): State<AppState>) -> Result<impl IntoResponse
 
 async fn put_settings(
     State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
     Json(settings): Json<ApplicationSettings>,
 ) -> Result<impl IntoResponse, ApiError> {
     settings.validate_basic()?;
     let previous = state.services.settings.get_settings().await?;
+    if settings.start_with_system != previous.start_with_system
+        && connection.is_some_and(|Extension(ConnectInfo(address))| !is_host_client(address.ip()))
+    {
+        return Err(ApiError(FetchError::LocalClientRequired));
+    }
     state
         .services
         .downloads
@@ -677,6 +718,10 @@ async fn events(
                             Event::default().event(application.event_name()).json_data(job)
                         } else if let Some(file) = application.completed_file() {
                             Event::default().event(application.event_name()).json_data(file)
+                        } else if let Some(progress) = application.playback_progress() {
+                            Event::default().event(application.event_name()).json_data(progress)
+                        } else if let Some(id) = application.cleared_playback_file() {
+                            Event::default().event(application.event_name()).json_data(id)
                         } else {
                             continue;
                         };
@@ -881,6 +926,16 @@ mod tests {
         async fn delete_completed(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
             Err(FetchError::FileNotFound)
         }
+        async fn save_playback_progress(
+            &self,
+            _id: uuid::Uuid,
+            _update: fetch_core::PlaybackProgressUpdate,
+        ) -> Result<fetch_core::PlaybackProgress, FetchError> {
+            Err(FetchError::FileNotFound)
+        }
+        async fn clear_playback_progress(&self, _id: uuid::Uuid) -> Result<(), FetchError> {
+            Err(FetchError::FileNotFound)
+        }
     }
 
     #[async_trait::async_trait]
@@ -906,6 +961,23 @@ mod tests {
                 .then_some(())
                 .ok_or(FetchError::FileNotFound)
         }
+        async fn save_playback_progress(
+            &self,
+            id: uuid::Uuid,
+            update: fetch_core::PlaybackProgressUpdate,
+        ) -> Result<fetch_core::PlaybackProgress, FetchError> {
+            self.get_completed(id).await?;
+            Ok(fetch_core::PlaybackProgress {
+                file_id: id,
+                position_seconds: update.position_seconds,
+                duration_seconds: update.duration_seconds,
+                completed: false,
+                updated_at: chrono::Utc::now(),
+            })
+        }
+        async fn clear_playback_progress(&self, id: uuid::Uuid) -> Result<(), FetchError> {
+            self.get_completed(id).await.map(|_| ())
+        }
     }
 
     #[async_trait::async_trait]
@@ -918,6 +990,7 @@ mod tests {
                 download_directory: "downloads".into(),
                 concurrent_downloads: 3,
                 open_browser_on_start: true,
+                start_with_system: false,
                 ytdlp_auto_update: true,
             })
         }
@@ -1074,7 +1147,7 @@ mod tests {
             app(),
             "/api/settings",
             "PUT",
-            Some(r#"{"bind_address":"127.0.0.1","port":8080,"allowed_networks":["not-a-cidr"],"download_directory":"downloads","concurrent_downloads":3,"open_browser_on_start":false,"ytdlp_auto_update":true}"#),
+            Some(r#"{"bind_address":"127.0.0.1","port":8080,"allowed_networks":["not-a-cidr"],"download_directory":"downloads","concurrent_downloads":3,"open_browser_on_start":false,"start_with_system":false,"ytdlp_auto_update":true}"#),
         )
         .await;
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -1082,6 +1155,26 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"]["code"],
             "INVALID_SETTINGS"
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_clients_cannot_change_host_startup_registration() {
+        let mut request = axum::http::Request::builder()
+            .uri("/api/settings")
+            .method("PUT")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"bind_address":"127.0.0.1","port":8080,"allowed_networks":["192.168.0.0/16"],"download_directory":"downloads","concurrent_downloads":3,"open_browser_on_start":true,"start_with_system":true,"ytdlp_auto_update":true}"#))
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([192, 168, 2, 8], 4000))));
+        let response = app().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"]["code"],
+            "LOCAL_CLIENT_REQUIRED"
         );
     }
 
@@ -1132,6 +1225,7 @@ mod tests {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
             job_id: uuid::Uuid::new_v4(),
+            playlist: None,
             filename: "media.mp4".into(),
             path,
             thumbnail_path: None,
@@ -1140,6 +1234,7 @@ mod tests {
             mime_type: "video/mp4".into(),
             title: Some("Media".into()),
             browser_playable: true,
+            playback: None,
             created_at: chrono::Utc::now(),
         };
         let id = file.id;
@@ -1175,6 +1270,7 @@ mod tests {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
             job_id: uuid::Uuid::new_v4(),
+            playlist: None,
             filename: "media.mp4".into(),
             path: media_path,
             thumbnail_path: Some(thumbnail_path),
@@ -1183,6 +1279,7 @@ mod tests {
             mime_type: "video/mp4".into(),
             title: Some("Media".into()),
             browser_playable: true,
+            playback: None,
             created_at: chrono::Utc::now(),
         };
         let id = file.id;
@@ -1210,6 +1307,7 @@ mod tests {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
             job_id: uuid::Uuid::new_v4(),
+            playlist: None,
             filename: "media.mp4".into(),
             path: "media.mp4".into(),
             thumbnail_path: None,
@@ -1218,6 +1316,7 @@ mod tests {
             mime_type: "video/mp4".into(),
             title: Some("Media".into()),
             browser_playable: true,
+            playback: None,
             created_at: chrono::Utc::now(),
         };
         let id = file.id;
@@ -1249,6 +1348,48 @@ mod tests {
         )
         .await;
         assert_eq!(delete.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn playback_progress_can_be_saved_and_cleared_by_opaque_file_id() {
+        let file = fetch_core::CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: uuid::Uuid::new_v4(),
+            playlist: None,
+            filename: "media.mp4".into(),
+            path: "media.mp4".into(),
+            thumbnail_path: None,
+            thumbnail_available: false,
+            size_bytes: 5,
+            mime_type: "video/mp4".into(),
+            title: Some("Media".into()),
+            browser_playable: true,
+            playback: None,
+            created_at: chrono::Utc::now(),
+        };
+        let id = file.id;
+        let completed: Arc<dyn CompletedOperations> = Arc::new(TestCompletedFile(file));
+        let saved = request(
+            app_with_completed(completed.clone()),
+            &format!("/api/files/{id}/progress"),
+            "PUT",
+            Some(r#"{"position_seconds":30.0,"duration_seconds":100.0}"#),
+        )
+        .await;
+        assert_eq!(saved.status(), StatusCode::OK);
+        let body = to_bytes(saved.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()["position_seconds"],
+            30.0
+        );
+        let cleared = request(
+            app_with_completed(completed),
+            &format!("/api/files/{id}/progress"),
+            "DELETE",
+            None,
+        )
+        .await;
+        assert_eq!(cleared.status(), StatusCode::NO_CONTENT);
     }
 
     #[tokio::test]

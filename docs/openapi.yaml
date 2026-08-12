@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Fetch API
-  version: 0.1.0
+  version: 0.1.2
   license:
     name: MIT
     identifier: MIT
@@ -131,6 +131,27 @@ paths:
       responses:
         '204': {description: Containing folder opened on the Fetch host}
         '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/progress:
+    put:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PlaybackProgressUpdate'}
+      responses:
+        '200':
+          description: Persisted shared playback progress
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PlaybackProgress'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    delete:
+      parameters: [{$ref: '#/components/parameters/FileId'}]
+      responses:
+        '204': {description: Playback progress reset}
         '404': {$ref: '#/components/responses/Error'}
   /api/history:
     get:
@@ -358,20 +379,43 @@ components:
         updated_at: {type: string, format: date-time}
     CompletedFile:
       type: object
-      required: [id, job_id, filename, thumbnail_available, size_bytes, mime_type, browser_playable, created_at]
+      required: [id, job_id, playlist, filename, thumbnail_available, size_bytes, mime_type, browser_playable, playback, created_at]
       properties:
         id: {type: string, format: uuid}
         job_id: {type: string, format: uuid}
+        playlist:
+          anyOf:
+            - {$ref: '#/components/schemas/PlaylistContext'}
+            - {type: 'null'}
         filename: {type: string}
         thumbnail_available: {type: boolean}
         size_bytes: {type: integer}
         mime_type: {type: string}
         title: {type: string}
         browser_playable: {type: boolean}
+        playback:
+          anyOf:
+            - {$ref: '#/components/schemas/PlaybackProgress'}
+            - {type: 'null'}
         created_at: {type: string, format: date-time}
+    PlaybackProgressUpdate:
+      type: object
+      required: [position_seconds, duration_seconds]
+      properties:
+        position_seconds: {type: number, minimum: 0}
+        duration_seconds: {type: number, exclusiveMinimum: 0}
+    PlaybackProgress:
+      type: object
+      required: [file_id, position_seconds, duration_seconds, completed, updated_at]
+      properties:
+        file_id: {type: string, format: uuid}
+        position_seconds: {type: number, minimum: 0}
+        duration_seconds: {type: number, exclusiveMinimum: 0}
+        completed: {type: boolean}
+        updated_at: {type: string, format: date-time}
     Settings:
       type: object
-      required: [bind_address, port, allowed_networks, download_directory, concurrent_downloads, open_browser_on_start, ytdlp_auto_update]
+      required: [bind_address, port, allowed_networks, download_directory, concurrent_downloads, open_browser_on_start, start_with_system, ytdlp_auto_update]
       properties:
         bind_address: {type: string, default: 127.0.0.1}
         port: {type: integer, default: 8080}
@@ -382,6 +426,7 @@ components:
         download_directory: {type: string}
         concurrent_downloads: {type: integer, minimum: 1, maximum: 16, default: 3}
         open_browser_on_start: {type: boolean, default: true}
+        start_with_system: {type: boolean, default: false}
         ytdlp_auto_update: {type: boolean, default: true}
     SettingsSaveResponse:
       allOf:

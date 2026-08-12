@@ -24,12 +24,21 @@ Runtime:
 Storage:
 - migrations;
 - repositories;
-- settings/history persistence.
+- settings/history persistence;
+- playlist-context joins and ordering;
+- playback-progress migration, persistence, and deletion cascade.
 
 Network:
 - CIDR parsing;
 - allow/deny decisions.
 - cancellation closes active SSE bodies during graceful shutdown.
+
+Desktop lifecycle:
+- tray URL follows wildcard, IPv4, IPv6, and live listener changes;
+- startup registration follows persisted settings and rolls back on save failure;
+- remote clients cannot modify host startup registration;
+- graceful shutdown cancels queued/active downloads and owned child processes;
+- packaged startup smoke uses `--no-tray` for deterministic headless execution.
 
 File serving:
 - Range parsing;
@@ -39,6 +48,8 @@ File serving:
 - opaque cached-thumbnail access and immutable response headers.
 - completed media/artwork deletion with retained job history;
 - host-only opaque file-manager reveal and remote denial.
+- opaque file-ID playback progress retrieval, validation, save, reset, and
+  missing-file handling.
 
 Output organization:
 - cross-platform playlist path sanitization;
@@ -81,8 +92,9 @@ Required:
 - unified SSE state updates and cross-tab primary/secondary takeover;
 - browser E2E for first run, analyze, add download, progress, responsive native
   player actions, duration/status detail, host/remote completed actions, guarded
-  deletion, LAN QR output, settings, persisted theme selection, mobile
-  navigation, and multi-tab automatic failover.
+  deletion, stacked playlist galleries, watch progress, resume/start-over,
+  LAN QR output, live settings and listener handoff, persisted theme selection,
+  host-only system startup, mobile navigation, and multi-tab automatic failover.
 
 Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using

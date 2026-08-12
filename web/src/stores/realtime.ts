@@ -25,7 +25,7 @@ const runtimeEvents = new Set([
   'runtime.failed',
   'runtime.missing',
 ])
-const libraryEvents = new Set(['library.completed'])
+const libraryEvents = new Set(['library.completed', 'library.progress', 'library.progress-cleared'])
 const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents]
 
 type RealtimeRole = 'electing' | 'primary' | 'secondary'
@@ -103,7 +103,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
         library.applyDownload(payload)
       }
       else if (runtimeEvents.has(name)) runtime.applyEvent(payload)
-      else if (libraryEvents.has(name)) library.applyCompleted(payload)
+      else if (name === 'library.completed') library.applyCompleted(payload)
+      else if (name === 'library.progress') library.applyPlayback(payload)
+      else if (name === 'library.progress-cleared') library.clearPlayback(payload)
     } catch {
       setConnection('reconnecting', 'Fetch received an invalid realtime update. Reconnecting…')
     }

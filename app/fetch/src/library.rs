@@ -1,6 +1,8 @@
 use std::{path::Path, sync::Arc};
 
-use fetch_core::{CompletedFile, CompletedOperations, FetchError};
+use fetch_core::{
+    CompletedFile, CompletedOperations, FetchError, PlaybackProgress, PlaybackProgressUpdate,
+};
 use fetch_storage::Storage;
 use tracing::info;
 use uuid::Uuid;
@@ -124,6 +126,49 @@ impl CompletedOperations for CompletedLibrary {
         info!(file_id = %id, filename = %file.filename, "deleted completed media");
         Ok(())
     }
+
+    async fn save_playback_progress(
+        &self,
+        id: Uuid,
+        update: PlaybackProgressUpdate,
+    ) -> Result<PlaybackProgress, FetchError> {
+        self.find(id).await?;
+        if !update.position_seconds.is_finite()
+            || !update.duration_seconds.is_finite()
+            || update.position_seconds < 0.0
+            || update.duration_seconds <= 0.0
+            || update.position_seconds > update.duration_seconds + 1.0
+        {
+            return Err(FetchError::InvalidRequest(
+                "playback position and duration are invalid".into(),
+            ));
+        }
+        let completed = update.position_seconds >= update.duration_seconds * 0.95;
+        let progress = PlaybackProgress {
+            file_id: id,
+            position_seconds: if completed {
+                update.duration_seconds
+            } else {
+                update.position_seconds.min(update.duration_seconds)
+            },
+            duration_seconds: update.duration_seconds,
+            completed,
+            updated_at: chrono::Utc::now(),
+        };
+        self.storage
+            .save_playback_progress(&progress)
+            .await
+            .map_err(storage_error)?;
+        Ok(progress)
+    }
+
+    async fn clear_playback_progress(&self, id: Uuid) -> Result<(), FetchError> {
+        self.find(id).await?;
+        self.storage
+            .delete_playback_progress(id)
+            .await
+            .map_err(storage_error)
+    }
 }
 
 async fn remove_file_if_present(path: &Path) -> Result<(), FetchError> {
@@ -190,6 +235,7 @@ mod tests {
         let completed = CompletedFile {
             id: Uuid::new_v4(),
             job_id: job.id,
+            playlist: job.request.playlist.clone(),
             filename: "media.mp4".into(),
             path: media,
             thumbnail_path: Some(thumbnail),
@@ -198,6 +244,7 @@ mod tests {
             mime_type: "video/mp4".into(),
             title: Some("Fixture".into()),
             browser_playable: true,
+            playback: None,
             created_at: Utc::now(),
         };
         storage.insert_completed_file(&completed).await.unwrap();
@@ -228,5 +275,44 @@ mod tests {
                 .is_none()
         );
         assert!(storage.get_job(completed.job_id).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn playback_progress_is_validated_and_marks_near_end_as_completed() {
+        let (_directory, storage, completed) = fixture().await;
+        let library = CompletedLibrary::new(storage);
+        let progress = library
+            .save_playback_progress(
+                completed.id,
+                PlaybackProgressUpdate {
+                    position_seconds: 40.0,
+                    duration_seconds: 42.0,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(progress.completed);
+        assert_eq!(progress.position_seconds, 42.0);
+        assert!(
+            library
+                .save_playback_progress(
+                    completed.id,
+                    PlaybackProgressUpdate {
+                        position_seconds: -1.0,
+                        duration_seconds: 42.0,
+                    },
+                )
+                .await
+                .is_err()
+        );
+        library.clear_playback_progress(completed.id).await.unwrap();
+        assert!(
+            library
+                .get_completed(completed.id)
+                .await
+                .unwrap()
+                .playback
+                .is_none()
+        );
     }
 }

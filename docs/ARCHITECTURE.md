@@ -79,7 +79,24 @@ Composition root:
 - runtime manager;
 - adapters/services;
 - Axum startup;
-- optional default-browser opening.
+- optional default-browser opening;
+- platform tray and per-user startup-registration adapters.
+
+The tray is a thin native lifecycle adapter, not a second frontend. Windows and
+macOS use their native tray APIs through `tray-icon`; Linux uses the
+freedesktop StatusNotifierItem protocol. It reads the active listener and
+download directory from shared composition-root state. Quit cancels the same
+token as Ctrl+C and waits for owned download processes and HTTP connections.
+Tray initialization failures are logged and leave browser/terminal operation
+available. `--no-tray` provides an explicit headless path.
+
+Per-user startup registration is owned by a settings application service:
+Windows uses the current-user Run entry, macOS a LaunchAgent, and Linux XDG
+Autostart. Registered launches pass `--background`, which suppresses automatic
+browser opening without changing the saved manual-start preference.
+On Windows, background or direct desktop tray launches hide an app-owned
+console, while a console shared with the launching terminal remains visible so
+logs and Ctrl+C continue to work.
 
 DownloadManager derives sanitized playlist directories, asks the yt-dlp adapter
 to produce UUID-named JPEG artwork, and associates that private cache artifact
@@ -141,10 +158,14 @@ The composition root owns a shutdown cancellation token shared with the HTTP
 state. Ctrl+C cancels that token so every SSE stream ends before Axum waits for
 graceful connection shutdown. A five-second upper bound prevents another
 long-lived client response from blocking process exit indefinitely.
+The same bound covers cancellation of queued and active downloads so tray Quit
+does not orphan yt-dlp or FFmpeg descendants.
 
 ## Persistence
 
 SQLite only. Use migrations. Media files stay on disk, not in SQLite.
+Playback progress is stored per opaque completed-file ID and shared by all
+allowed clients; deleting a completed file cascades to its progress record.
 
 ## Process ownership
 

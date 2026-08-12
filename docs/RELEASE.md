@@ -38,6 +38,13 @@ independent. Signing/notarization is not currently provided; review Windows
 code signing and Apple Developer ID notarization before broad public
 distribution.
 
+Native builds include a system tray. Linux uses the session's freedesktop
+StatusNotifierItem implementation and requires no GTK application runtime; some
+desktop environments require their usual AppIndicator/StatusNotifier extension.
+Package smoke tests pass `--no-tray` because CI runners are headless. Windows and
+macOS release runs must additionally verify tray creation and graceful Quit on
+their native interactive desktops before publication.
+
 ## Runtime licensing
 
 Fetch downloads official yt-dlp release artifacts and FFmpeg/FFprobe artifacts

@@ -42,6 +42,51 @@ Windows releases transient handles. Exhausted best-effort cleanup emits a
 warning without converting a verified application startup into a release
 failure.
 
+## BUG-016 — Completed cards overflow narrow mobile screens
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Completed media and playlist cards remain fully inside the content
+area on supported mobile widths, with readable touch actions.
+
+Actual: Grid children retained intrinsic width from their two-column action
+labels, while stacked-playlist decoration could extend the visual footprint.
+On narrow phones a card could paint outside its container.
+
+Resolution: Completed grids and cards now explicitly permit their columns and
+children to shrink, action labels truncate safely, and action rows collapse to
+one column below 360 CSS pixels. A browser regression test verifies standalone,
+playlist, and focused-gallery cards at 320 CSS pixels without document overflow.
+
+## UX-019 — Browser-only lifecycle has no persistent desktop control
+
+Status: RESOLVED
+
+Affected:
+- app/fetch
+- fetch-server
+- web
+- release automation
+
+Expected: Closing the browser does not make Fetch feel orphaned. Desktop users
+can reopen the interface, reach downloads, quit safely, and optionally launch
+Fetch automatically after sign-in.
+
+Actual: Fetch opened a browser but exposed no persistent desktop control. Users
+had to return to the launching terminal to stop the process, and there was no
+system-start option.
+
+Resolution: Added native Windows/macOS tray and Linux StatusNotifier adapters
+with Open Fetch, Open downloads folder, and graceful Quit. Quit shares the
+Ctrl+C cancellation path and stops owned download processes. Host settings now
+synchronize per-user Windows Run, macOS LaunchAgent, or Linux XDG Autostart
+registration using a fixed background argument. LAN clients cannot change that
+host setting, tray failures preserve browser/terminal operation, and release
+smokes use the explicit `--no-tray` headless mode.
+
 ## BUG-012 — Tagged release publisher lacks Git tag context
 
 Status: RESOLVED
@@ -351,3 +396,52 @@ the save response moves the browser tab to the new URL. Failed binds roll back
 persistence and live download defaults while the original listener stays
 available. Browser-open and yt-dlp auto-update preferences remain saved inputs
 to their next relevant startup/update action.
+
+## UX-017 — Completed playlists appear as unrelated files
+
+Status: RESOLVED
+
+Affected:
+- fetch-core
+- fetch-storage
+- web
+
+Expected: Completed playlist media remains visibly grouped and ordered without
+making standalone downloads harder to browse on desktop or mobile.
+
+Actual: Every completed file used the same large card grid, so playlist context
+was lost and collections quickly became difficult to scan.
+
+Resolution: Completed-file responses now derive optional playlist identity,
+title, and item index from the persisted download job without a database
+migration. The Completed page represents each playlist as a stacked collection
+card alongside normal media. Opening it shows only that playlist in the regular
+media-card grid, in original order, with URL-backed state and a clear return
+action. Realtime insertion uses the same grouping path, and store plus
+desktop/mobile browser tests cover collection order and navigation.
+
+## UX-018 — Media playback does not resume across sessions
+
+Status: RESOLVED
+
+Affected:
+- fetch-core
+- fetch-storage
+- fetch-server
+- app/fetch
+- web
+
+Expected: Fetch remembers meaningful watch positions, communicates progress on
+media cards, resumes later playback, and lets the viewer deliberately start
+over without introducing user accounts.
+
+Actual: Closing the player discarded its position, so long videos always
+restarted and playlist progress was invisible.
+
+Resolution: A cascading SQLite record stores position, actual duration,
+completion, and update time per opaque completed-file ID. The player serializes
+throttled saves, resumes positions of at least ten seconds, treats the final
+five percent as watched, and exposes Start over plus non-blocking save errors.
+Cards and playlist summaries render accent progress lines, while dedicated SSE
+events synchronize primary, secondary, and LAN views. Domain, storage, API,
+store, player, and desktop/mobile browser tests cover the behavior.
