@@ -64,6 +64,16 @@ and downloads without changing Fetch's local/LAN server model.
 
 The approved design and acceptance details are in `docs/PROXY.md`.
 
+### 0.1.3 stabilization
+
+- [ ] Keep an existing healthy runtime available when an automatic update
+  fails, without returning the first-run setup flow.
+- [ ] Bound stalled managed-runtime provider requests and retain actionable
+  operation, component, and low-level failure details.
+- [ ] Add responsive All, Info, Warning, and Error filters to the Logs page.
+- [ ] Cover runtime fallback, retained diagnostics, and log filtering with
+  backend, frontend, and browser regression tests.
+
 ## Candidate ideas
 
 These are not commitments and must be promoted into a version before

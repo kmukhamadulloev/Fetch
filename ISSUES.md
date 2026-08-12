@@ -21,6 +21,29 @@ the current archive release. `docs/RELEASE.md` calls out the required review
 before broad public distribution. This does not affect local execution or the
 native package startup gates.
 
+## BUG-021 — Failed runtime update demotes a working yt-dlp installation
+
+Status: IN PROGRESS
+
+Affected:
+- fetch-runtime
+- app/fetch
+- fetch-server
+- web
+
+Expected: A failed automatic update leaves the existing verified runtime ready,
+terminates within a bounded time, and records enough context to diagnose the
+provider failure. Logs can be filtered by severity on desktop and mobile.
+
+Actual: A failed yt-dlp update changes an existing working component to
+`failed`, reopening the first-run runtime dialog. Each subsequent application
+start tries again, while retained records contain only `runtime download
+failed` with no underlying network details. The Logs page has no severity
+filter.
+
+Notes: The existing managed yt-dlp remains intact on disk; the defect is in the
+in-memory failure transition and diagnostic retention, not atomic replacement.
+
 ## UX-020 — yt-dlp traffic cannot use a host-managed proxy
 
 Status: RESOLVED
