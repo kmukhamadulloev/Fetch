@@ -94,6 +94,11 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — bind/port validation returns typed settings errors.
 - [x] PASS — download defaults, concurrency, allow-list, bind address, and port apply without restarting the process.
 - [x] PASS — host settings synchronize per-user background startup while LAN clients cannot alter it.
+- [x] PASS — system-default, forced-direct, and custom proxy modes persist separately and hot-apply to newly spawned yt-dlp processes.
+- [x] PASS — HTTP, HTTPS, SOCKS4, and SOCKS5 proxy URLs are validated while credentials and ambiguous mode/URL combinations are rejected.
+- [x] PASS — analysis and downloads receive the same structured proxy arguments without copying endpoints into job or event payloads.
+- [x] PASS — proxy endpoints are host-only and redacted from process diagnostics before logging or persistence.
+- [x] PASS — host and LAN-disabled proxy UI states pass desktop and mobile browser tests.
 - [x] PASS — every supported operational setting and managed runtime action is exposed in the UI.
 - [x] PASS — reachable LAN URLs can be copied or encoded locally as a scannable QR code.
 - [x] PASS — no authentication or pairing system was introduced.

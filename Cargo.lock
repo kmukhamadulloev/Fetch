@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "fetch"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-runtime"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "fetch-core",
  "reqwest",
@@ -788,7 +788,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-server"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-storage"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "fetch-ytdlp"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-trait",
  "fetch-core",

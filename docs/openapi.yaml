@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Fetch API
-  version: 0.1.2
+  version: 0.1.3
   license:
     name: MIT
     identifier: MIT
@@ -192,6 +192,31 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/NetworkInfo'}
+  /api/proxy:
+    get:
+      description: Read outbound yt-dlp proxy settings from the Fetch host
+      responses:
+        '200':
+          description: Proxy settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProxySettings'}
+        '403': {$ref: '#/components/responses/Error'}
+    put:
+      description: Validate, persist, and hot-apply outbound yt-dlp proxy settings on the Fetch host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProxySettings'}
+      responses:
+        '200':
+          description: Saved proxy settings
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProxySettings'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
   /api/logs:
     get:
       responses:
@@ -435,6 +460,16 @@ components:
           required: [listener_changed]
           properties:
             listener_changed: {type: boolean}
+    ProxySettings:
+      type: object
+      additionalProperties: false
+      required: [mode, url]
+      properties:
+        mode: {type: string, enum: [system, direct, custom]}
+        url:
+          anyOf:
+            - {type: string, format: uri, maxLength: 2048}
+            - {type: 'null'}
     RuntimeComponent:
       type: object
       required: [name, status]

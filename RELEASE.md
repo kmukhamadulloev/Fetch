@@ -3,7 +3,15 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## 0.1.2 — Current
+## 0.1.3 — Current
+
+- Added host-managed system-default, forced-direct, and custom proxy modes.
+- Routed yt-dlp analysis and newly spawned downloads through the saved policy.
+- Added validated HTTP, HTTPS, SOCKS4, and SOCKS5 endpoint support.
+- Kept proxy endpoints out of LAN APIs, job history, SSE, and diagnostics.
+- Added responsive proxy controls and host/remote browser coverage.
+
+## 0.1.2
 
 - Grouped completed playlist downloads into stacked cards and focused galleries.
 - Preserved playlist titles and item order across reloads and realtime updates.

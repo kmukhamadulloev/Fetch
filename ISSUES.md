@@ -21,6 +21,28 @@ the current archive release. `docs/RELEASE.md` calls out the required review
 before broad public distribution. This does not affect local execution or the
 native package startup gates.
 
+## UX-020 — yt-dlp traffic cannot use a host-managed proxy
+
+Status: RESOLVED
+
+Affected:
+- fetch-core
+- fetch-storage
+- fetch-ytdlp
+- fetch-server
+- app/fetch
+- web
+
+Expected: The host can select system-default, forced-direct, or a validated
+outbound proxy for media analysis and downloads without exposing proxy
+configuration to LAN clients or accepting arbitrary yt-dlp arguments.
+
+Resolution: Added a separately persisted typed proxy policy with host-only API
+access and responsive Network settings. HTTP, HTTPS, SOCKS4, and SOCKS5 proxy
+URLs hot-apply to analysis and newly spawned downloads; active processes retain
+their route. The initial scope rejects credentials, passes arguments without a
+shell, and redacts endpoints before retaining subprocess diagnostics.
+
 ## BUG-011 — Windows release smoke can fail during temporary cleanup
 
 Status: RESOLVED

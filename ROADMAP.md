@@ -44,22 +44,22 @@ and downloads without changing Fetch's local/LAN server model.
 
 ### Proxy support
 
-- [ ] Add host-managed **System default**, **Direct connection**, and
+- [x] Add host-managed **System default**, **Direct connection**, and
   **Custom proxy** modes under Network settings.
-- [ ] Support validated unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxy
+- [x] Support validated unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxy
   URLs without exposing arbitrary yt-dlp arguments.
-- [ ] Apply the selected route consistently to media/playlist analysis and
+- [x] Apply the selected route consistently to media/playlist analysis and
   every newly spawned yt-dlp download process; active processes keep their
   existing route.
-- [ ] Keep proxy configuration host-only. LAN clients may initiate downloads
+- [x] Keep proxy configuration host-only. LAN clients may initiate downloads
   through the host's configured route but cannot read or change its endpoint.
-- [ ] Persist proxy configuration separately from the LAN-readable application
+- [x] Persist proxy configuration separately from the LAN-readable application
   settings contract and hot-apply it without restarting Fetch.
-- [ ] Pass proxy values as structured process arguments, redact them from
+- [x] Pass proxy values as structured process arguments, redact them from
   retained diagnostics, and return actionable validation/connection errors.
-- [ ] Cover validation, persistence, command construction, hot application,
+- [x] Cover validation, persistence, command construction, hot application,
   host/remote authorization, UI states, and desktop/mobile behavior with tests.
-- [ ] Update the API contract, security model, UI specification, testing docs,
+- [x] Update the API contract, security model, UI specification, testing docs,
   acceptance matrix, and release notes as implementation lands.
 
 The approved design and acceptance details are in `docs/PROXY.md`.

@@ -48,6 +48,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
 - Optionally start Fetch in the tray when the current operating-system user
   signs in, without forcing a browser window open.
 - Bind locally or to a trusted LAN with a CIDR allow-list.
+- Route yt-dlp analysis and downloads through a host-managed HTTP, HTTPS,
+  SOCKS4, or SOCKS5 proxy without exposing its endpoint to LAN clients.
 - Inspect retained process logs and database, runtime, and output diagnostics.
 
 ## How it works
@@ -155,6 +157,9 @@ After a successful listener change, the current browser tab relocates to the
 new address; an unavailable replacement leaves the existing listener active.
 Start-with-system registration applies immediately on the host and launches
 Fetch in background mode. Use `--no-tray` for terminal-only or headless runs.
+Outbound proxy mode is configured separately under Network settings and applies
+immediately to analysis and newly spawned downloads. The initial implementation
+intentionally rejects proxy credentials.
 
 Appearance remains a browser-local preference so desktop and mobile clients
 can independently use Dark, Light, or Use system.

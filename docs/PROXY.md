@@ -1,6 +1,6 @@
 # Proxy Support Design
 
-Status: approved for Fetch 0.1.3 implementation.
+Status: implemented for Fetch 0.1.3.
 
 ## Scope
 
@@ -102,20 +102,20 @@ not display the configured endpoint to a LAN client.
 
 ## Acceptance criteria
 
-- `system`, `direct`, and `custom` produce the intended deterministic yt-dlp
+- [x] PASS — `system`, `direct`, and `custom` produce the intended deterministic yt-dlp
   arguments for both analysis and downloads.
-- Valid HTTP/HTTPS/SOCKS4/SOCKS5 endpoints persist and hot-apply.
-- Invalid schemes, malformed URLs, credentials, and ambiguous mode/URL
+- [x] PASS — Valid HTTP/HTTPS/SOCKS4/SOCKS5 endpoints persist and hot-apply.
+- [x] PASS — Invalid schemes, malformed URLs, credentials, and ambiguous mode/URL
   combinations are rejected without changing the active setting.
-- Existing databases load with `system` mode and require no manual migration.
-- LAN clients cannot read or modify proxy configuration.
-- The proxy URL never appears in download job JSON, SSE payloads, normal logs,
+- [x] PASS — Existing databases load with `system` mode and require no manual migration.
+- [x] PASS — LAN clients cannot read or modify proxy configuration.
+- [x] PASS — The proxy URL never appears in download job JSON, SSE payloads, normal logs,
   retained diagnostics, or API errors.
-- Changing the setting affects queued/new processes and does not terminate an
+- [x] PASS — Changing the setting affects queued/new processes and does not terminate an
   active download.
-- Desktop and mobile UI clearly represent all modes, validation failures, and
+- [x] PASS — Desktop and mobile UI clearly represent all modes, validation failures, and
   the LAN-disabled state.
-- The local server, LAN file transfer, and managed runtime installation remain
+- [x] PASS — The local server, LAN file transfer, and managed runtime installation remain
   unaffected.
 
 ## Deferred

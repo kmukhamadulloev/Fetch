@@ -76,6 +76,7 @@ the completed-file record while retaining the associated job history.
 
 - `GET|PUT /api/settings`
 - `GET /api/network`
+- `GET|PUT /api/proxy` (host device only)
 
 Settings include bind IP, port, allowed CIDRs, output directory, concurrency,
 browser-open preference, per-user system-start preference, and yt-dlp
@@ -91,6 +92,14 @@ uses these URLs to generate local QR codes; no external QR service is contacted.
 Only a host client may change `start_with_system`; remote allowed clients receive
 `LOCAL_CLIENT_REQUIRED`. Enabled registration launches the executable with
 `--background` and does not force-open a browser.
+
+Proxy settings are intentionally separate from the LAN-readable application
+settings response. The typed body is `{"mode":"system|direct|custom","url":null|string}`.
+System and direct modes require a null URL. Custom mode accepts only a validated
+unauthenticated HTTP, HTTPS, SOCKS4, or SOCKS5 endpoint. Both proxy operations
+require a host client; remote allowed clients receive `LOCAL_CLIENT_REQUIRED`.
+Saving hot-applies to analysis and queued/new yt-dlp processes without
+interrupting an active download.
 
 ## Runtime and diagnostics
 

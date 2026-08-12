@@ -32,6 +32,10 @@ Network:
 - CIDR parsing;
 - allow/deny decisions.
 - cancellation closes active SSE bodies during graceful shutdown.
+- proxy mode/URL validation and default compatibility;
+- proxy persistence outside application settings;
+- matching yt-dlp analysis/download arguments for system, direct, and custom;
+- host-only proxy API access and diagnostic redaction.
 
 Desktop lifecycle:
 - tray URL follows wildcard, IPv4, IPv6, and live listener changes;
@@ -94,7 +98,8 @@ Required:
   player actions, duration/status detail, host/remote completed actions, guarded
   deletion, stacked playlist galleries, watch progress, resume/start-over,
   LAN QR output, live settings and listener handoff, persisted theme selection,
-  host-only system startup, mobile navigation, and multi-tab automatic failover.
+  host-only system startup, host-only proxy configuration, mobile navigation,
+  and multi-tab automatic failover.
 
 Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using
