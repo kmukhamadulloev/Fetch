@@ -671,11 +671,21 @@ async fn runtime_repair(
     start_runtime_action(state, component, RuntimeAction::Repair).await
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RuntimeAction {
     Install,
     Update,
     Repair,
+}
+
+impl RuntimeAction {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Install => "install",
+            Self::Update => "update",
+            Self::Repair => "repair",
+        }
+    }
 }
 
 async fn start_runtime_action(
@@ -690,7 +700,19 @@ async fn start_runtime_action(
     }
     let manager = state.services.runtime.clone();
     let status = state.services.status.clone();
+    let diagnostics = state.services.diagnostics.clone();
     tokio::spawn(async move {
+        let action_label = action.label();
+        let start_details =
+            format!("component: {component}\naction: {action_label}\nsource: host request");
+        let _ = diagnostics
+            .record_log(
+                "info",
+                "runtime",
+                "runtime operation started",
+                Some(&start_details),
+            )
+            .await;
         let result = match (component.as_str(), action) {
             ("yt-dlp", RuntimeAction::Install) => manager.install_ytdlp().await.map(|_| ()),
             ("yt-dlp", RuntimeAction::Update) => manager.update_ytdlp().await.map(|_| ()),
@@ -699,13 +721,46 @@ async fn start_runtime_action(
             (_, RuntimeAction::Update) => manager.update_ffmpeg().await.map(|_| ()),
             (_, RuntimeAction::Repair) => manager.repair_ffmpeg().await.map(|_| ()),
         };
-        if result.is_ok() {
-            let components = manager.inspect_all().await;
-            status.set_runtime_ready(
-                components
-                    .iter()
-                    .all(|component| component.status == RuntimeStatus::Ready),
-            );
+        let components = manager.inspect_all().await;
+        status.set_runtime_ready(
+            components
+                .iter()
+                .all(|component| component.status == RuntimeStatus::Ready),
+        );
+        match result {
+            Ok(()) => {
+                let details =
+                    format!("component: {component}\naction: {action_label}\nresult: completed");
+                let _ = diagnostics
+                    .record_log(
+                        "info",
+                        "runtime",
+                        "runtime operation completed",
+                        Some(&details),
+                    )
+                    .await;
+            }
+            Err(error) => {
+                let retained = action == RuntimeAction::Update
+                    && components.iter().any(|item| {
+                        item.name.executable_name() == component
+                            && item.status == RuntimeStatus::Ready
+                    });
+                let level = if retained { "warn" } else { "error" };
+                let message = if retained {
+                    "runtime update failed; existing component remains ready"
+                } else {
+                    "runtime operation failed"
+                };
+                let cause = error
+                    .diagnostic_details()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| error.public_message());
+                let details = format!("component: {component}\naction: {action_label}\n{cause}");
+                let _ = diagnostics
+                    .record_log(level, "runtime", message, Some(&details))
+                    .await;
+            }
         }
     });
     Ok((
@@ -1060,6 +1115,15 @@ mod tests {
         }
         async fn report(&self) -> Result<fetch_core::DiagnosticsReport, FetchError> {
             Ok(fetch_core::DiagnosticsReport { checks: vec![] })
+        }
+        async fn record_log(
+            &self,
+            _level: &str,
+            _subsystem: &str,
+            _message: &str,
+            _details: Option<&str>,
+        ) -> Result<(), FetchError> {
+            Ok(())
         }
     }
 

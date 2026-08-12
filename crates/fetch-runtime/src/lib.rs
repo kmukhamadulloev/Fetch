@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
+    time::Duration,
 };
 
 use fetch_core::{FetchError, RuntimeComponent, RuntimeComponentName, RuntimeStatus};
@@ -20,6 +21,9 @@ const YTDLP_CHECKSUMS_URL: &str =
     "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
 const FFMPEG_RELEASE_API: &str =
     "https://api.github.com/repos/eugeneware/ffmpeg-static/releases/latest";
+const RUNTIME_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const RUNTIME_READ_TIMEOUT: Duration = Duration::from_secs(30);
+const RUNTIME_REQUEST_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Clone)]
 pub struct RuntimePaths {
@@ -116,6 +120,9 @@ impl RuntimeManager {
     pub fn new(paths: RuntimePaths) -> Result<Self, FetchError> {
         let client = reqwest::Client::builder()
             .user_agent(concat!("Fetch/", env!("CARGO_PKG_VERSION")))
+            .connect_timeout(RUNTIME_CONNECT_TIMEOUT)
+            .read_timeout(RUNTIME_READ_TIMEOUT)
+            .timeout(RUNTIME_REQUEST_TIMEOUT)
             .build()
             .map_err(|error| FetchError::Internal(error.to_string()))?;
         Ok(Self::with_source(
@@ -221,6 +228,7 @@ impl RuntimeManager {
 
     pub async fn update_ytdlp(&self) -> Result<RuntimeComponent, FetchError> {
         let _operation = self.operation_lock.lock().await;
+        let previous = self.inspect_component(RuntimeComponentName::YtDlp).await;
         self.set_state(
             RuntimeComponentName::YtDlp,
             RuntimeStatus::Updating,
@@ -234,13 +242,24 @@ impl RuntimeManager {
                 Ok(component)
             }
             Err(error) => {
-                self.set_state(
-                    RuntimeComponentName::YtDlp,
-                    RuntimeStatus::Failed,
-                    None,
-                    Some(error.public_message()),
-                )
-                .await;
+                if previous.status == RuntimeStatus::Ready {
+                    warn!(
+                        component = "yt-dlp",
+                        operation = "update",
+                        error = %error.public_message(),
+                        details = ?error.diagnostic_details(),
+                        "runtime update failed; keeping the existing verified runtime"
+                    );
+                    self.store_component(previous).await;
+                } else {
+                    self.set_state(
+                        RuntimeComponentName::YtDlp,
+                        RuntimeStatus::Failed,
+                        None,
+                        Some(error.public_message()),
+                    )
+                    .await;
+                }
                 Err(error)
             }
         }
@@ -259,9 +278,45 @@ impl RuntimeManager {
 
     pub async fn update_ffmpeg(&self) -> Result<Vec<RuntimeComponent>, FetchError> {
         let _operation = self.operation_lock.lock().await;
+        let previous = vec![
+            self.inspect_component(RuntimeComponentName::Ffmpeg).await,
+            self.inspect_component(RuntimeComponentName::Ffprobe).await,
+        ];
         self.set_ffmpeg_state(RuntimeStatus::Updating, None, None)
             .await;
-        self.install_ffmpeg_inner(RuntimeStatus::Updating).await
+        match self.install_ffmpeg_artifacts(RuntimeStatus::Updating).await {
+            Ok(components) => {
+                for component in &components {
+                    self.store_component(component.clone()).await;
+                }
+                Ok(components)
+            }
+            Err(error) => {
+                if previous
+                    .iter()
+                    .all(|component| component.status == RuntimeStatus::Ready)
+                {
+                    warn!(
+                        component = "ffmpeg/ffprobe",
+                        operation = "update",
+                        error = %error.public_message(),
+                        details = ?error.diagnostic_details(),
+                        "runtime update failed; keeping the existing verified runtimes"
+                    );
+                    for component in previous {
+                        self.store_component(component).await;
+                    }
+                } else {
+                    self.set_ffmpeg_state(
+                        RuntimeStatus::Failed,
+                        None,
+                        Some(error.public_message()),
+                    )
+                    .await;
+                }
+                Err(error)
+            }
+        }
     }
 
     pub async fn repair_ffmpeg(&self) -> Result<Vec<RuntimeComponent>, FetchError> {
@@ -482,22 +537,13 @@ impl RuntimeManager {
             .get(url)
             .send()
             .await
-            .map_err(|error| FetchError::ProcessFailed {
-                summary: "runtime download failed".into(),
-                details: error.to_string(),
-            })?
+            .map_err(|error| runtime_request_error("send request", url, error))?
             .error_for_status()
-            .map_err(|error| FetchError::ProcessFailed {
-                summary: "runtime provider returned an error".into(),
-                details: error.to_string(),
-            })?;
+            .map_err(|error| runtime_request_error("check response status", url, error))?;
         let bytes = response
             .bytes()
             .await
-            .map_err(|error| FetchError::ProcessFailed {
-                summary: "runtime download was interrupted".into(),
-                details: error.to_string(),
-            })?;
+            .map_err(|error| runtime_request_error("read response body", url, error))?;
         Ok(bytes.to_vec())
     }
 
@@ -612,9 +658,24 @@ fn ffmpeg_platform_for(platform: &str, architecture: &str) -> Result<&'static st
 }
 
 fn runtime_download_error(error: reqwest::Error) -> FetchError {
+    runtime_request_error("load provider release metadata", FFMPEG_RELEASE_API, error)
+}
+
+fn runtime_request_error(stage: &str, url: &str, error: reqwest::Error) -> FetchError {
+    let kind = if error.is_timeout() {
+        "timeout"
+    } else if error.is_connect() {
+        "connection"
+    } else if error.is_status() {
+        "HTTP status"
+    } else if error.is_body() {
+        "response body"
+    } else {
+        "request"
+    };
     FetchError::ProcessFailed {
-        summary: "runtime provider request failed".into(),
-        details: error.to_string(),
+        summary: format!("runtime provider {kind} failure"),
+        details: format!("stage: {stage}\nprovider: {url}\nkind: {kind}\ncause: {error}"),
     }
 }
 
@@ -794,6 +855,24 @@ fn executable_filename(base: &str) -> String {
 mod tests {
     use super::*;
 
+    struct UnreachableYtDlpSource {
+        url: String,
+    }
+
+    impl RuntimeSource for UnreachableYtDlpSource {
+        fn ytdlp_asset(&self) -> Result<RuntimeAsset, FetchError> {
+            Ok(RuntimeAsset {
+                component: RuntimeComponentName::YtDlp,
+                platform: "test",
+                architecture: "test",
+                filename: "yt-dlp",
+                url: self.url.clone(),
+                checksum_url: self.url.clone(),
+                expected_sha256: None,
+            })
+        }
+    }
+
     #[test]
     fn checksum_validation_accepts_matching_and_rejects_corruption() {
         let bytes = b"runtime";
@@ -828,6 +907,75 @@ mod tests {
         }
         assert!(ytdlp_asset_for("plan9", "mips").is_err());
         assert!(ffmpeg_platform_for("plan9", "mips").is_err());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_update_keeps_an_existing_healthy_ytdlp_ready() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let paths = RuntimePaths::new(directory.path());
+        tokio::fs::create_dir_all(paths.ytdlp_directory())
+            .await
+            .unwrap();
+        tokio::fs::write(
+            paths.ytdlp_executable(),
+            b"#!/bin/sh\nprintf 'working-version\\n'\n",
+        )
+        .await
+        .unwrap();
+        let mut permissions = std::fs::metadata(paths.ytdlp_executable())
+            .unwrap()
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(paths.ytdlp_executable(), permissions).unwrap();
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let unreachable = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_millis(100))
+            .timeout(Duration::from_millis(250))
+            .build()
+            .unwrap();
+        let manager = RuntimeManager::with_source(
+            paths,
+            Arc::new(UnreachableYtDlpSource { url: unreachable }),
+            client,
+        );
+
+        assert!(manager.update_ytdlp().await.is_err());
+        let component = manager
+            .components()
+            .await
+            .into_iter()
+            .find(|component| component.name == RuntimeComponentName::YtDlp)
+            .unwrap();
+        assert_eq!(component.status, RuntimeStatus::Ready);
+        assert_eq!(component.version.as_deref(), Some("working-version"));
+        assert_eq!(
+            manager.ytdlp_path().await.unwrap(),
+            manager.paths().ytdlp_executable()
+        );
+    }
+
+    #[test]
+    fn runtime_request_errors_include_actionable_context() {
+        let error = reqwest::Client::builder()
+            .build()
+            .unwrap()
+            .get("not a URL")
+            .build()
+            .unwrap_err();
+        let mapped =
+            runtime_request_error("load test artifact", "https://provider.test/tool", error);
+        assert_eq!(mapped.public_message(), "runtime provider request failure");
+        let details = mapped.diagnostic_details().unwrap();
+        assert!(details.contains("stage: load test artifact"));
+        assert!(details.contains("provider: https://provider.test/tool"));
+        assert!(details.contains("kind: request"));
+        assert!(details.contains("cause:"));
     }
 
     #[tokio::test]

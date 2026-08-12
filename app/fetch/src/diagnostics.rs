@@ -71,6 +71,19 @@ impl DiagnosticOperations for DiagnosticsService {
         }
         Ok(DiagnosticsReport { checks })
     }
+
+    async fn record_log(
+        &self,
+        level: &str,
+        subsystem: &str,
+        message: &str,
+        details: Option<&str>,
+    ) -> Result<(), FetchError> {
+        self.storage
+            .append_log(level, subsystem, message, details)
+            .await
+            .map_err(|error| FetchError::Internal(error.to_string()))
+    }
 }
 
 async fn check_output_directory(path: &std::path::Path) -> std::io::Result<()> {

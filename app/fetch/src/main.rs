@@ -345,27 +345,142 @@ fn start_runtime_bootstrap(
             .and_then(|value| value.parse::<chrono::DateTime<chrono::Utc>>().ok());
         let update_due = last_update
             .is_none_or(|updated| chrono::Utc::now() - updated > chrono::Duration::days(1));
-        let ytdlp_result = if ytdlp.is_none_or(|component| component.status != RuntimeStatus::Ready)
-        {
-            runtime.install_ytdlp().await.map(|_| ())
-        } else if settings.ytdlp_auto_update && update_due {
-            runtime.update_ytdlp().await.map(|_| ())
-        } else {
-            Ok(())
+        let ytdlp_operation =
+            if ytdlp.is_none_or(|component| component.status != RuntimeStatus::Ready) {
+                Some("install")
+            } else if settings.ytdlp_auto_update && update_due {
+                Some("automatic update")
+            } else {
+                None
+            };
+        let ytdlp_result = match ytdlp_operation {
+            Some(operation) => {
+                let details =
+                    format!("component: yt-dlp\naction: {operation}\nsource: startup bootstrap");
+                let _ = storage
+                    .append_log(
+                        "info",
+                        "runtime",
+                        "runtime operation started",
+                        Some(&details),
+                    )
+                    .await;
+                info!(
+                    component = "yt-dlp",
+                    action = operation,
+                    "runtime operation started"
+                );
+                if operation == "install" {
+                    runtime.install_ytdlp().await.map(|_| ())
+                } else {
+                    runtime.update_ytdlp().await.map(|_| ())
+                }
+            }
+            None => Ok(()),
         };
-        if let Err(error) = &ytdlp_result {
+        if let (Some(operation), Err(error)) = (ytdlp_operation, &ytdlp_result) {
+            let retained = runtime.components().await.iter().any(|component| {
+                component.name == fetch_core::RuntimeComponentName::YtDlp
+                    && component.status == RuntimeStatus::Ready
+            });
+            let level = if retained { "warn" } else { "error" };
+            let message = if retained {
+                "runtime update failed; existing component remains ready"
+            } else {
+                "runtime operation failed"
+            };
+            let cause = error
+                .diagnostic_details()
+                .map(str::to_owned)
+                .unwrap_or_else(|| error.public_message());
+            let details = format!("component: yt-dlp\naction: {operation}\n{cause}");
+            warn!(
+                component = "yt-dlp",
+                action = operation,
+                retained,
+                error = %error.public_message(),
+                details = ?error.diagnostic_details(),
+                "runtime operation failed"
+            );
             let _ = storage
-                .append_log("error", "runtime", &error.public_message(), None)
+                .append_log(level, "runtime", message, Some(&details))
                 .await;
-        } else if update_due {
+        } else if let Some(operation) = ytdlp_operation {
+            let details = format!("component: yt-dlp\naction: {operation}\nresult: completed");
+            let _ = storage
+                .append_log(
+                    "info",
+                    "runtime",
+                    "runtime operation completed",
+                    Some(&details),
+                )
+                .await;
+            info!(
+                component = "yt-dlp",
+                action = operation,
+                "runtime operation completed"
+            );
+        }
+        if ytdlp_operation.is_some() && ytdlp_result.is_ok() {
             let _ = storage
                 .set_metadata("ytdlp_last_update", &chrono::Utc::now().to_rfc3339())
                 .await;
         }
-        if ffmpeg_missing && let Err(error) = runtime.install_ffmpeg().await {
+        if ffmpeg_missing {
+            let start_details =
+                "component: ffmpeg/ffprobe\naction: install\nsource: startup bootstrap";
             let _ = storage
-                .append_log("error", "runtime", &error.public_message(), None)
+                .append_log(
+                    "info",
+                    "runtime",
+                    "runtime operation started",
+                    Some(start_details),
+                )
                 .await;
+            info!(
+                component = "ffmpeg/ffprobe",
+                action = "install",
+                "runtime operation started"
+            );
+            match runtime.install_ffmpeg().await {
+                Ok(_) => {
+                    let _ = storage
+                        .append_log(
+                            "info",
+                            "runtime",
+                            "runtime operation completed",
+                            Some("component: ffmpeg/ffprobe\naction: install\nresult: completed"),
+                        )
+                        .await;
+                    info!(
+                        component = "ffmpeg/ffprobe",
+                        action = "install",
+                        "runtime operation completed"
+                    );
+                }
+                Err(error) => {
+                    let cause = error
+                        .diagnostic_details()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| error.public_message());
+                    let details = format!("component: ffmpeg/ffprobe\naction: install\n{cause}");
+                    warn!(
+                        component = "ffmpeg/ffprobe",
+                        action = "install",
+                        error = %error.public_message(),
+                        details = ?error.diagnostic_details(),
+                        "runtime operation failed"
+                    );
+                    let _ = storage
+                        .append_log(
+                            "error",
+                            "runtime",
+                            "runtime operation failed",
+                            Some(&details),
+                        )
+                        .await;
+                }
+            }
         }
         let ready = runtime
             .inspect_all()

@@ -30,4 +30,11 @@ pub trait DiagnosticOperations: Send + Sync {
     async fn logs(&self) -> Result<Vec<DiagnosticLogEntry>, FetchError>;
     async fn clear_logs(&self) -> Result<(), FetchError>;
     async fn report(&self) -> Result<DiagnosticsReport, FetchError>;
+    async fn record_log(
+        &self,
+        level: &str,
+        subsystem: &str,
+        message: &str,
+        details: Option<&str>,
+    ) -> Result<(), FetchError>;
 }
