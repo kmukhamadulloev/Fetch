@@ -37,10 +37,32 @@ improving the live settings experience.
 - [ ] Confirm version metadata, release notes, documentation, and artifacts are
   aligned before creating the release commit and tag.
 
-## Planned
+## 0.1.3 — Planned
 
-No later release scope is approved yet. Add work here only after its product
-scope and acceptance criteria are agreed.
+Objective: add safe, understandable outbound proxy routing for media analysis
+and downloads without changing Fetch's local/LAN server model.
+
+### Proxy support
+
+- [ ] Add host-managed **System default**, **Direct connection**, and
+  **Custom proxy** modes under Network settings.
+- [ ] Support validated unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxy
+  URLs without exposing arbitrary yt-dlp arguments.
+- [ ] Apply the selected route consistently to media/playlist analysis and
+  every newly spawned yt-dlp download process; active processes keep their
+  existing route.
+- [ ] Keep proxy configuration host-only. LAN clients may initiate downloads
+  through the host's configured route but cannot read or change its endpoint.
+- [ ] Persist proxy configuration separately from the LAN-readable application
+  settings contract and hot-apply it without restarting Fetch.
+- [ ] Pass proxy values as structured process arguments, redact them from
+  retained diagnostics, and return actionable validation/connection errors.
+- [ ] Cover validation, persistence, command construction, hot application,
+  host/remote authorization, UI states, and desktop/mobile behavior with tests.
+- [ ] Update the API contract, security model, UI specification, testing docs,
+  acceptance matrix, and release notes as implementation lands.
+
+The approved design and acceptance details are in `docs/PROXY.md`.
 
 ## Candidate ideas
 
@@ -49,6 +71,9 @@ implementation:
 
 - Search, filter, and sort the Completed library.
 - Guarded playlist-level bulk actions.
+- Authenticated proxy credentials using native operating-system secret storage.
+- Named proxy profiles and per-download proxy selection.
+- Optional proxy routing for managed runtime downloads.
 - Code signing and notarization for native release artifacts.
 
 ## Deferred or out of scope

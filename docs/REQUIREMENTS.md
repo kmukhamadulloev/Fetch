@@ -96,6 +96,14 @@ Support:
 - `192.168.0.0/16` may be the default LAN allow-list.
 - Explicit warning that there is no application login.
 
+## Planned outbound proxy routing
+
+The approved 0.1.3 scope adds a host-only global route for yt-dlp analysis and
+downloads. It supports system-default, forced-direct, and validated
+unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 proxy modes. It does not proxy the
+Fetch listener, LAN file traffic, or managed runtime installation. See
+`PROXY.md` for the implementation and security contract.
+
 ## Logs
 - application logs;
 - yt-dlp stdout/stderr;

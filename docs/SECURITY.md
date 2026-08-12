@@ -22,6 +22,14 @@ Never automatically configure router port forwarding, UPnP, public tunnels or in
 ## Command injection
 Never concatenate URL/user input into shell command strings. Use structured process spawning (`Command::new(...).arg(...)`). Avoid `sh -c`, `cmd /C`, PowerShell command strings unless a documented platform requirement safely handles escaping.
 
+## Planned outbound proxy security
+
+The 0.1.3 proxy design is host-managed and applies only to yt-dlp analysis and
+downloads. Its endpoint is not exposed to LAN clients, download records, SSE,
+or normal diagnostics. The initial scope rejects embedded credentials because
+command arguments, process listings, persistence, and subprocess output are
+not suitable secret stores. See `PROXY.md` for the complete boundary.
+
 ## Filesystem
 File and thumbnail endpoints use opaque stored IDs, not arbitrary paths.
 Validate output directories independently. Playlist titles and IDs are

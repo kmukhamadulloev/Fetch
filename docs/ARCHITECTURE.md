@@ -41,6 +41,11 @@ Owns:
 - structured/progress output parsing;
 - mapping process failures into typed errors.
 
+Planned for 0.1.3: consume a shared typed outbound proxy policy for analysis
+and download command construction. The adapter remains the only layer that
+translates this policy into yt-dlp arguments; download requests and HTTP
+handlers never accept arbitrary process arguments.
+
 ### fetch-runtime
 Owns:
 - OS/architecture detection;
@@ -166,6 +171,10 @@ does not orphan yt-dlp or FFmpeg descendants.
 SQLite only. Use migrations. Media files stay on disk, not in SQLite.
 Playback progress is stored per opaque completed-file ID and shared by all
 allowed clients; deleting a completed file cascades to its progress record.
+
+The planned proxy policy is stored separately from LAN-readable application
+settings and is read or changed only through a host-authorized application
+service. See `PROXY.md`.
 
 ## Process ownership
 

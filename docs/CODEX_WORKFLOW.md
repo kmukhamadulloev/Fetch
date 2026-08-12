@@ -19,6 +19,10 @@ Use `CODEX_START.txt` as the first prompt.
 `ROADMAP.md` is forward-looking. Do not use it as a substitute for the release
 history in `RELEASE.md` or the concrete defect register in `ISSUES.md`.
 
+When the `$roadmap-git-workflow` skill is available, use it for adding,
+promoting, re-scoping, completing, implementing, or auditing roadmap work so
+these files remain aligned and verified milestones become scoped local commits.
+
 ## Audit prompt
 
 ```text
