@@ -23,7 +23,7 @@ native package startup gates.
 
 ## BUG-021 — Failed runtime update demotes a working yt-dlp installation
 
-Status: IN PROGRESS
+Status: RESOLVED
 
 Affected:
 - fetch-runtime
@@ -41,8 +41,13 @@ start tries again, while retained records contain only `runtime download
 failed` with no underlying network details. The Logs page has no severity
 filter.
 
-Notes: The existing managed yt-dlp remains intact on disk; the defect is in the
-in-memory failure transition and diagnostic retention, not atomic replacement.
+Resolution: Managed updates now restore the verified previous Ready state after
+a provider failure, while first-time install failures retain their actionable
+Failed state. Runtime HTTP requests have bounded connect, idle-read, and total
+durations. Startup and host-triggered operations retain start, success, and
+failure records with component, action, provider stage, category, and cause.
+The responsive Logs page adds immediate All, Info, Warnings, and Errors filters
+with counts and readable multiline details.
 
 ## UX-020 — yt-dlp traffic cannot use a host-managed proxy
 

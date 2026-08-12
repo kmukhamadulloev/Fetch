@@ -34,3 +34,10 @@ The runtime manager broadcasts actual installing/updating/ready/failed state
 over SSE. yt-dlp automatic update is checked at most daily when enabled.
 Install, update, and repair are also available in Settings. Fetch does not fake
 runtime versions or progress.
+
+Provider requests have bounded connection, idle-read, and total operation
+durations. A failed update never demotes an already verified executable: Fetch
+restores its Ready state and records the update as a warning. A failed initial
+install remains Failed with a retry action. Retained runtime lifecycle records
+include the component, operation, source, request stage, failure category, and
+underlying cause without returning internal details through normal API errors.

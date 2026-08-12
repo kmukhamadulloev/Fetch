@@ -10,6 +10,9 @@ developer-visible behavior, compatibility, and release operations.
 - Added validated HTTP, HTTPS, SOCKS4, and SOCKS5 endpoint support.
 - Kept proxy endpoints out of LAN APIs, job history, SSE, and diagnostics.
 - Added responsive proxy controls and host/remote browser coverage.
+- Kept verified runtimes ready when automatic provider updates fail.
+- Bounded runtime provider requests and retained actionable operation details.
+- Added responsive severity filters and counts to the Logs page.
 
 ## 0.1.2
 

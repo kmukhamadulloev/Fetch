@@ -108,6 +108,8 @@ commands and live-smoke observations are recorded in the completion report.
 ## Phase 07 — Runtime updates and repair
 
 - [x] PASS — failed pair replacement restores both working binaries.
+- [x] PASS — failed provider updates keep existing verified runtimes Ready while first-time failures remain actionable.
+- [x] PASS — runtime provider requests have bounded connect, idle-read, and total durations.
 - [x] PASS — versions are rechecked after replacement.
 - [x] PASS — corrupt artifacts and missing provider digests are rejected.
 - [x] PASS — UI state/progress is sourced from RuntimeManager SSE.
@@ -118,8 +120,9 @@ commands and live-smoke observations are recorded in the completion report.
 ## Phase 08 — Logs and diagnostics
 
 - [x] PASS — process failures persist an actionable summary and raw diagnostics.
+- [x] PASS — runtime lifecycle records retain component, action, source, provider stage, failure category, and cause.
 - [x] PASS — API errors omit raw process output and internal stack details.
-- [x] PASS — Logs UI lists, refreshes, and clears retained records.
+- [x] PASS — Logs UI lists, refreshes, clears, and filters retained records by severity on desktop and mobile.
 - [x] PASS — diagnostics check SQLite, output directory, and all runtimes.
 - [x] PASS — API and privacy regression tests pass.
 

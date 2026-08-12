@@ -152,3 +152,7 @@ Show real RuntimeManager install state and retry errors. Never fake production s
 - monospace for URLs/paths/logs;
 - Lucide icons;
 - intentional responsive behavior, not just shrinking desktop.
+
+The Logs view presents retained timestamps, severity, subsystem, summary, and
+multiline details in a responsive layout. All, Info, Warnings, and Errors
+filters show entry counts and apply immediately without another API request.
