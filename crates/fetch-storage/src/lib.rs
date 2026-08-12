@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use fetch_core::{
     ApplicationSettings, CompletedFile, DiagnosticLogEntry, DownloadJob, DownloadStatus,
-    FetchError, PlaybackProgress, SettingsOperations,
+    FetchError, PlaybackProgress, ProxySettings, SettingsOperations,
 };
 use sqlx::{Row, SqlitePool, sqlite::SqlitePoolOptions};
 use thiserror::Error;
@@ -262,6 +262,28 @@ impl Storage {
         Ok(())
     }
 
+    pub async fn load_proxy_settings(&self) -> Result<ProxySettings, StorageError> {
+        let value: Option<String> =
+            sqlx::query_scalar("SELECT value FROM settings WHERE key = 'proxy'")
+                .fetch_optional(&self.pool)
+                .await?;
+        value
+            .map(from_json)
+            .transpose()
+            .map(|settings| settings.unwrap_or_default())
+    }
+
+    pub async fn save_proxy_settings(&self, settings: &ProxySettings) -> Result<(), StorageError> {
+        settings
+            .validate()
+            .map_err(|error| StorageError::Data(error.public_message()))?;
+        sqlx::query("INSERT INTO settings (key, value, updated_at) VALUES ('proxy', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP")
+            .bind(to_json(settings)?)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn append_log(
         &self,
         level: &str,
@@ -401,6 +423,22 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(version, 4);
+        assert_eq!(
+            storage.load_proxy_settings().await.unwrap(),
+            ProxySettings::default()
+        );
+    }
+
+    #[tokio::test]
+    async fn persists_proxy_settings_separately_from_application_settings() {
+        let storage = Storage::open(Path::new(":memory:")).await.unwrap();
+        let settings = ProxySettings {
+            mode: fetch_core::ProxyMode::Custom,
+            url: Some("socks5://127.0.0.1:1080".into()),
+        };
+        storage.save_proxy_settings(&settings).await.unwrap();
+        assert_eq!(storage.load_proxy_settings().await.unwrap(), settings);
+        assert!(storage.load_settings().await.unwrap().is_none());
     }
 
     #[tokio::test]
