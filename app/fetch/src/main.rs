@@ -483,7 +483,7 @@ fn start_runtime_bootstrap(
             }
         }
         let ready = runtime
-            .inspect_all()
+            .components()
             .await
             .iter()
             .all(|component| component.status == RuntimeStatus::Ready);

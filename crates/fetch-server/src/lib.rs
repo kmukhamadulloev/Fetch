@@ -721,7 +721,7 @@ async fn start_runtime_action(
             (_, RuntimeAction::Update) => manager.update_ffmpeg().await.map(|_| ()),
             (_, RuntimeAction::Repair) => manager.repair_ffmpeg().await.map(|_| ()),
         };
-        let components = manager.inspect_all().await;
+        let components = manager.components().await;
         status.set_runtime_ready(
             components
                 .iter()

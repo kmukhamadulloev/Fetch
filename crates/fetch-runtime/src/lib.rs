@@ -960,6 +960,37 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn failed_first_install_retains_the_actionable_failed_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let unreachable = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_millis(100))
+            .timeout(Duration::from_millis(250))
+            .build()
+            .unwrap();
+        let manager = RuntimeManager::with_source(
+            RuntimePaths::new(directory.path()),
+            Arc::new(UnreachableYtDlpSource { url: unreachable }),
+            client,
+        );
+
+        assert!(manager.install_ytdlp().await.is_err());
+        let component = manager
+            .components()
+            .await
+            .into_iter()
+            .find(|component| component.name == RuntimeComponentName::YtDlp)
+            .unwrap();
+        assert_eq!(component.status, RuntimeStatus::Failed);
+        assert_eq!(
+            component.error.as_deref(),
+            Some("runtime provider connection failure")
+        );
+    }
+
     #[test]
     fn runtime_request_errors_include_actionable_context() {
         let error = reqwest::Client::builder()
