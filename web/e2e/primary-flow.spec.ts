@@ -51,7 +51,12 @@ async function mockApi(
     if (/^\/api\/files\/.+\/progress$/.test(path) && request.method() === 'DELETE') { const id = path.split('/').at(-2); completed = completed.map((file) => file.id === id ? { ...file, playback: null } : file); return route.fulfill({ status: 204 }) }
     if (/^\/api\/files\/.+$/.test(path) && request.method() === 'DELETE') { const id = path.split('/').at(-1); completed = completed.filter((file) => file.id !== id); return route.fulfill({ status: 204 }) }
     if (/^\/api\/files\/.+\/reveal$/.test(path)) return route.fulfill({ status: network.local_client ? 204 : 403, json: network.local_client ? undefined : { error: { code: 'LOCAL_CLIENT_REQUIRED', message: 'Host only' } } })
-    if (path === '/api/history' || path === '/api/logs') return route.fulfill({ json: [] })
+    if (path === '/api/history') return route.fulfill({ json: [] })
+    if (path === '/api/logs') return route.fulfill({ json: [
+      { id: 3, level: 'error', subsystem: 'runtime', message: 'runtime operation failed', details: 'component: yt-dlp\naction: automatic update\nkind: connection', created_at: '2026-08-12T19:18:08Z' },
+      { id: 2, level: 'warn', subsystem: 'yt-dlp', message: 'extractor warning', details: 'job: fixture', created_at: '2026-08-12T19:17:08Z' },
+      { id: 1, level: 'info', subsystem: 'runtime', message: 'runtime operation started', details: 'component: yt-dlp', created_at: '2026-08-12T19:16:08Z' },
+    ] })
     if (path === '/api/settings') return route.fulfill({ json: request.method() === 'PUT' ? { ...request.postDataJSON(), listener_changed: false } : settings })
     if (path === '/api/network') return route.fulfill({ json: { bind_address: settings.bind_address, port: settings.port, urls: network.urls, authentication: false, restart_required_after_bind_change: false, local_client: network.local_client } })
     if (path === '/api/proxy') {
@@ -149,6 +154,25 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
   await expect(page.getByText('Proxy configuration is private to the host.')).toBeVisible()
   await expect(page.getByLabel('Download proxy mode')).toHaveCount(0)
   expect(proxyRequests).toBe(0)
+})
+
+test('logs expose detailed severity filters on desktop and mobile', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/logs')
+
+  await expect(page.getByRole('button', { name: 'All 3' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-log-entry]')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Errors 1' }).click()
+  await expect(page.locator('[data-log-entry]')).toHaveCount(1)
+  await expect(page.getByText('runtime operation failed')).toBeVisible()
+  await expect(page.getByText('kind: connection')).toBeVisible()
+  await expect(page.getByText('extractor warning')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Warnings 1' }).click()
+  await expect(page.locator('[data-log-entry]')).toHaveCount(1)
+  await expect(page.getByText('extractor warning')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  )
 })
 
 test('playlist entries retain shared folder context and item order', async ({ page }) => {
