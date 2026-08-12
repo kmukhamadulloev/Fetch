@@ -24,6 +24,7 @@ case "${1:-}" in
     output_dir=/tmp
     thumbnail_dir=
     thumbnail_stem=
+    proxy_value='<system>'
     previous=
     for argument in "$@"; do
       if [ "$previous" = "--paths" ]; then
@@ -31,6 +32,9 @@ case "${1:-}" in
           thumbnail:*) thumbnail_dir=${argument#thumbnail:} ;;
           *) output_dir=$argument ;;
         esac
+      fi
+      if [ "$previous" = "--proxy" ]; then
+        proxy_value=$argument
       fi
       if [ "$previous" = "--output" ]; then
         case "$argument" in
@@ -47,6 +51,9 @@ case "${1:-}" in
       *fail*) printf '%s\n' 'ERROR: fixture download failed' >&2; exit 1 ;;
     esac
     mkdir -p "$output_dir"
+    case "${argument:-}" in
+      *record-proxy*) printf '%s' "$proxy_value" > "$output_dir/fixture-proxy.txt" ;;
+    esac
     output_file="$output_dir/fixture.mp4"
     printf '%s' 'fixture media bytes' > "$output_file"
     if [ -n "$thumbnail_dir" ] && [ -n "$thumbnail_stem" ]; then

@@ -1026,6 +1026,102 @@ mod tests {
         panic!("queued jobs did not stop cleanly");
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn proxy_changes_leave_active_jobs_running_and_apply_to_queued_jobs() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let runtime_paths = fetch_runtime::RuntimePaths::new(temp.path().join("runtime"));
+        std::fs::create_dir_all(runtime_paths.ytdlp_directory()).unwrap();
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../tests/fixtures/fake-ytdlp.sh"),
+            runtime_paths.ytdlp_executable(),
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(runtime_paths.ytdlp_executable())
+            .unwrap()
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(runtime_paths.ytdlp_executable(), permissions).unwrap();
+        let storage = Arc::new(
+            Storage::open(std::path::Path::new(":memory:"))
+                .await
+                .unwrap(),
+        );
+        let policy = ProxyPolicy::new(ProxySettings::default()).unwrap();
+        let output = temp.path().join("downloads");
+        let manager = DownloadManager::new(
+            storage,
+            RuntimeManager::new(runtime_paths).unwrap(),
+            EventBus::default(),
+            1,
+            output.clone(),
+            temp.path().join("thumbnails"),
+            policy.clone(),
+        );
+        let request = |url: &str| DownloadRequest {
+            url: url.into(),
+            title: None,
+            duration_seconds: None,
+            mode: DownloadMode::Video,
+            format_id: None,
+            quality: None,
+            container: None,
+            video_codec: None,
+            audio_codec: None,
+            embed_metadata: false,
+            embed_thumbnail: false,
+            subtitles: false,
+            playlist: None,
+            output_directory: None,
+        };
+        let active = manager
+            .create(request("https://example.test/slow-active"))
+            .await
+            .unwrap();
+        let queued = manager
+            .create(request("https://example.test/record-proxy"))
+            .await
+            .unwrap();
+        for _ in 0..100 {
+            if manager.get(active.id).await.unwrap().status == DownloadStatus::Downloading {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        policy
+            .replace(ProxySettings {
+                mode: fetch_core::ProxyMode::Custom,
+                url: Some("socks5://127.0.0.1:1080".into()),
+            })
+            .unwrap();
+        assert_eq!(
+            manager.get(active.id).await.unwrap().status,
+            DownloadStatus::Downloading
+        );
+        assert_eq!(
+            manager.get(queued.id).await.unwrap().status,
+            DownloadStatus::Queued
+        );
+        manager.stop(active.id).await.unwrap();
+        for _ in 0..200 {
+            if manager.get(queued.id).await.unwrap().status == DownloadStatus::Completed {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            manager.get(queued.id).await.unwrap().status,
+            DownloadStatus::Completed
+        );
+        assert_eq!(
+            std::fs::read_to_string(output.join("fixture-proxy.txt")).unwrap(),
+            "socks5://127.0.0.1:1080"
+        );
+    }
+
     #[test]
     fn playlist_paths_are_ordered_and_cross_platform_safe() {
         let context = fetch_core::PlaylistContext {
