@@ -1,10 +1,14 @@
 # Active Goal
 
-Complete the approved Fetch 0.1.2 scope described in `ROADMAP.md`:
+Implement the approved Fetch 0.1.3 proxy scope described in `ROADMAP.md` and
+`docs/PROXY.md`:
 
-- finish the remaining desktop and mobile acceptance review;
-- validate the full Rust, frontend, browser, managed-runtime, and packaging
-  paths required for release;
+- add typed, persisted, host-only outbound proxy configuration;
+- hot-apply the selected route to yt-dlp analysis and newly spawned downloads;
+- integrate responsive Network settings without exposing the endpoint to LAN
+  clients or retained diagnostics;
+- validate the Rust, API, frontend, browser, and compatibility paths required
+  by the proxy acceptance criteria;
 - keep `ROADMAP.md`, `RELEASE.md`, `docs/ACCEPTANCE.md`, and `ISSUES.md` aligned
   with verified behavior.
 

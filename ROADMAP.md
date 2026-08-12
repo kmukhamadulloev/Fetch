@@ -4,7 +4,7 @@ This file tracks approved forward-looking product work. Keep completed release
 details in `RELEASE.md`, concrete defects in `ISSUES.md`, and verification
 evidence in `docs/ACCEPTANCE.md`.
 
-## 0.1.2 — Current
+## 0.1.2 — Implementation complete; release verification pending
 
 Objective: make the completed-media library organized and resumable while
 improving the live settings experience.
@@ -37,7 +37,7 @@ improving the live settings experience.
 - [ ] Confirm version metadata, release notes, documentation, and artifacts are
   aligned before creating the release commit and tag.
 
-## 0.1.3 — Planned
+## 0.1.3 — Current
 
 Objective: add safe, understandable outbound proxy routing for media analysis
 and downloads without changing Fetch's local/LAN server model.
