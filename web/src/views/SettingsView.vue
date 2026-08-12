@@ -3,12 +3,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Check, CheckCircle2, Clipboard, Cpu, Download, ExternalLink, FileClock, Film,
-  Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, TriangleAlert, Wrench,
+  Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, TriangleAlert, Waypoints, Wrench,
 } from '@lucide/vue'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useSettingsStore } from '@/stores/settings'
+import { useProxyStore } from '@/stores/proxy'
 import { useAppearance, type ThemePreference } from '@/stores/appearance'
-import type { ApplicationSettings, RuntimeComponent } from '@/app/api/client'
+import type { ApplicationSettings, ProxyMode, ProxySettings, RuntimeComponent } from '@/app/api/client'
 
 const tabs = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
@@ -23,11 +24,13 @@ const route = useRoute()
 const router = useRouter()
 const settings = useSettingsStore()
 const runtime = useRuntimeStore()
+const proxy = useProxyStore()
 const appearance = useAppearance()
 const active = ref<TabId>('general')
 const form = ref<ApplicationSettings | null>(null)
 const networks = ref('')
 const copiedUrl = ref<string | null>(null)
+const proxyForm = ref<ProxySettings | null>(null)
 
 function tabFromHash(hash: string): TabId {
   const candidate = hash.replace('#', '') as TabId
@@ -43,15 +46,20 @@ watch(() => settings.value, (value) => {
   form.value = { ...value, allowed_networks: [...value.allowed_networks] }
   networks.value = value.allowed_networks.join('\n')
 }, { immediate: true })
+watch(() => proxy.value, (value) => {
+  proxyForm.value = value ? { ...value } : null
+}, { immediate: true })
 
 const runtimeReady = computed(() => runtime.components.filter((item) => item.status === 'ready').length)
 const ytdlp = computed(() => runtime.components.find((item) => item.name === 'yt-dlp'))
 const ffmpeg = computed(() => runtime.components.find((item) => item.name === 'ffmpeg'))
 const ffprobe = computed(() => runtime.components.find((item) => item.name === 'ffprobe'))
 const runtimeBusy = (component?: RuntimeComponent) => component?.status === 'installing' || component?.status === 'updating'
+const isHost = computed(() => settings.network?.local_client === true)
 
 onMounted(async () => {
   await Promise.all([settings.refresh(), runtime.refresh()])
+  if (isHost.value) await proxy.refresh()
 })
 
 function save() {
@@ -61,6 +69,20 @@ function save() {
 
 function changeTheme(event: Event) {
   appearance.setTheme((event.target as HTMLSelectElement).value as ThemePreference)
+}
+
+function changeProxyMode(event: Event) {
+  if (!proxyForm.value) return
+  const mode = (event.target as HTMLSelectElement).value as ProxyMode
+  proxyForm.value = { mode, url: mode === 'custom' ? (proxyForm.value.url ?? '') : null }
+}
+
+function saveProxy() {
+  if (!proxyForm.value || !isHost.value) return
+  void proxy.save({
+    mode: proxyForm.value.mode,
+    url: proxyForm.value.mode === 'custom' ? proxyForm.value.url : null,
+  })
 }
 
 async function copyUrl(url: string) {
@@ -79,7 +101,7 @@ async function copyUrl(url: string) {
     <p class="eyebrow">Configuration</p>
     <h2 class="mt-2 text-2xl font-semibold">Settings</h2>
     <p class="mt-1 text-sm text-muted">Application, network, download, and runtime preferences.</p>
-    <p v-if="settings.error || runtime.error" class="error-panel mt-5" role="alert">{{ settings.error ?? runtime.error }}</p>
+    <p v-if="settings.error || runtime.error || proxy.error" class="error-panel mt-5" role="alert">{{ settings.error ?? runtime.error ?? proxy.error }}</p>
 
     <div class="settings-layout mt-6">
       <nav class="settings-nav card" aria-label="Settings sections">
@@ -138,6 +160,43 @@ async function copyUrl(url: string) {
               </div>
             </div>
             <p class="mt-4 text-[11px] leading-5 text-muted">Network changes apply immediately. If the address changes, Fetch moves this tab to the new URL automatically.</p>
+          </div>
+          <div class="card p-5 sm:p-6" aria-labelledby="settings-proxy">
+            <div class="flex items-start gap-3 sm:gap-4">
+              <div class="empty-icon shrink-0"><Waypoints :size="18" /></div>
+              <div class="min-w-0 flex-1">
+                <h3 id="settings-proxy" class="text-sm font-semibold">Outbound downloads</h3>
+                <p class="mt-1 text-xs leading-5 text-muted">Choose how yt-dlp analyzes media and starts new downloads.</p>
+              </div>
+            </div>
+            <div v-if="!isHost" class="info-panel mt-5">
+              <Network :size="18" class="shrink-0" />
+              <span>Proxy configuration is private to the host. Open Settings on the device running Fetch to view or change it.</span>
+            </div>
+            <div v-else-if="proxy.loading" class="mt-5 min-h-24 animate-pulse rounded-xl bg-[var(--app-surface-2)]" aria-label="Loading proxy settings"></div>
+            <div v-else-if="!proxyForm" class="error-panel mt-5" role="alert">
+              <span>Proxy settings could not be loaded.</span>
+              <button class="secondary-btn ml-auto shrink-0" type="button" @click="proxy.refresh">Retry</button>
+            </div>
+            <div v-else class="mt-5 space-y-4">
+              <label class="field max-w-md">
+                <span>Connection mode</span>
+                <select class="select" :value="proxyForm.mode" aria-label="Download proxy mode" @change="changeProxyMode">
+                  <option value="system">System default</option>
+                  <option value="direct">Direct connection</option>
+                  <option value="custom">Custom proxy</option>
+                </select>
+              </label>
+              <label v-if="proxyForm.mode === 'custom'" class="field">
+                <span>Proxy URL</span>
+                <input v-model="proxyForm.url" class="input font-mono text-xs" type="url" inputmode="url" autocomplete="off" placeholder="socks5://127.0.0.1:1080" aria-describedby="proxy-help" />
+              </label>
+              <p id="proxy-help" class="text-[11px] leading-5 text-muted">Supports unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. Active downloads keep their current route; queued and new work use the saved mode.</p>
+              <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
+                <span class="text-xs" aria-live="polite"><span v-if="proxy.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Proxy saved</span></span>
+                <button class="secondary-btn" type="button" :disabled="proxy.saving" @click="saveProxy">{{ proxy.saving ? 'Saving…' : 'Save proxy' }}</button>
+              </div>
+            </div>
           </div>
           <div class="warning-panel"><TriangleAlert class="shrink-0 text-amber-500" :size="20" /><div><div class="text-xs font-medium">Network access has no application login</div><p class="mt-1 text-xs leading-5 opacity-70">Every allowed client can control downloads and access completed files. Fetch never opens router ports or public tunnels.</p></div></div>
         </section>

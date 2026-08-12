@@ -123,6 +123,11 @@ export interface NetworkInfo {
   restart_required_after_bind_change: boolean
   local_client: boolean
 }
+export type ProxyMode = 'system' | 'direct' | 'custom'
+export interface ProxySettings {
+  mode: ProxyMode
+  url: string | null
+}
 export type SettingsSaveResponse = ApplicationSettings & { listener_changed: boolean }
 export interface DiagnosticLogEntry {
   id: number
@@ -246,6 +251,10 @@ export function putSettings(settings: ApplicationSettings): Promise<SettingsSave
   return jsonRequest('/api/settings', { method: 'PUT', body: JSON.stringify(settings) })
 }
 export function getNetworkInfo(): Promise<NetworkInfo> { return jsonRequest('/api/network') }
+export function getProxySettings(): Promise<ProxySettings> { return jsonRequest('/api/proxy') }
+export function putProxySettings(settings: ProxySettings): Promise<ProxySettings> {
+  return jsonRequest('/api/proxy', { method: 'PUT', body: JSON.stringify(settings) })
+}
 export function getLogs(): Promise<DiagnosticLogEntry[]> { return jsonRequest('/api/logs') }
 export function getDiagnostics(): Promise<DiagnosticsReport> { return jsonRequest('/api/diagnostics') }
 export async function clearLogs(): Promise<void> {

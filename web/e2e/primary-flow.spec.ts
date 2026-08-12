@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import type { CompletedFile } from '../src/app/api/client'
+import type { CompletedFile, ProxySettings } from '../src/app/api/client'
 
 const readyRuntime = [
   { name: 'yt-dlp', version: '2026.08.09', status: 'ready', progress_percent: null, error: null },
@@ -24,6 +24,7 @@ async function mockApi(
 ) {
   let jobs: unknown[] = []
   let completed = [...completedFixture]
+  let proxy: ProxySettings = { mode: 'system', url: null }
   await page.route('**/*', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -53,6 +54,15 @@ async function mockApi(
     if (path === '/api/history' || path === '/api/logs') return route.fulfill({ json: [] })
     if (path === '/api/settings') return route.fulfill({ json: request.method() === 'PUT' ? { ...request.postDataJSON(), listener_changed: false } : settings })
     if (path === '/api/network') return route.fulfill({ json: { bind_address: settings.bind_address, port: settings.port, urls: network.urls, authentication: false, restart_required_after_bind_change: false, local_client: network.local_client } })
+    if (path === '/api/proxy') {
+      if (!network.local_client) return route.fulfill({ status: 403, json: { error: { code: 'LOCAL_CLIENT_REQUIRED', message: 'Host only' } } })
+      if (request.method() === 'PUT') {
+        const next = request.postDataJSON() as ProxySettings
+        if (next.url?.includes('@')) return route.fulfill({ status: 400, json: { error: { code: 'INVALID_SETTINGS', message: 'authenticated proxies are not supported in this version' } } })
+        proxy = next
+      }
+      return route.fulfill({ json: proxy })
+    }
     if (path === '/api/diagnostics') return route.fulfill({ json: { checks: [] } })
     return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } })
   })
@@ -115,6 +125,30 @@ test('remote settings cannot change host system startup', async ({ page }) => {
   await page.goto('/settings#general')
   await expect(page.getByLabel('Start Fetch with system')).toBeDisabled()
   await expect(page.getByText('Change this setting on the device running Fetch.')).toBeVisible()
+})
+
+test('host can hot-apply an outbound download proxy', async ({ page }) => {
+  await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
+  await page.goto('/settings#network')
+  await page.getByLabel('Download proxy mode').selectOption('custom')
+  await page.getByLabel('Proxy URL').fill('socks5://127.0.0.1:1080')
+  const save = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/proxy' && request.method() === 'PUT')
+  await page.getByRole('button', { name: 'Save proxy' }).click()
+  expect((await save).postDataJSON()).toEqual({ mode: 'custom', url: 'socks5://127.0.0.1:1080' })
+  await expect(page.getByText('Proxy saved')).toBeVisible()
+  await expect(page.getByText('Active downloads keep their current route')).toBeVisible()
+})
+
+test('LAN clients cannot read or change the host proxy endpoint', async ({ page }) => {
+  let proxyRequests = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/proxy') proxyRequests += 1
+  })
+  await mockApi(page, readyRuntime, { urls: ['http://192.168.1.25:8080'], local_client: false })
+  await page.goto('/settings#network')
+  await expect(page.getByText('Proxy configuration is private to the host.')).toBeVisible()
+  await expect(page.getByLabel('Download proxy mode')).toHaveCount(0)
+  expect(proxyRequests).toBe(0)
 })
 
 test('playlist entries retain shared folder context and item order', async ({ page }) => {
