@@ -2,6 +2,7 @@ mod config;
 mod diagnostics;
 mod downloads;
 mod library;
+mod proxy;
 mod startup;
 mod tray;
 
@@ -13,11 +14,12 @@ use diagnostics::DiagnosticsService;
 use downloads::DownloadManager;
 use fetch_core::{
     ApplicationSettings, EventBus, FetchError, ListenerOperations, MediaAnalysis, MediaInfo,
-    RuntimeStatus, StatusService,
+    ProxyPolicy, RuntimeStatus, StatusService,
 };
 use fetch_runtime::{RuntimeManager, RuntimePaths};
 use fetch_storage::Storage;
 use library::CompletedLibrary;
+use proxy::ManagedProxy;
 use startup::{ManagedSettings, SystemStartupRegistration};
 use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -90,6 +92,7 @@ async fn run_fetch(
             settings
         }
     };
+    let proxy_policy = ProxyPolicy::new(storage.load_proxy_settings().await?)?;
     let runtime = RuntimeManager::new(RuntimePaths::new(config.runtime_path()))?;
     let components = runtime.inspect_all().await;
     let runtime_ready = components
@@ -104,9 +107,11 @@ async fn run_fetch(
         settings.concurrent_downloads as usize,
         settings.download_directory.clone(),
         config.data_directory.join("thumbnails"),
+        proxy_policy.clone(),
     ));
     let media = Arc::new(DynamicMediaAnalyzer {
         runtime: runtime.clone(),
+        proxy: proxy_policy.clone(),
     });
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;
     let shutdown = CancellationToken::new();
@@ -147,6 +152,7 @@ async fn run_fetch(
         events,
         completed: Arc::new(CompletedLibrary::new(storage.clone())),
         settings: managed_settings,
+        proxy: Arc::new(ManagedProxy::new(storage.clone(), proxy_policy)),
         listener: listener_control,
         network_policy,
         diagnostics: Arc::new(DiagnosticsService::new(storage.clone(), runtime.clone())),
@@ -372,13 +378,14 @@ fn start_runtime_bootstrap(
 
 struct DynamicMediaAnalyzer {
     runtime: RuntimeManager,
+    proxy: ProxyPolicy,
 }
 
 #[async_trait::async_trait]
 impl MediaAnalysis for DynamicMediaAnalyzer {
     async fn analyze(&self, url: &str) -> Result<MediaInfo, FetchError> {
         let path = self.runtime.ytdlp_path().await?;
-        let mut adapter = fetch_ytdlp::YtDlp::new(path);
+        let mut adapter = fetch_ytdlp::YtDlp::new(path).with_proxy(self.proxy.current())?;
         if let Some(directory) = self.runtime.ffmpeg_directory().await {
             adapter = adapter.with_ffmpeg_directory(directory);
         }

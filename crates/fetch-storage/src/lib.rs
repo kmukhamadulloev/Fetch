@@ -267,10 +267,14 @@ impl Storage {
             sqlx::query_scalar("SELECT value FROM settings WHERE key = 'proxy'")
                 .fetch_optional(&self.pool)
                 .await?;
-        value
+        let settings: ProxySettings = value
             .map(from_json)
             .transpose()
-            .map(|settings| settings.unwrap_or_default())
+            .map(|settings| settings.unwrap_or_default())?;
+        settings
+            .validate()
+            .map_err(|error| StorageError::Data(error.public_message()))?;
+        Ok(settings)
     }
 
     pub async fn save_proxy_settings(&self, settings: &ProxySettings) -> Result<(), StorageError> {

@@ -11,7 +11,7 @@ use std::{
 use chrono::Utc;
 use fetch_core::{
     ApplicationEvent, CompletedFile, DownloadJob, DownloadOperations, DownloadRequest,
-    DownloadStatus, EventBus, FetchError,
+    DownloadStatus, EventBus, FetchError, ProxyPolicy, ProxySettings,
 };
 use fetch_runtime::RuntimeManager;
 use fetch_storage::Storage;
@@ -37,6 +37,7 @@ struct Inner {
     controls: Mutex<HashMap<Uuid, CancellationToken>>,
     default_output: RwLock<PathBuf>,
     thumbnail_directory: PathBuf,
+    proxy: ProxyPolicy,
 }
 
 impl DownloadManager {
@@ -47,6 +48,7 @@ impl DownloadManager {
         concurrency: usize,
         default_output: PathBuf,
         thumbnail_directory: PathBuf,
+        proxy: ProxyPolicy,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -57,6 +59,7 @@ impl DownloadManager {
                 controls: Mutex::new(HashMap::new()),
                 default_output: RwLock::new(default_output),
                 thumbnail_directory,
+                proxy,
             }),
         }
     }
@@ -313,7 +316,8 @@ async fn run_job(
         .publish(ApplicationEvent::DownloadProgress(job.clone()));
 
     let ytdlp_path = inner.runtime.ytdlp_path().await?;
-    let mut adapter = YtDlp::new(ytdlp_path);
+    let proxy = inner.proxy.current();
+    let mut adapter = YtDlp::new(ytdlp_path).with_proxy(proxy.clone())?;
     if let Some(directory) = inner.runtime.ffmpeg_directory().await {
         adapter = adapter.with_ffmpeg_directory(directory);
     }
@@ -355,7 +359,7 @@ async fn run_job(
                 _ = cancellation.cancelled() => break ProcessOutcome::Cancelled,
                 result = &mut wait => break ProcessOutcome::Exited(result.map_err(|error| FetchError::ProcessFailed { summary: "could not wait for yt-dlp".into(), details: error.to_string() })?),
                 line = receiver.recv() => if let Some((is_stderr, line)) = line {
-                    handle_line(&inner, &mut job, &mut completed_path, &mut diagnostics, is_stderr, line).await?;
+                    handle_line(&inner, &mut job, &mut completed_path, &mut diagnostics, &proxy, is_stderr, line).await?;
                 },
             }
         }
@@ -401,6 +405,7 @@ async fn run_job(
             &mut job,
             &mut completed_path,
             &mut diagnostics,
+            &proxy,
             is_stderr,
             line,
         )
@@ -462,6 +467,7 @@ async fn handle_line(
     job: &mut DownloadJob,
     completed_path: &mut Option<PathBuf>,
     diagnostics: &mut String,
+    proxy: &ProxySettings,
     is_stderr: bool,
     line: String,
 ) -> Result<(), FetchError> {
@@ -483,6 +489,7 @@ async fn handle_line(
         }
         ProcessLine::CompletedFile(path) => *completed_path = Some(path),
         ProcessLine::Diagnostic(line) => {
+            let line = redact_proxy_diagnostic(proxy, &line);
             if is_stderr {
                 if diagnostics.len() < 65_536 {
                     diagnostics.push_str(&line);
@@ -506,6 +513,10 @@ async fn handle_line(
         ProcessLine::Postprocessing => {}
     }
     Ok(())
+}
+
+fn redact_proxy_diagnostic(proxy: &ProxySettings, line: &str) -> String {
+    proxy.redact(line)
 }
 
 async fn stop_job(inner: &Inner, id: Uuid) -> Result<(), FetchError> {
@@ -728,6 +739,19 @@ fn storage_error(error: fetch_storage::StorageError) -> FetchError {
 mod tests {
     use super::*;
 
+    #[test]
+    fn retained_diagnostics_redact_custom_proxy_endpoints() {
+        let proxy = ProxySettings {
+            mode: fetch_core::ProxyMode::Custom,
+            url: Some("http://private.proxy:8080".into()),
+        };
+        let line = redact_proxy_diagnostic(
+            &proxy,
+            "ERROR: could not connect to http://private.proxy:8080",
+        );
+        assert_eq!(line, "ERROR: could not connect to <redacted-proxy>");
+    }
+
     #[tokio::test]
     async fn concurrency_gate_applies_limit_changes_without_restart() {
         let gate = Arc::new(ConcurrencyGate::new(1));
@@ -793,6 +817,7 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
+            ProxyPolicy::new(ProxySettings::default()).unwrap(),
         );
         let job = manager
             .create(DownloadRequest {
@@ -882,6 +907,7 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
+            ProxyPolicy::new(ProxySettings::default()).unwrap(),
         );
         let job = manager
             .create(DownloadRequest {
@@ -948,6 +974,7 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
+            ProxyPolicy::new(ProxySettings::default()).unwrap(),
         );
         let request = |suffix: &str| DownloadRequest {
             url: format!("https://example.test/slow-{suffix}"),

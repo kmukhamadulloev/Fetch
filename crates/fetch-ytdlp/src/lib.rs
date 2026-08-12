@@ -4,7 +4,7 @@ use std::{path::PathBuf, process::Stdio};
 
 use fetch_core::{
     DownloadMode, DownloadProgress, DownloadRequest, FetchError, MediaAnalysis, MediaFormat,
-    MediaInfo, MediaKind, PlaylistEntry,
+    MediaInfo, MediaKind, PlaylistEntry, ProxyMode, ProxySettings,
 };
 use serde_json::Value;
 use tokio::{io::AsyncReadExt, process::Command};
@@ -23,6 +23,7 @@ pub struct DownloadArtifacts {
 pub struct YtDlp {
     executable: PathBuf,
     ffmpeg_directory: Option<PathBuf>,
+    proxy: ProxySettings,
 }
 
 #[async_trait::async_trait]
@@ -37,12 +38,19 @@ impl YtDlp {
         Self {
             executable: executable.into(),
             ffmpeg_directory: None,
+            proxy: ProxySettings::default(),
         }
     }
 
     pub fn with_ffmpeg_directory(mut self, directory: impl Into<PathBuf>) -> Self {
         self.ffmpeg_directory = Some(directory.into());
         self
+    }
+
+    pub fn with_proxy(mut self, proxy: ProxySettings) -> Result<Self, FetchError> {
+        proxy.validate()?;
+        self.proxy = proxy;
+        Ok(self)
     }
 
     pub fn executable(&self) -> &std::path::Path {
@@ -71,13 +79,7 @@ impl YtDlp {
             return Err(FetchError::InvalidRequest("URL must not be empty".into()));
         }
         let output = Command::new(&self.executable)
-            .args([
-                "--dump-single-json",
-                "--skip-download",
-                "--no-warnings",
-                "--",
-                url,
-            ])
+            .args(build_inspect_args(url, &self.proxy)?)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -86,7 +88,8 @@ impl YtDlp {
             .map_err(|error| FetchError::RuntimeMissing(format!("yt-dlp: {error}")))?;
 
         if !output.status.success() {
-            return Err(map_process_error(&String::from_utf8_lossy(&output.stderr)));
+            let diagnostics = self.proxy.redact(&String::from_utf8_lossy(&output.stderr));
+            return Err(map_process_error(&diagnostics));
         }
         normalize_media_json(&output.stdout)
     }
@@ -101,7 +104,12 @@ impl YtDlp {
         artifacts: Option<&DownloadArtifacts>,
     ) -> Result<Command, FetchError> {
         let mut command = Command::new(&self.executable);
-        for argument in build_download_args(request, self.ffmpeg_directory.as_deref(), artifacts)? {
+        for argument in build_download_args_with_proxy(
+            request,
+            self.ffmpeg_directory.as_deref(),
+            artifacts,
+            &self.proxy,
+        )? {
             command.arg(argument);
         }
         command
@@ -114,6 +122,33 @@ impl YtDlp {
         #[cfg(windows)]
         command.creation_flags(0x0000_0200); // CREATE_NEW_PROCESS_GROUP
         Ok(command)
+    }
+}
+
+pub fn build_inspect_args(url: &str, proxy: &ProxySettings) -> Result<Vec<String>, FetchError> {
+    if url.trim().is_empty() {
+        return Err(FetchError::InvalidRequest("URL must not be empty".into()));
+    }
+    proxy.validate()?;
+    let mut args = proxy_args(proxy);
+    args.extend([
+        "--dump-single-json".into(),
+        "--skip-download".into(),
+        "--no-warnings".into(),
+        "--".into(),
+        url.into(),
+    ]);
+    Ok(args)
+}
+
+fn proxy_args(proxy: &ProxySettings) -> Vec<String> {
+    match proxy.mode {
+        ProxyMode::System => vec![],
+        ProxyMode::Direct => vec!["--proxy".into(), String::new()],
+        ProxyMode::Custom => vec![
+            "--proxy".into(),
+            proxy.url.clone().expect("validated custom proxy has a URL"),
+        ],
     }
 }
 
@@ -231,13 +266,29 @@ pub fn build_download_args(
     ffmpeg_directory: Option<&std::path::Path>,
     artifacts: Option<&DownloadArtifacts>,
 ) -> Result<Vec<String>, FetchError> {
+    build_download_args_with_proxy(
+        request,
+        ffmpeg_directory,
+        artifacts,
+        &ProxySettings::default(),
+    )
+}
+
+pub fn build_download_args_with_proxy(
+    request: &DownloadRequest,
+    ffmpeg_directory: Option<&std::path::Path>,
+    artifacts: Option<&DownloadArtifacts>,
+    proxy: &ProxySettings,
+) -> Result<Vec<String>, FetchError> {
     if request.url.trim().is_empty() {
         return Err(FetchError::InvalidRequest("URL must not be empty".into()));
     }
     let output_directory = request.output_directory.as_ref().ok_or_else(|| {
         FetchError::OutputDirectoryUnavailable("no output directory was configured".into())
     })?;
-    let mut args = vec![
+    proxy.validate()?;
+    let mut args = proxy_args(proxy);
+    args.extend([
         "--newline".into(),
         "--continue".into(),
         "--windows-filenames".into(),
@@ -249,7 +300,7 @@ pub fn build_download_args(
         "postprocess:fetch-postprocess:%(progress.status)s".into(),
         "--print".into(),
         "after_move:fetch-file:%(filepath)s".into(),
-    ];
+    ]);
     if let Some(artifacts) = artifacts {
         args.extend([
             "--write-thumbnail".into(),
@@ -514,6 +565,55 @@ mod tests {
             args.windows(2)
                 .any(|pair| pair == ["--ffmpeg-location", "/runtime"])
         );
+    }
+
+    #[test]
+    fn proxy_modes_apply_to_analysis_and_download_commands() {
+        let request = DownloadRequest {
+            url: "https://example.test/media".into(),
+            title: None,
+            duration_seconds: None,
+            mode: DownloadMode::Video,
+            format_id: None,
+            quality: None,
+            container: None,
+            video_codec: None,
+            audio_codec: None,
+            embed_metadata: false,
+            embed_thumbnail: false,
+            subtitles: false,
+            playlist: None,
+            output_directory: Some(PathBuf::from("/tmp/out")),
+        };
+        let cases = [
+            (ProxySettings::default(), None),
+            (
+                ProxySettings {
+                    mode: ProxyMode::Direct,
+                    url: None,
+                },
+                Some(""),
+            ),
+            (
+                ProxySettings {
+                    mode: ProxyMode::Custom,
+                    url: Some("socks5://127.0.0.1:1080".into()),
+                },
+                Some("socks5://127.0.0.1:1080"),
+            ),
+        ];
+        for (proxy, expected) in cases {
+            let inspect = build_inspect_args(&request.url, &proxy).unwrap();
+            let download = build_download_args_with_proxy(&request, None, None, &proxy).unwrap();
+            for args in [&inspect, &download] {
+                let actual = args
+                    .windows(2)
+                    .find(|pair| pair[0] == "--proxy")
+                    .map(|pair| pair[1].as_str());
+                assert_eq!(actual, expected);
+                assert_eq!(args.last(), Some(&request.url));
+            }
+        }
     }
 
     #[test]

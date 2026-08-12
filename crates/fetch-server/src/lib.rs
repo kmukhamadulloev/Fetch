@@ -19,8 +19,8 @@ use axum::{
 use fetch_core::{
     ApplicationEvent, ApplicationSettings, CompletedOperations, DiagnosticOperations,
     DownloadOperations, DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus,
-    FetchError, ListenerOperations, MediaAnalysis, PlaybackProgressUpdate, RuntimeStatus,
-    SettingsOperations, StatusService,
+    FetchError, ListenerOperations, MediaAnalysis, PlaybackProgressUpdate, ProxyOperations,
+    ProxySettings, RuntimeStatus, SettingsOperations, StatusService,
 };
 use fetch_runtime::RuntimeManager;
 use rust_embed::Embed;
@@ -37,6 +37,7 @@ pub struct ServerServices {
     pub events: EventBus,
     pub completed: Arc<dyn CompletedOperations>,
     pub settings: Arc<dyn SettingsOperations>,
+    pub proxy: Arc<dyn ProxyOperations>,
     pub listener: Arc<dyn ListenerOperations>,
     pub network_policy: NetworkPolicy,
     pub diagnostics: Arc<dyn DiagnosticOperations>,
@@ -129,6 +130,7 @@ pub fn router(services: ServerServices) -> Router {
             put(save_playback_progress).delete(clear_playback_progress),
         )
         .route("/api/settings", get(get_settings).put(put_settings))
+        .route("/api/proxy", get(get_proxy).put(put_proxy))
         .route("/api/network", get(network_info))
         .route("/api/logs", get(logs).delete(clear_logs))
         .route("/api/diagnostics", get(diagnostics))
@@ -470,6 +472,32 @@ fn parse_range(value: &str, length: u64) -> Option<(u64, u64)> {
 
 async fn get_settings(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(state.services.settings.get_settings().await?))
+}
+
+fn require_host_client(
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<(), ApiError> {
+    match connection {
+        Some(Extension(ConnectInfo(address))) if is_host_client(address.ip()) => Ok(()),
+        _ => Err(ApiError(FetchError::LocalClientRequired)),
+    }
+}
+
+async fn get_proxy(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<impl IntoResponse, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.proxy.get_proxy().await?))
+}
+
+async fn put_proxy(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+    Json(settings): Json<ProxySettings>,
+) -> Result<impl IntoResponse, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.proxy.put_proxy(settings).await?))
 }
 
 async fn put_settings(
@@ -851,6 +879,7 @@ mod tests {
     struct TestCompleted;
     struct TestCompletedFile(fetch_core::CompletedFile);
     struct TestSettings;
+    struct TestProxy;
     struct TestListener;
     struct TestDiagnostics;
 
@@ -1003,6 +1032,18 @@ mod tests {
     }
 
     #[async_trait::async_trait]
+    impl ProxyOperations for TestProxy {
+        async fn get_proxy(&self) -> Result<ProxySettings, FetchError> {
+            Ok(ProxySettings::default())
+        }
+
+        async fn put_proxy(&self, settings: ProxySettings) -> Result<ProxySettings, FetchError> {
+            settings.validate()?;
+            Ok(settings)
+        }
+    }
+
+    #[async_trait::async_trait]
     impl ListenerOperations for TestListener {
         async fn rebind(&self, _address: SocketAddr) -> Result<bool, FetchError> {
             Ok(false)
@@ -1043,6 +1084,7 @@ mod tests {
             events,
             completed,
             settings: Arc::new(TestSettings),
+            proxy: Arc::new(TestProxy),
             listener: Arc::new(TestListener),
             network_policy: NetworkPolicy::new(&["192.168.0.0/16".into()]).unwrap(),
             diagnostics: Arc::new(TestDiagnostics),
@@ -1176,6 +1218,46 @@ mod tests {
             serde_json::from_slice::<serde_json::Value>(&body).unwrap()["error"]["code"],
             "LOCAL_CLIENT_REQUIRED"
         );
+    }
+
+    #[tokio::test]
+    async fn proxy_configuration_is_host_only_and_validated() {
+        let local = request_json_from(
+            app(),
+            "/api/proxy",
+            "PUT",
+            r#"{"mode":"custom","url":"socks5://127.0.0.1:1080"}"#,
+            ([127, 0, 0, 1], 4000).into(),
+        )
+        .await;
+        assert_eq!(local.status(), StatusCode::OK);
+        let body = to_bytes(local.into_body(), usize::MAX).await.unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload["mode"], "custom");
+
+        let invalid = request_json_from(
+            app(),
+            "/api/proxy",
+            "PUT",
+            r#"{"mode":"custom","url":"http://user:secret@proxy.test:8080"}"#,
+            ([127, 0, 0, 1], 4000).into(),
+        )
+        .await;
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(invalid.into_body(), usize::MAX).await.unwrap();
+        assert!(!String::from_utf8_lossy(&body).contains("secret"));
+
+        for method in ["GET", "PUT"] {
+            let remote = request_json_from(
+                app(),
+                "/api/proxy",
+                method,
+                r#"{"mode":"direct","url":null}"#,
+                ([192, 168, 2, 8], 4000).into(),
+            )
+            .await;
+            assert_eq!(remote.status(), StatusCode::FORBIDDEN);
+        }
     }
 
     #[tokio::test]
@@ -1433,6 +1515,23 @@ mod tests {
             .uri(uri)
             .method(method)
             .body(Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(ConnectInfo(address));
+        app.oneshot(request).await.unwrap()
+    }
+
+    async fn request_json_from(
+        app: Router,
+        uri: &str,
+        method: &str,
+        body: &str,
+        address: SocketAddr,
+    ) -> Response {
+        let mut request = axum::http::Request::builder()
+            .uri(uri)
+            .method(method)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_owned()))
             .unwrap();
         request.extensions_mut().insert(ConnectInfo(address));
         app.oneshot(request).await.unwrap()
