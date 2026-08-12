@@ -122,7 +122,7 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — process failures persist an actionable summary and raw diagnostics.
 - [x] PASS — runtime lifecycle records retain component, action, source, provider stage, failure category, and cause.
 - [x] PASS — API errors omit raw process output and internal stack details.
-- [x] PASS — Logs UI lists, refreshes, clears, and filters retained records by severity on desktop and mobile.
+- [x] PASS — Logs UI lists, refreshes, clears, filters by severity, and expands details accessibly on desktop and mobile.
 - [x] PASS — diagnostics check SQLite, output directory, and all runtimes.
 - [x] PASS — API and privacy regression tests pass.
 

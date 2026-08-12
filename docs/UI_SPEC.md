@@ -156,3 +156,5 @@ Show real RuntimeManager install state and retry errors. Never fake production s
 The Logs view presents retained timestamps, severity, subsystem, summary, and
 multiline details in a responsive layout. All, Info, Warnings, and Errors
 filters show entry counts and apply immediately without another API request.
+Severity is shown as restrained colored text. Optional diagnostic details stay
+collapsed behind a right-aligned, keyboard-accessible per-entry accordion.

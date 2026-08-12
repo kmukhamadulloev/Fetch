@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CheckCircle2, RefreshCw, Trash2, TriangleAlert } from '@lucide/vue'
+import { CheckCircle2, ChevronDown, RefreshCw, Trash2, TriangleAlert } from '@lucide/vue'
 import { clearLogs, getDiagnostics, getLogs, type DiagnosticLogEntry, type DiagnosticsReport } from '@/app/api/client'
 import { countDiagnosticLogs, filterDiagnosticLogs, logLevelFilters, normalizedLogLevel, type LogLevelFilter } from '@/app/logs'
 
@@ -9,13 +9,21 @@ const report = ref<DiagnosticsReport | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const levelFilter = ref<LogLevelFilter>('all')
+const expandedLogs = ref(new Set<number>())
 const visibleLogs = computed(() => filterDiagnosticLogs(logs.value, levelFilter.value))
 const levelCount = (filter: LogLevelFilter) => countDiagnosticLogs(logs.value, filter)
 const levelClass = (level: string) => ({
-  error: 'text-rose-300 border-rose-400/20 bg-rose-400/10',
-  warn: 'text-amber-300 border-amber-400/20 bg-amber-400/10',
-  info: 'text-sky-300 border-sky-400/20 bg-sky-400/10',
+  error: 'text-rose-300',
+  warn: 'text-amber-300',
+  info: 'text-sky-300',
 }[normalizedLogLevel(level)])
+const isExpanded = (id: number) => expandedLogs.value.has(id)
+function toggleDetails(id: number) {
+  const next = new Set(expandedLogs.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedLogs.value = next
+}
 async function refresh() {
   loading.value = true
   try { [logs.value, report.value] = await Promise.all([getLogs(), getDiagnostics()]); error.value = null }
@@ -44,15 +52,18 @@ onMounted(refresh)
       </div>
       <div class="min-h-96 max-h-[600px] overflow-auto bg-[#090b0e] p-3 font-mono text-[11px] leading-5 sm:p-4 sm:leading-6">
         <article v-for="entry in visibleLogs" :key="entry.id" class="log-entry" data-log-entry>
-          <div class="flex min-w-0 flex-wrap items-center gap-2 sm:block">
-            <span class="text-zinc-500">{{ new Date(entry.created_at).toLocaleString() }}</span>
-            <span class="log-level" :class="levelClass(entry.level)">{{ normalizedLogLevel(entry.level) }}</span>
+          <div class="log-entry-summary">
+            <time class="text-zinc-500" :datetime="entry.created_at">{{ new Date(entry.created_at).toLocaleString() }}</time>
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="log-level" :class="levelClass(entry.level)">{{ normalizedLogLevel(entry.level) }}</span>
+              <span class="min-w-0 truncate text-accent">{{ entry.subsystem }}</span>
+            </div>
+            <div class="min-w-0 whitespace-pre-wrap break-words text-zinc-200">{{ entry.message }}</div>
+            <button v-if="entry.details" class="log-details-button" type="button" :aria-expanded="isExpanded(entry.id)" :aria-controls="`log-details-${entry.id}`" @click="toggleDetails(entry.id)">
+              Details <ChevronDown :class="{ 'rotate-180': isExpanded(entry.id) }" :size="14" />
+            </button>
           </div>
-          <span class="min-w-0 break-words text-accent">{{ entry.subsystem }}</span>
-          <div class="min-w-0">
-            <div class="whitespace-pre-wrap break-words text-zinc-200">{{ entry.message }}</div>
-            <pre v-if="entry.details" class="log-details">{{ entry.details }}</pre>
-          </div>
+          <pre v-if="entry.details && isExpanded(entry.id)" :id="`log-details-${entry.id}`" class="log-details">{{ entry.details }}</pre>
         </article>
         <p v-if="!logs.length" class="p-2 text-zinc-500">No retained diagnostic output.</p>
         <p v-else-if="!visibleLogs.length" class="p-2 text-zinc-500">No {{ levelFilter }} diagnostic entries.</p>

@@ -12,7 +12,7 @@ developer-visible behavior, compatibility, and release operations.
 - Added responsive proxy controls and host/remote browser coverage.
 - Kept verified runtimes ready when automatic provider updates fail.
 - Bounded runtime provider requests and retained actionable operation details.
-- Added responsive severity filters and counts to the Logs page.
+- Added responsive severity filters, counts, and collapsible details to Logs.
 
 ## 0.1.2
 

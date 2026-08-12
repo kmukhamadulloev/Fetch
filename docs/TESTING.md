@@ -101,7 +101,8 @@ Required:
   deletion, stacked playlist galleries, watch progress, resume/start-over,
   LAN QR output, live settings and listener handoff, persisted theme selection,
   host-only system startup, host-only proxy configuration, mobile navigation,
-  detailed severity log filtering, and multi-tab automatic failover.
+  detailed severity log filtering and accordions, and multi-tab automatic
+  failover.
 
 Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using
