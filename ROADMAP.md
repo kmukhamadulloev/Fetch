@@ -4,7 +4,7 @@ This file tracks approved forward-looking product work. Keep completed release
 details in `RELEASE.md`, concrete defects in `ISSUES.md`, and verification
 evidence in `docs/ACCEPTANCE.md`.
 
-## 0.1.2 — Implementation complete; release verification pending
+## 0.1.2 — Released
 
 Objective: make the completed-media library organized and resumable while
 improving the live settings experience.
@@ -37,7 +37,7 @@ improving the live settings experience.
 - [ ] Confirm version metadata, release notes, documentation, and artifacts are
   aligned before creating the release commit and tag.
 
-## 0.1.3 — Current
+## 0.1.3 — Release candidate
 
 Objective: add safe, understandable outbound proxy routing for media analysis
 and downloads without changing Fetch's local/LAN server model.
@@ -73,6 +73,16 @@ The approved design and acceptance details are in `docs/PROXY.md`.
 - [x] Add responsive All, Info, Warning, and Error filters to the Logs page.
 - [x] Cover runtime fallback, retained diagnostics, and log filtering with
   backend, frontend, and browser regression tests.
+
+### 0.1.3 release gates
+
+- [x] Pass formatting, linting, Rust/frontend tests, production builds, and
+  desktop/mobile browser coverage.
+- [x] Build, smoke-test, package, and checksum the local Linux x86_64 archive.
+- [ ] Pass the tag-triggered native archive matrix for Linux x86_64/aarch64,
+  macOS x86_64/arm64, and Windows x86_64.
+- [ ] Confirm interactive tray creation, actions, system-start registration,
+  and graceful Quit on supported Windows, macOS, and Linux desktops.
 
 ## Candidate ideas
 

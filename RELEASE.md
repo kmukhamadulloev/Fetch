@@ -3,7 +3,7 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## 0.1.3 — Current
+## 0.1.3 — 2026-08-12
 
 - Added host-managed system-default, forced-direct, and custom proxy modes.
 - Routed yt-dlp analysis and newly spawned downloads through the saved policy.
