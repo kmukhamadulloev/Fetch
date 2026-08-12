@@ -156,12 +156,28 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
   expect(proxyRequests).toBe(0)
 })
 
-test('logs expose detailed severity filters on desktop and mobile', async ({ page }) => {
+test('logs expose detailed severity filters on desktop and mobile', async ({ page }, testInfo) => {
   await mockApi(page)
   await page.goto('/logs')
 
   await expect(page.getByRole('button', { name: 'All 3' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-log-entry]')).toHaveCount(3)
+  if (testInfo.project.name === 'desktop-chromium') {
+    const alignment = await page.locator('[data-log-entry]').evaluateAll((entries) => entries.map((entry) => {
+      const elements = ['time', '.log-level', '.log-subsystem', '.log-message', '.log-details-button']
+        .map((selector) => entry.querySelector(selector)?.getBoundingClientRect())
+        .filter((box): box is DOMRect => Boolean(box))
+      const centers = elements.map((box) => box.top + box.height / 2)
+      return {
+        verticalSpread: Math.max(...centers) - Math.min(...centers),
+        levelLeft: entry.querySelector('.log-level')?.getBoundingClientRect().left,
+        subsystemLeft: entry.querySelector('.log-subsystem')?.getBoundingClientRect().left,
+      }
+    }))
+    expect(alignment.every(({ verticalSpread }) => verticalSpread < 1)).toBe(true)
+    expect(new Set(alignment.map(({ levelLeft }) => levelLeft)).size).toBe(1)
+    expect(new Set(alignment.map(({ subsystemLeft }) => subsystemLeft)).size).toBe(1)
+  }
   await page.getByRole('button', { name: 'Errors 1' }).click()
   await expect(page.locator('[data-log-entry]')).toHaveCount(1)
   await expect(page.getByText('runtime operation failed')).toBeVisible()

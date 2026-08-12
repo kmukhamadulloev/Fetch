@@ -54,11 +54,9 @@ onMounted(refresh)
         <article v-for="entry in visibleLogs" :key="entry.id" class="log-entry" data-log-entry>
           <div class="log-entry-summary">
             <time class="text-zinc-500" :datetime="entry.created_at">{{ new Date(entry.created_at).toLocaleString() }}</time>
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="log-level" :class="levelClass(entry.level)">{{ normalizedLogLevel(entry.level) }}</span>
-              <span class="min-w-0 truncate text-accent">{{ entry.subsystem }}</span>
-            </div>
-            <div class="min-w-0 whitespace-pre-wrap break-words text-zinc-200">{{ entry.message }}</div>
+            <span class="log-level" :class="levelClass(entry.level)">{{ normalizedLogLevel(entry.level) }}</span>
+            <span class="log-subsystem">{{ entry.subsystem }}</span>
+            <div class="log-message">{{ entry.message }}</div>
             <button v-if="entry.details" class="log-details-button" type="button" :aria-expanded="isExpanded(entry.id)" :aria-controls="`log-details-${entry.id}`" @click="toggleDetails(entry.id)">
               Details <ChevronDown :class="{ 'rotate-180': isExpanded(entry.id) }" :size="14" />
             </button>
