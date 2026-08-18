@@ -10,6 +10,7 @@ const settings = {
   bind_address: '127.0.0.1', port: 8080, allowed_networks: ['192.168.0.0/16'],
   download_directory: 'downloads', concurrent_downloads: 3,
   open_browser_on_start: false, start_with_system: false, ytdlp_auto_update: true,
+  ytdlp_js_runtime: 'auto',
 }
 const completedFixture: CompletedFile[] = [{ id: 'af2bf705-8425-4178-9c5c-805e62db4f64', job_id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310', playlist: null, filename: 'media.mp4', thumbnail_available: true, size_bytes: 100, mime_type: 'video/mp4', title: 'Fixture media', browser_playable: true, playback: null, created_at: '2026-08-09T00:00:00Z' }]
 const playlistCompletedFixture: CompletedFile[] = [
@@ -31,6 +32,11 @@ async function mockApi(
     if (!path.startsWith('/api/')) return route.fallback()
     if (path === '/api/events') return route.fulfill({ status: 204 })
     if (path === '/api/status') return route.fulfill({ json: { version: '0.1.0', server: 'ready', runtime_ready: runtime.every((item) => item.status === 'ready'), storage_ready: true } })
+    if (path === '/api/runtime/javascript') return route.fulfill({ json: [
+      { name: 'deno', detected: false, version: null },
+      { name: 'node', detected: true, version: 'v25.9.0' },
+      { name: 'quickjs', detected: false, version: null },
+    ] })
     if (path === '/api/runtime' && request.method() === 'GET') return route.fulfill({ json: runtime })
     if (/^\/api\/runtime\/.+\/(install|update|repair)$/.test(path)) return route.fulfill({ status: 202, json: { accepted: true } })
     if (path === '/api/downloads' && request.method() === 'GET') return route.fulfill({ json: jobs })
@@ -123,6 +129,21 @@ test('host settings can enable background system startup', async ({ page }) => {
   await page.getByRole('button', { name: 'Save settings' }).click()
   expect((await startupSave).postDataJSON().start_with_system).toBe(true)
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+})
+
+test('JavaScript runtime controls detect Node and hot-apply the selection', async ({ page }) => {
+  await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
+  await page.goto('/settings#runtime')
+  await expect(page.getByText('Node').last()).toBeVisible()
+  await expect(page.getByText('v25.9.0')).toBeVisible()
+  await page.getByLabel('JavaScript runtime', { exact: true }).selectOption('node')
+  const save = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/settings' && request.method() === 'PUT')
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  expect((await save).postDataJSON().ytdlp_js_runtime).toBe('node')
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  )
 })
 
 test('remote settings cannot change host system startup', async ({ page }) => {

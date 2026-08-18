@@ -1,9 +1,10 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getRuntime, startRuntimeAction, type RuntimeComponent } from '@/app/api/client'
+import { getJavaScriptRuntimes, getRuntime, startRuntimeAction, type JavaScriptRuntime, type RuntimeComponent } from '@/app/api/client'
 
 export const useRuntimeStore = defineStore('runtime', () => {
   const components = ref<RuntimeComponent[]>([])
+  const javascript = ref<JavaScriptRuntime[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -20,7 +21,7 @@ export const useRuntimeStore = defineStore('runtime', () => {
     loading.value = true
     error.value = null
     try {
-      components.value = await getRuntime()
+      ;[components.value, javascript.value] = await Promise.all([getRuntime(), getJavaScriptRuntimes()])
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Runtime status is unavailable'
     } finally {
@@ -39,5 +40,5 @@ export const useRuntimeStore = defineStore('runtime', () => {
 
   function applyEvent(payload: unknown) { merge(payload as RuntimeComponent) }
 
-  return { components, ytdlp, needsSetup, loading, error, refresh, act, applyEvent }
+  return { components, javascript, ytdlp, needsSetup, loading, error, refresh, act, applyEvent }
 })

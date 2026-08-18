@@ -13,6 +13,12 @@ export interface RuntimeComponent {
   progress_percent: number | null
   error: string | null
 }
+export type YtDlpJsRuntime = 'auto' | 'deno' | 'node' | 'quickjs' | 'disabled'
+export interface JavaScriptRuntime {
+  name: 'deno' | 'node' | 'quickjs'
+  detected: boolean
+  version: string | null
+}
 
 export interface MediaFormat {
   id: string
@@ -114,6 +120,7 @@ export interface ApplicationSettings {
   open_browser_on_start: boolean
   start_with_system: boolean
   ytdlp_auto_update: boolean
+  ytdlp_js_runtime: YtDlpJsRuntime
 }
 export interface NetworkInfo {
   bind_address: string
@@ -188,6 +195,10 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getRuntime(): Promise<RuntimeComponent[]> {
   return jsonRequest('/api/runtime')
+}
+
+export function getJavaScriptRuntimes(): Promise<JavaScriptRuntime[]> {
+  return jsonRequest('/api/runtime/javascript')
 }
 
 export function startRuntimeAction(component: RuntimeComponent['name'], action: 'install' | 'update' | 'repair'): Promise<{ accepted: boolean }> {

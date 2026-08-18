@@ -56,6 +56,15 @@ const ffmpeg = computed(() => runtime.components.find((item) => item.name === 'f
 const ffprobe = computed(() => runtime.components.find((item) => item.name === 'ffprobe'))
 const runtimeBusy = (component?: RuntimeComponent) => component?.status === 'installing' || component?.status === 'updating'
 const isHost = computed(() => settings.network?.local_client === true)
+const selectedJsRuntimeMissing = computed(() => {
+  const selected = form.value?.ytdlp_js_runtime
+  if (!selected || selected === 'auto' || selected === 'disabled') return false
+  return runtime.javascript.find((item) => item.name === selected)?.detected === false
+})
+
+function javascriptRuntimeLabel(name: 'deno' | 'node' | 'quickjs') {
+  return name === 'quickjs' ? 'QuickJS' : `${name[0].toUpperCase()}${name.slice(1)}`
+}
 
 onMounted(async () => {
   await Promise.all([settings.refresh(), runtime.refresh()])
@@ -208,6 +217,33 @@ async function copyUrl(url: string) {
           </div>
           <div class="runtime-card">
             <div class="flex items-start gap-3 sm:gap-4"><div class="empty-icon shrink-0"><Film :size="18" /></div><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="text-sm font-semibold">FFmpeg + FFprobe</span><span class="badge" :class="{ muted: ffmpeg?.status !== 'ready' || ffprobe?.status !== 'ready' }">{{ ffmpeg?.status === 'ready' && ffprobe?.status === 'ready' ? 'ready' : ffmpeg?.status ?? 'checking' }}</span></div><p class="mt-1 break-all text-xs text-muted">FFmpeg {{ ffmpeg?.version ?? '—' }} · FFprobe {{ ffprobe?.version ?? '—' }}</p><div class="mt-4 flex flex-wrap gap-2"><button v-if="ffmpeg?.status === 'missing'" class="secondary-btn" type="button" @click="runtime.act('ffmpeg', 'install')">Install pair</button><template v-else><button class="secondary-btn" type="button" :disabled="runtimeBusy(ffmpeg)" @click="runtime.act('ffmpeg', 'update')"><RefreshCw :class="{ 'animate-spin': runtimeBusy(ffmpeg) }" :size="14" />Update</button><button class="secondary-btn" type="button" :disabled="runtimeBusy(ffmpeg)" @click="runtime.act('ffmpeg', 'repair')"><RotateCcw :size="14" />Repair pair</button></template></div></div></div>
+          </div>
+          <div class="runtime-card">
+            <div class="flex min-w-0 items-start gap-3 sm:gap-4">
+              <div class="empty-icon shrink-0"><Cpu :size="18" /></div>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2"><span class="text-sm font-semibold">JavaScript challenges</span><span class="badge">{{ form.ytdlp_js_runtime }}</span></div>
+                <p class="mt-1 text-xs leading-5 text-muted">Let yt-dlp use a supported host runtime when an extractor needs JavaScript.</p>
+                <label class="field mt-4 max-w-md">
+                  <span>JavaScript runtime</span>
+                  <select v-model="form.ytdlp_js_runtime" class="select" aria-label="JavaScript runtime">
+                    <option value="auto">Automatic (recommended)</option>
+                    <option value="deno">Deno</option>
+                    <option value="node">Node</option>
+                    <option value="quickjs">QuickJS</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </label>
+                <div class="mt-4 grid min-w-0 gap-2 sm:grid-cols-3" aria-label="Detected JavaScript runtimes">
+                  <div v-for="item in runtime.javascript" :key="item.name" class="min-w-0 rounded-lg bg-[var(--app-surface-2)] px-3 py-2">
+                    <div class="flex items-center justify-between gap-2 text-xs font-medium"><span>{{ javascriptRuntimeLabel(item.name) }}</span><span :class="item.detected ? 'text-emerald-500' : 'text-muted'">{{ item.detected ? 'Detected' : 'Not found' }}</span></div>
+                    <p class="mt-1 truncate font-mono text-[10px] text-muted" :title="item.version ?? undefined">{{ item.version ?? '—' }}</p>
+                  </div>
+                </div>
+                <p v-if="selectedJsRuntimeMissing" class="mt-3 text-xs leading-5 text-amber-500" role="alert">The selected runtime was not found in Fetch's process environment. Choose Automatic or install it on the host PATH.</p>
+                <p class="mt-3 text-[11px] leading-5 text-muted">Automatic tries Deno, Node, then QuickJS. Saving applies immediately to analysis and queued or new downloads; an active download keeps its current runtime.</p>
+              </div>
+            </div>
           </div>
           <label class="setting-row card px-5 py-4"><span><span class="setting-title">Automatically update yt-dlp</span><span class="setting-help">Keep extractor support current independently of Fetch releases.</span></span><input v-model="form.ytdlp_auto_update" type="checkbox" /></label>
         </section>
