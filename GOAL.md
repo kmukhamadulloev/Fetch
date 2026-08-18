@@ -14,6 +14,9 @@ Publish the verified Fetch 0.1.3 release described in `ROADMAP.md` and
 - preserve an already healthy managed runtime when an automatic update fails;
 - bound managed-runtime network stalls and retain actionable lifecycle details;
 - add responsive severity filters to the retained Logs interface.
+- explicitly configure yt-dlp JavaScript runtimes, automatically use supported
+  host installations such as Node, and expose typed hot-reload controls plus
+  availability diagnostics in Settings;
 - pass the automated native archive matrix and retain its artifacts;
 - complete the documented interactive native tray release gate;
 - publish the annotated `v0.1.3` tag and generated GitHub release.

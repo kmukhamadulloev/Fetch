@@ -21,6 +21,27 @@ the current archive release. `docs/RELEASE.md` calls out the required review
 before broad public distribution. This does not affect local execution or the
 native package startup gates.
 
+## BUG-022 — Installed JavaScript runtimes are not enabled for yt-dlp
+
+Status: IN PROGRESS
+
+Affected:
+- fetch-core
+- fetch-ytdlp
+- fetch-runtime
+- fetch-server
+- app/fetch
+- web
+
+Expected: Fetch explicitly enables a supported installed JavaScript runtime for
+yt-dlp, makes the selection understandable and persistent, and applies changes
+to analysis and new downloads without a restart.
+
+Actual: yt-dlp enables only Deno by default. Fetch does not pass
+`--js-runtimes`, so an installed Node runtime is ignored and YouTube extraction
+can warn that no supported runtime exists before failing with missing formats
+or HTTP 403 responses.
+
 ## BUG-021 — Failed runtime update demotes a working yt-dlp installation
 
 Status: RESOLVED
