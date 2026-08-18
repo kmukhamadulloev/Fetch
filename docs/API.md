@@ -80,7 +80,9 @@ the completed-file record while retaining the associated job history.
 
 Settings include bind IP, port, allowed CIDRs, output directory, concurrency,
 browser-open preference, per-user system-start preference, and yt-dlp
-auto-update preference. Invalid IP, port, CIDR, concurrency, directory,
+auto-update preference. `ytdlp_js_runtime` is one of `auto`, `deno`, `node`,
+`quickjs`, or `disabled`; missing persisted values default to `auto`. Invalid
+IP, port, CIDR, concurrency, directory,
 startup-registration, and unavailable listener values return
 `INVALID_SETTINGS`. CIDRs, new-job download defaults, concurrency, and listener
 changes apply immediately. A successful listener change returns
@@ -104,12 +106,19 @@ interrupting an active download.
 ## Runtime and diagnostics
 
 - `GET /api/runtime`
+- `GET /api/runtime/javascript` returns Deno, Node, and QuickJS discovery state
+  and versions from Fetch's process environment.
 - `POST /api/runtime/{yt-dlp|ffmpeg|ffprobe}/{install|update|repair}` returns
   `202` after the operation is scheduled.
 - `GET|DELETE /api/logs`
 - `GET /api/diagnostics`
 
 FFmpeg and FFprobe actions operate on the managed pair.
+
+The JavaScript-runtime setting hot-applies to analysis and queued/new downloads;
+active yt-dlp processes keep their startup policy. Automatic mode advertises
+Deno, Node, and QuickJS to yt-dlp. Explicit modes enable only the selected
+runtime, and disabled mode clears all runtime defaults.
 
 ## Events
 

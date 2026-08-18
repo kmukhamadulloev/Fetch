@@ -74,6 +74,8 @@ Support:
 - repair/reinstall;
 - health checks;
 - real progress/status in UI.
+- typed yt-dlp JavaScript-runtime selection with automatic host discovery;
+- hot application to analysis and newly spawned downloads.
 
 ## Web UI
 - Same UI on localhost and LAN.

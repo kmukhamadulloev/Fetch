@@ -3,7 +3,7 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## 0.1.3 — 2026-08-12
+## 0.1.3 — 2026-08-18
 
 - Added host-managed system-default, forced-direct, and custom proxy modes.
 - Routed yt-dlp analysis and newly spawned downloads through the saved policy.
@@ -13,6 +13,9 @@ developer-visible behavior, compatibility, and release operations.
 - Kept verified runtimes ready when automatic provider updates fail.
 - Bounded runtime provider requests and retained actionable operation details.
 - Added responsive severity filters, counts, and collapsible details to Logs.
+- Added automatic and explicit yt-dlp JavaScript-runtime controls.
+- Added Deno, Node, and QuickJS host discovery with version/status feedback.
+- Hot-applied JavaScript-runtime changes to analysis and queued/new downloads.
 
 ## 0.1.2
 

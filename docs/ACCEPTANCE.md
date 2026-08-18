@@ -32,6 +32,8 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — unsupported URLs map to typed errors.
 - [x] PASS — playlist and single media are distinct typed results.
 - [x] PASS — playlist IDs and item thumbnail metadata normalize without site-specific logic.
+- [x] PASS — automatic JavaScript-runtime policy enables detected Deno, Node,
+  or QuickJS for both analysis and downloads without site-specific branches.
 - [x] PASS — adapter, fixture integration, and live analysis tests pass.
 
 ## Phase 03 — Download manager
@@ -99,6 +101,10 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — analysis and downloads receive the same structured proxy arguments without copying endpoints into job or event payloads.
 - [x] PASS — proxy endpoints are host-only and redacted from process diagnostics before logging or persistence.
 - [x] PASS — host and LAN-disabled proxy UI states pass desktop and mobile browser tests.
+- [x] PASS — JavaScript-runtime selection persists and hot-applies to analysis
+  and queued/new downloads while active processes remain unchanged.
+- [x] PASS — Runtime settings report detected Deno, Node, and QuickJS versions
+  and remain contained on desktop and mobile.
 - [x] PASS — every supported operational setting and managed runtime action is exposed in the UI.
 - [x] PASS — reachable LAN URLs can be copied or encoded locally as a scannable QR code.
 - [x] PASS — no authentication or pairing system was introduced.
@@ -116,6 +122,7 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — repair reinstalls and validates managed components.
 - [x] PASS — Fetch and runtime component versions are independent.
 - [x] PASS — runtime manifest, checksum, rollback, and live-provider tests pass.
+- [x] PASS — JavaScript-runtime discovery and typed yt-dlp argument tests pass.
 
 ## Phase 08 — Logs and diagnostics
 

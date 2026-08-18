@@ -23,7 +23,7 @@ native package startup gates.
 
 ## BUG-022 — Installed JavaScript runtimes are not enabled for yt-dlp
 
-Status: IN PROGRESS
+Status: RESOLVED
 
 Affected:
 - fetch-core
@@ -41,6 +41,14 @@ Actual: yt-dlp enables only Deno by default. Fetch does not pass
 `--js-runtimes`, so an installed Node runtime is ignored and YouTube extraction
 can warn that no supported runtime exists before failing with missing formats
 or HTTP 403 responses.
+
+Resolution: Added a backward-compatible automatic policy that explicitly
+advertises Deno, Node, and QuickJS to yt-dlp, plus explicit single-runtime and
+disabled modes. The persisted setting hot-applies to analysis and queued/new
+downloads. Runtime Settings and a typed API report the host executables and
+versions visible to Fetch, with missing-selection guidance. Adapter, policy,
+discovery, API, queue, frontend, and desktop/mobile browser tests cover the
+behavior.
 
 ## BUG-021 — Failed runtime update demotes a working yt-dlp installation
 

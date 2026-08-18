@@ -248,6 +248,16 @@ paths:
               schema:
                 type: array
                 items: {$ref: '#/components/schemas/RuntimeComponent'}
+  /api/runtime/javascript:
+    get:
+      responses:
+        '200':
+          description: Host JavaScript runtime discovery status
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/JavaScriptRuntime'}
   /api/runtime/{component}/install:
     post:
       parameters: [{$ref: '#/components/parameters/RuntimeComponent'}]
@@ -440,7 +450,7 @@ components:
         updated_at: {type: string, format: date-time}
     Settings:
       type: object
-      required: [bind_address, port, allowed_networks, download_directory, concurrent_downloads, open_browser_on_start, start_with_system, ytdlp_auto_update]
+      required: [bind_address, port, allowed_networks, download_directory, concurrent_downloads, open_browser_on_start, start_with_system, ytdlp_auto_update, ytdlp_js_runtime]
       properties:
         bind_address: {type: string, default: 127.0.0.1}
         port: {type: integer, default: 8080}
@@ -453,6 +463,7 @@ components:
         open_browser_on_start: {type: boolean, default: true}
         start_with_system: {type: boolean, default: false}
         ytdlp_auto_update: {type: boolean, default: true}
+        ytdlp_js_runtime: {type: string, enum: [auto, deno, node, quickjs, disabled], default: auto}
     SettingsSaveResponse:
       allOf:
         - {$ref: '#/components/schemas/Settings'}
@@ -479,6 +490,16 @@ components:
         status: {type: string, enum: [missing, installing, ready, updating, failed]}
         progress_percent: {type: number}
         error: {type: string}
+    JavaScriptRuntime:
+      type: object
+      required: [name, detected, version]
+      properties:
+        name: {type: string, enum: [deno, node, quickjs]}
+        detected: {type: boolean}
+        version:
+          anyOf:
+            - {type: string}
+            - {type: 'null'}
     NetworkInfo:
       type: object
       required: [bind_address, port, urls, authentication, restart_required_after_bind_change, local_client]

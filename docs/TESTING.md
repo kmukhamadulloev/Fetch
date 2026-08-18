@@ -22,6 +22,7 @@ Runtime:
 - health transitions;
 - failed-update fallback to an existing verified runtime;
 - actionable failed-install state and bounded provider failures.
+- Deno, Node, and QuickJS discovery/version reporting.
 
 Storage:
 - migrations;
@@ -37,6 +38,8 @@ Network:
 - proxy mode/URL validation and default compatibility;
 - proxy persistence outside application settings;
 - matching yt-dlp analysis/download arguments for system, direct, and custom;
+- automatic, explicit, and disabled JavaScript-runtime argument construction;
+- persisted JavaScript-runtime defaults and queued-job hot application;
 - host-only proxy API access and diagnostic redaction.
 
 Desktop lifecycle:
@@ -101,6 +104,7 @@ Required:
   deletion, stacked playlist galleries, watch progress, resume/start-over,
   LAN QR output, live settings and listener handoff, persisted theme selection,
   host-only system startup, host-only proxy configuration, mobile navigation,
+  JavaScript-runtime discovery and hot-apply controls,
   detailed severity log filtering and accordions, and multi-tab automatic
   failover.
 

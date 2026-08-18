@@ -41,3 +41,24 @@ restores its Ready state and records the update as a warning. A failed initial
 install remains Failed with a retry action. Retained runtime lifecycle records
 include the component, operation, source, request stage, failure category, and
 underlying cause without returning internal details through normal API errors.
+
+## JavaScript challenge runtimes
+
+Some yt-dlp extractors require a supported external JavaScript runtime. Fetch
+does not manage these executables, but discovers `deno`, `node`, and `qjs` from
+the process `PATH` and reports their versions through Runtime settings and
+`GET /api/runtime/javascript`.
+
+The persisted `ytdlp_js_runtime` setting accepts `auto`, `deno`, `node`,
+`quickjs`, or `disabled`. Automatic is the backward-compatible default and
+passes Deno, Node, and QuickJS to yt-dlp in its supported priority order.
+Explicit modes clear yt-dlp defaults and enable exactly one runtime; disabled
+clears all JavaScript runtimes. The adapter passes each value as a structured
+process argument and never invokes a shell.
+
+A saved change hot-applies to media analysis and to queued or newly spawned
+downloads. An active yt-dlp process keeps the policy it started with. A runtime
+installed after Fetch starts is visible after pressing Refresh because
+discovery is performed on demand. Desktop launch mechanisms may expose a
+different `PATH` than an interactive shell, so the UI reports what Fetch itself
+can see rather than assuming a machine-wide installation is reachable.

@@ -41,10 +41,10 @@ Owns:
 - structured/progress output parsing;
 - mapping process failures into typed errors.
 
-It consumes a shared typed outbound proxy policy for analysis and download
-command construction. The adapter remains the only layer that
-translates this policy into yt-dlp arguments; download requests and HTTP
-handlers never accept arbitrary process arguments.
+It consumes shared typed outbound proxy and JavaScript-runtime policies for
+analysis and download command construction. The adapter remains the only layer
+that translates these policies into yt-dlp arguments; download requests and
+HTTP handlers never accept arbitrary process arguments.
 
 ### fetch-runtime
 Owns:
@@ -55,6 +55,7 @@ Owns:
 - atomic replacement;
 - executable health checks;
 - component versions.
+- discovery and version reporting for host-provided Deno, Node, and QuickJS.
 
 ### fetch-storage
 Owns:

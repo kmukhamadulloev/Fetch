@@ -76,13 +76,13 @@ The approved design and acceptance details are in `docs/PROXY.md`.
 
 ### JavaScript runtime compatibility
 
-- [ ] Add a persisted typed yt-dlp JavaScript-runtime policy with automatic,
+- [x] Add a persisted typed yt-dlp JavaScript-runtime policy with automatic,
   Deno, Node, QuickJS, and disabled modes.
-- [ ] Hot-apply the policy to analysis and newly spawned downloads while
+- [x] Hot-apply the policy to analysis and newly spawned downloads while
   leaving active downloads unchanged.
-- [ ] Discover supported host runtimes and show actionable availability and
+- [x] Discover supported host runtimes and show actionable availability and
   version information in responsive Runtime settings.
-- [ ] Cover argument construction, persistence, discovery, API behavior, and
+- [x] Cover argument construction, persistence, discovery, API behavior, and
   desktop/mobile controls with automated tests and documentation.
 
 ### 0.1.3 release gates

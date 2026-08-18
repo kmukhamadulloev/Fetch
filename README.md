@@ -161,6 +161,12 @@ Outbound proxy mode is configured separately under Network settings and applies
 immediately to analysis and newly spawned downloads. The initial implementation
 intentionally rejects proxy credentials.
 
+Runtime settings also provide a typed JavaScript-runtime selector. Automatic
+mode is the default and lets yt-dlp use detected Deno, Node, or QuickJS
+installations. Selecting Node explicitly is useful when it is already available
+on the host. Changes apply to analysis and queued or new downloads without
+restarting Fetch.
+
 Appearance remains a browser-local preference so desktop and mobile clients
 can independently use Dark, Light, or Use system.
 

@@ -123,6 +123,10 @@ Listener changes bind the replacement address before retiring the old listener;
 the current browser tab then replaces its location with the new URL.
 
 Runtime includes yt-dlp and FFmpeg/FFprobe version/status/update/repair controls.
+It also includes a JavaScript-runtime selector with Automatic, Deno, Node,
+QuickJS, and Disabled modes, plus detected/not-found state and versions for the
+host executables. Missing explicit selections are called out inline. Saving
+applies to analysis and queued/new downloads without interrupting active work.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.
