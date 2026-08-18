@@ -260,6 +260,7 @@ mod tests {
             open_browser_on_start: true,
             start_with_system: false,
             ytdlp_auto_update: true,
+            ytdlp_js_runtime: fetch_core::YtDlpJsRuntime::Auto,
         };
         storage.save_settings(&initial).await.unwrap();
         let startup = Arc::new(RecordingStartup::default());

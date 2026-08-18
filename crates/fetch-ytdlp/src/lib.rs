@@ -4,7 +4,7 @@ use std::{path::PathBuf, process::Stdio};
 
 use fetch_core::{
     DownloadMode, DownloadProgress, DownloadRequest, FetchError, MediaAnalysis, MediaFormat,
-    MediaInfo, MediaKind, PlaylistEntry, ProxyMode, ProxySettings,
+    MediaInfo, MediaKind, PlaylistEntry, ProxyMode, ProxySettings, YtDlpJsRuntime,
 };
 use serde_json::Value;
 use tokio::{io::AsyncReadExt, process::Command};
@@ -24,6 +24,7 @@ pub struct YtDlp {
     executable: PathBuf,
     ffmpeg_directory: Option<PathBuf>,
     proxy: ProxySettings,
+    js_runtime: YtDlpJsRuntime,
 }
 
 #[async_trait::async_trait]
@@ -39,6 +40,7 @@ impl YtDlp {
             executable: executable.into(),
             ffmpeg_directory: None,
             proxy: ProxySettings::default(),
+            js_runtime: YtDlpJsRuntime::Auto,
         }
     }
 
@@ -51,6 +53,11 @@ impl YtDlp {
         proxy.validate()?;
         self.proxy = proxy;
         Ok(self)
+    }
+
+    pub fn with_js_runtime(mut self, runtime: YtDlpJsRuntime) -> Self {
+        self.js_runtime = runtime;
+        self
     }
 
     pub fn executable(&self) -> &std::path::Path {
@@ -79,7 +86,11 @@ impl YtDlp {
             return Err(FetchError::InvalidRequest("URL must not be empty".into()));
         }
         let output = Command::new(&self.executable)
-            .args(build_inspect_args(url, &self.proxy)?)
+            .args(build_inspect_args_with_runtime(
+                url,
+                &self.proxy,
+                self.js_runtime,
+            )?)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -104,11 +115,12 @@ impl YtDlp {
         artifacts: Option<&DownloadArtifacts>,
     ) -> Result<Command, FetchError> {
         let mut command = Command::new(&self.executable);
-        for argument in build_download_args_with_proxy(
+        for argument in build_download_args_with_options(
             request,
             self.ffmpeg_directory.as_deref(),
             artifacts,
             &self.proxy,
+            self.js_runtime,
         )? {
             command.arg(argument);
         }
@@ -126,11 +138,20 @@ impl YtDlp {
 }
 
 pub fn build_inspect_args(url: &str, proxy: &ProxySettings) -> Result<Vec<String>, FetchError> {
+    build_inspect_args_with_runtime(url, proxy, YtDlpJsRuntime::Auto)
+}
+
+pub fn build_inspect_args_with_runtime(
+    url: &str,
+    proxy: &ProxySettings,
+    js_runtime: YtDlpJsRuntime,
+) -> Result<Vec<String>, FetchError> {
     if url.trim().is_empty() {
         return Err(FetchError::InvalidRequest("URL must not be empty".into()));
     }
     proxy.validate()?;
     let mut args = proxy_args(proxy);
+    args.extend(js_runtime_args(js_runtime));
     args.extend([
         "--dump-single-json".into(),
         "--skip-download".into(),
@@ -139,6 +160,24 @@ pub fn build_inspect_args(url: &str, proxy: &ProxySettings) -> Result<Vec<String
         url.into(),
     ]);
     Ok(args)
+}
+
+fn js_runtime_args(runtime: YtDlpJsRuntime) -> Vec<String> {
+    let runtimes: &[&str] = match runtime {
+        YtDlpJsRuntime::Auto => &["deno", "node", "quickjs"],
+        YtDlpJsRuntime::Deno => &["deno"],
+        YtDlpJsRuntime::Node => &["node"],
+        YtDlpJsRuntime::QuickJs => &["quickjs"],
+        YtDlpJsRuntime::Disabled => &[],
+    };
+    let mut args = Vec::with_capacity(1 + runtimes.len() * 2);
+    if runtime != YtDlpJsRuntime::Auto {
+        args.push("--no-js-runtimes".into());
+    }
+    for runtime in runtimes {
+        args.extend(["--js-runtimes".into(), (*runtime).into()]);
+    }
+    args
 }
 
 fn proxy_args(proxy: &ProxySettings) -> Vec<String> {
@@ -280,6 +319,22 @@ pub fn build_download_args_with_proxy(
     artifacts: Option<&DownloadArtifacts>,
     proxy: &ProxySettings,
 ) -> Result<Vec<String>, FetchError> {
+    build_download_args_with_options(
+        request,
+        ffmpeg_directory,
+        artifacts,
+        proxy,
+        YtDlpJsRuntime::Auto,
+    )
+}
+
+pub fn build_download_args_with_options(
+    request: &DownloadRequest,
+    ffmpeg_directory: Option<&std::path::Path>,
+    artifacts: Option<&DownloadArtifacts>,
+    proxy: &ProxySettings,
+    js_runtime: YtDlpJsRuntime,
+) -> Result<Vec<String>, FetchError> {
     if request.url.trim().is_empty() {
         return Err(FetchError::InvalidRequest("URL must not be empty".into()));
     }
@@ -288,6 +343,7 @@ pub fn build_download_args_with_proxy(
     })?;
     proxy.validate()?;
     let mut args = proxy_args(proxy);
+    args.extend(js_runtime_args(js_runtime));
     args.extend([
         "--newline".into(),
         "--continue".into(),
@@ -612,6 +668,69 @@ mod tests {
                     .map(|pair| pair[1].as_str());
                 assert_eq!(actual, expected);
                 assert_eq!(args.last(), Some(&request.url));
+            }
+        }
+    }
+
+    #[test]
+    fn javascript_runtime_policy_applies_to_analysis_and_download_commands() {
+        let request = DownloadRequest {
+            url: "https://example.test/media".into(),
+            title: None,
+            duration_seconds: None,
+            mode: DownloadMode::Video,
+            format_id: None,
+            quality: None,
+            container: None,
+            video_codec: None,
+            audio_codec: None,
+            embed_metadata: false,
+            embed_thumbnail: false,
+            subtitles: false,
+            playlist: None,
+            output_directory: Some(PathBuf::from("/tmp/out")),
+        };
+        for runtime in [
+            YtDlpJsRuntime::Auto,
+            YtDlpJsRuntime::Node,
+            YtDlpJsRuntime::Disabled,
+        ] {
+            let inspect =
+                build_inspect_args_with_runtime(&request.url, &ProxySettings::default(), runtime)
+                    .unwrap();
+            let download = build_download_args_with_options(
+                &request,
+                None,
+                None,
+                &ProxySettings::default(),
+                runtime,
+            )
+            .unwrap();
+            for args in [&inspect, &download] {
+                assert_eq!(args.last(), Some(&request.url));
+                match runtime {
+                    YtDlpJsRuntime::Auto => {
+                        assert!(!args.iter().any(|value| value == "--no-js-runtimes"));
+                        let configured = args
+                            .windows(2)
+                            .filter(|pair| pair[0] == "--js-runtimes")
+                            .map(|pair| pair[1].as_str())
+                            .collect::<Vec<_>>();
+                        assert_eq!(configured, ["deno", "node", "quickjs"]);
+                    }
+                    YtDlpJsRuntime::Node => {
+                        assert!(args.iter().any(|value| value == "--no-js-runtimes"));
+                        assert!(
+                            args.windows(2)
+                                .any(|pair| pair == ["--js-runtimes", "node"])
+                        );
+                    }
+                    YtDlpJsRuntime::Disabled => {
+                        assert!(args.iter().any(|value| value == "--no-js-runtimes"));
+                        assert!(!args.iter().any(|value| value == "--js-runtimes"));
+                    }
+                    _ => unreachable!(),
+                }
             }
         }
     }

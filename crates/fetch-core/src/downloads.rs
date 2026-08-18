@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::FetchError;
+use crate::{FetchError, YtDlpJsRuntime};
 
 #[async_trait::async_trait]
 pub trait DownloadOperations: Send + Sync {
@@ -19,6 +19,7 @@ pub trait DownloadOperations: Send + Sync {
         &self,
         download_directory: PathBuf,
         concurrent_downloads: u8,
+        ytdlp_js_runtime: YtDlpJsRuntime,
     ) -> Result<(), FetchError>;
 }
 

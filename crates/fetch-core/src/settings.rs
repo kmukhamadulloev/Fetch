@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::FetchError;
+use crate::{FetchError, YtDlpJsRuntime};
 
 #[async_trait::async_trait]
 pub trait SettingsOperations: Send + Sync {
@@ -32,6 +32,8 @@ pub struct ApplicationSettings {
     #[serde(default)]
     pub start_with_system: bool,
     pub ytdlp_auto_update: bool,
+    #[serde(default)]
+    pub ytdlp_js_runtime: YtDlpJsRuntime,
 }
 
 impl ApplicationSettings {
@@ -75,6 +77,7 @@ mod tests {
             open_browser_on_start: true,
             start_with_system: false,
             ytdlp_auto_update: true,
+            ytdlp_js_runtime: YtDlpJsRuntime::Auto,
         };
         assert!(settings.validate_basic().is_err());
     }
@@ -86,5 +89,6 @@ mod tests {
         )
         .unwrap();
         assert!(!settings.start_with_system);
+        assert_eq!(settings.ytdlp_js_runtime, YtDlpJsRuntime::Auto);
     }
 }

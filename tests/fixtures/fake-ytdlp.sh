@@ -1,11 +1,20 @@
 #!/usr/bin/env sh
 set -eu
 
-case "${1:-}" in
-  --version)
-    printf '%s\n' '2026.08.09-test'
-    ;;
-  --dump-single-json)
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' '2026.08.09-test'
+  exit 0
+fi
+
+mode=download
+for argument in "$@"; do
+  if [ "$argument" = "--dump-single-json" ]; then
+    mode=inspect
+  fi
+done
+
+case "$mode" in
+  inspect)
     for url in "$@"; do :; done
     case "${url:-}" in
       *unsupported*)
@@ -25,6 +34,7 @@ case "${1:-}" in
     thumbnail_dir=
     thumbnail_stem=
     proxy_value='<system>'
+    js_runtime_value='<none>'
     previous=
     for argument in "$@"; do
       if [ "$previous" = "--paths" ]; then
@@ -35,6 +45,9 @@ case "${1:-}" in
       fi
       if [ "$previous" = "--proxy" ]; then
         proxy_value=$argument
+      fi
+      if [ "$previous" = "--js-runtimes" ]; then
+        js_runtime_value=$argument
       fi
       if [ "$previous" = "--output" ]; then
         case "$argument" in
@@ -53,6 +66,9 @@ case "${1:-}" in
     mkdir -p "$output_dir"
     case "${argument:-}" in
       *record-proxy*) printf '%s' "$proxy_value" > "$output_dir/fixture-proxy.txt" ;;
+    esac
+    case "${argument:-}" in
+      *record-js-runtime*) printf '%s' "$js_runtime_value" > "$output_dir/fixture-js-runtime.txt" ;;
     esac
     output_file="$output_dir/fixture.mp4"
     printf '%s' 'fixture media bytes' > "$output_file"

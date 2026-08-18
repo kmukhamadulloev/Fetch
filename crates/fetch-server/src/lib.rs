@@ -135,6 +135,7 @@ pub fn router(services: ServerServices) -> Router {
         .route("/api/logs", get(logs).delete(clear_logs))
         .route("/api/diagnostics", get(diagnostics))
         .route("/api/runtime", get(runtime_status))
+        .route("/api/runtime/javascript", get(javascript_runtime_status))
         .route("/api/runtime/{component}/install", post(runtime_install))
         .route("/api/runtime/{component}/update", post(runtime_update))
         .route("/api/runtime/{component}/repair", post(runtime_repair))
@@ -178,6 +179,10 @@ async fn analyze_media(
 
 async fn runtime_status(State(state): State<AppState>) -> impl IntoResponse {
     Json(state.services.runtime.components().await)
+}
+
+async fn javascript_runtime_status(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.services.runtime.javascript_runtimes().await)
 }
 
 async fn list_downloads(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
@@ -518,6 +523,7 @@ async fn put_settings(
         .update_defaults(
             settings.download_directory.clone(),
             settings.concurrent_downloads,
+            settings.ytdlp_js_runtime,
         )
         .await?;
     let saved = match state.services.settings.put_settings(settings).await {
@@ -529,6 +535,7 @@ async fn put_settings(
                 .update_defaults(
                     previous.download_directory.clone(),
                     previous.concurrent_downloads,
+                    previous.ytdlp_js_runtime,
                 )
                 .await;
             return Err(ApiError(error));
@@ -545,6 +552,7 @@ async fn put_settings(
                 .update_defaults(
                     previous.download_directory.clone(),
                     previous.concurrent_downloads,
+                    previous.ytdlp_js_runtime,
                 )
                 .await;
             return Err(ApiError(error));
@@ -988,6 +996,7 @@ mod tests {
             &self,
             _download_directory: std::path::PathBuf,
             _concurrent_downloads: u8,
+            _ytdlp_js_runtime: fetch_core::YtDlpJsRuntime,
         ) -> Result<(), FetchError> {
             Ok(())
         }
@@ -1076,6 +1085,7 @@ mod tests {
                 open_browser_on_start: true,
                 start_with_system: false,
                 ytdlp_auto_update: true,
+                ytdlp_js_runtime: fetch_core::YtDlpJsRuntime::Auto,
             })
         }
         async fn put_settings(
@@ -1165,6 +1175,19 @@ mod tests {
         assert_eq!(json["server"], "ready");
         assert_eq!(json["storage_ready"], true);
         assert_eq!(json["runtime_ready"], false);
+    }
+
+    #[tokio::test]
+    async fn javascript_runtime_status_has_stable_typed_entries() {
+        let response = request(app(), "/api/runtime/javascript", "GET", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json.as_array().unwrap().len(), 3);
+        assert_eq!(json[0]["name"], "deno");
+        assert_eq!(json[1]["name"], "node");
+        assert_eq!(json[2]["name"], "quickjs");
+        assert!(json[1]["detected"].is_boolean());
     }
 
     #[tokio::test]

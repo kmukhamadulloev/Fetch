@@ -11,7 +11,8 @@ use std::{
 use chrono::Utc;
 use fetch_core::{
     ApplicationEvent, CompletedFile, DownloadJob, DownloadOperations, DownloadRequest,
-    DownloadStatus, EventBus, FetchError, ProxyPolicy, ProxySettings,
+    DownloadStatus, EventBus, FetchError, JsRuntimePolicy, ProxyPolicy, ProxySettings,
+    YtDlpJsRuntime,
 };
 use fetch_runtime::RuntimeManager;
 use fetch_storage::Storage;
@@ -38,6 +39,7 @@ struct Inner {
     default_output: RwLock<PathBuf>,
     thumbnail_directory: PathBuf,
     proxy: ProxyPolicy,
+    js_runtime: JsRuntimePolicy,
 }
 
 impl DownloadManager {
@@ -49,6 +51,7 @@ impl DownloadManager {
         default_output: PathBuf,
         thumbnail_directory: PathBuf,
         proxy: ProxyPolicy,
+        js_runtime: JsRuntimePolicy,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -60,6 +63,7 @@ impl DownloadManager {
                 default_output: RwLock::new(default_output),
                 thumbnail_directory,
                 proxy,
+                js_runtime,
             }),
         }
     }
@@ -223,12 +227,14 @@ impl DownloadOperations for DownloadManager {
         &self,
         download_directory: PathBuf,
         concurrent_downloads: u8,
+        ytdlp_js_runtime: YtDlpJsRuntime,
     ) -> Result<(), FetchError> {
         validate_output_directory(&download_directory).await?;
         *self.inner.default_output.write().await = download_directory;
         self.inner
             .concurrency
             .set_limit(concurrent_downloads as usize);
+        self.inner.js_runtime.replace(ytdlp_js_runtime);
         Ok(())
     }
 }
@@ -317,7 +323,9 @@ async fn run_job(
 
     let ytdlp_path = inner.runtime.ytdlp_path().await?;
     let proxy = inner.proxy.current();
-    let mut adapter = YtDlp::new(ytdlp_path).with_proxy(proxy.clone())?;
+    let mut adapter = YtDlp::new(ytdlp_path)
+        .with_proxy(proxy.clone())?
+        .with_js_runtime(inner.js_runtime.current());
     if let Some(directory) = inner.runtime.ffmpeg_directory().await {
         adapter = adapter.with_ffmpeg_directory(directory);
     }
@@ -818,6 +826,7 @@ mod tests {
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
             ProxyPolicy::new(ProxySettings::default()).unwrap(),
+            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
         );
         let job = manager
             .create(DownloadRequest {
@@ -908,6 +917,7 @@ mod tests {
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
             ProxyPolicy::new(ProxySettings::default()).unwrap(),
+            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
         );
         let job = manager
             .create(DownloadRequest {
@@ -975,6 +985,7 @@ mod tests {
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
             ProxyPolicy::new(ProxySettings::default()).unwrap(),
+            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
         );
         let request = |suffix: &str| DownloadRequest {
             url: format!("https://example.test/slow-{suffix}"),
@@ -1060,6 +1071,7 @@ mod tests {
             output.clone(),
             temp.path().join("thumbnails"),
             policy.clone(),
+            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
         );
         let request = |url: &str| DownloadRequest {
             url: url.into(),
@@ -1082,7 +1094,9 @@ mod tests {
             .await
             .unwrap();
         let queued = manager
-            .create(request("https://example.test/record-proxy"))
+            .create(request(
+                "https://example.test/record-proxy-record-js-runtime",
+            ))
             .await
             .unwrap();
         for _ in 0..100 {
@@ -1096,6 +1110,10 @@ mod tests {
                 mode: fetch_core::ProxyMode::Custom,
                 url: Some("socks5://127.0.0.1:1080".into()),
             })
+            .unwrap();
+        manager
+            .update_defaults(output.clone(), 1, YtDlpJsRuntime::Node)
+            .await
             .unwrap();
         assert_eq!(
             manager.get(active.id).await.unwrap().status,
@@ -1119,6 +1137,10 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(output.join("fixture-proxy.txt")).unwrap(),
             "socks5://127.0.0.1:1080"
+        );
+        assert_eq!(
+            std::fs::read_to_string(output.join("fixture-js-runtime.txt")).unwrap(),
+            "node"
         );
     }
 

@@ -86,6 +86,7 @@ async fn run_fetch(
                 open_browser_on_start: config.open_browser_on_start,
                 start_with_system: config.start_with_system,
                 ytdlp_auto_update: config.ytdlp_auto_update,
+                ytdlp_js_runtime: fetch_core::YtDlpJsRuntime::Auto,
             };
             settings.validate_basic()?;
             storage.save_settings(&settings).await?;
@@ -93,6 +94,7 @@ async fn run_fetch(
         }
     };
     let proxy_policy = ProxyPolicy::new(storage.load_proxy_settings().await?)?;
+    let js_runtime_policy = fetch_core::JsRuntimePolicy::new(settings.ytdlp_js_runtime);
     let runtime = RuntimeManager::new(RuntimePaths::new(config.runtime_path()))?;
     let components = runtime.inspect_all().await;
     let runtime_ready = components
@@ -108,10 +110,12 @@ async fn run_fetch(
         settings.download_directory.clone(),
         config.data_directory.join("thumbnails"),
         proxy_policy.clone(),
+        js_runtime_policy.clone(),
     ));
     let media = Arc::new(DynamicMediaAnalyzer {
         runtime: runtime.clone(),
         proxy: proxy_policy.clone(),
+        js_runtime: js_runtime_policy,
     });
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;
     let shutdown = CancellationToken::new();
@@ -494,13 +498,16 @@ fn start_runtime_bootstrap(
 struct DynamicMediaAnalyzer {
     runtime: RuntimeManager,
     proxy: ProxyPolicy,
+    js_runtime: fetch_core::JsRuntimePolicy,
 }
 
 #[async_trait::async_trait]
 impl MediaAnalysis for DynamicMediaAnalyzer {
     async fn analyze(&self, url: &str) -> Result<MediaInfo, FetchError> {
         let path = self.runtime.ytdlp_path().await?;
-        let mut adapter = fetch_ytdlp::YtDlp::new(path).with_proxy(self.proxy.current())?;
+        let mut adapter = fetch_ytdlp::YtDlp::new(path)
+            .with_proxy(self.proxy.current())?
+            .with_js_runtime(self.js_runtime.current());
         if let Some(directory) = self.runtime.ffmpeg_directory().await {
             adapter = adapter.with_ffmpeg_directory(directory);
         }

@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use fetch_core::{FetchError, RuntimeComponent, RuntimeComponentName, RuntimeStatus};
+use fetch_core::{
+    FetchError, JavaScriptRuntime, JavaScriptRuntimeName, RuntimeComponent, RuntimeComponentName,
+    RuntimeStatus,
+};
 use sha2::{Digest, Sha256};
 use tokio::{
     io::AsyncWriteExt,
@@ -182,6 +185,19 @@ impl RuntimeManager {
         .into_iter()
         .filter_map(|name| state.get(&name).cloned())
         .collect()
+    }
+
+    pub async fn javascript_runtimes(&self) -> Vec<JavaScriptRuntime> {
+        let mut runtimes = Vec::with_capacity(3);
+        for name in [
+            JavaScriptRuntimeName::Deno,
+            JavaScriptRuntimeName::Node,
+            JavaScriptRuntimeName::QuickJs,
+        ] {
+            let executable = which::which(name.executable_name()).ok();
+            runtimes.push(inspect_javascript_runtime(name, executable.as_deref()).await);
+        }
+        runtimes
     }
 
     pub async fn ytdlp_path(&self) -> Result<PathBuf, FetchError> {
@@ -618,6 +634,39 @@ impl RuntimeManager {
     }
 }
 
+async fn inspect_javascript_runtime(
+    name: JavaScriptRuntimeName,
+    executable: Option<&Path>,
+) -> JavaScriptRuntime {
+    let Some(executable) = executable else {
+        return JavaScriptRuntime {
+            name,
+            detected: false,
+            version: None,
+        };
+    };
+    match executable_version(executable).await {
+        Ok(version) => JavaScriptRuntime {
+            name,
+            detected: true,
+            version: Some(version),
+        },
+        Err(error) => {
+            warn!(
+                runtime = ?name,
+                executable = %executable.display(),
+                error = %error.public_message(),
+                "JavaScript runtime was found but its version could not be read"
+            );
+            JavaScriptRuntime {
+                name,
+                detected: true,
+                version: None,
+            }
+        }
+    }
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct GitHubRelease {
     tag_name: String,
@@ -907,6 +956,30 @@ mod tests {
         }
         assert!(ytdlp_asset_for("plan9", "mips").is_err());
         assert!(ffmpeg_platform_for("plan9", "mips").is_err());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn javascript_runtime_inspection_reports_detected_versions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("node");
+        tokio::fs::write(&executable, b"#!/bin/sh\nprintf 'v25.9.0\\n'\n")
+            .await
+            .unwrap();
+        let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&executable, permissions).unwrap();
+
+        let runtime =
+            inspect_javascript_runtime(JavaScriptRuntimeName::Node, Some(&executable)).await;
+        assert!(runtime.detected);
+        assert_eq!(runtime.version.as_deref(), Some("v25.9.0"));
+
+        let missing = inspect_javascript_runtime(JavaScriptRuntimeName::Deno, None).await;
+        assert!(!missing.detected);
+        assert_eq!(missing.version, None);
     }
 
     #[cfg(unix)]
