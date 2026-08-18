@@ -30,6 +30,12 @@ pub struct DownloadManager {
     inner: Arc<Inner>,
 }
 
+#[derive(Clone)]
+pub struct YtDlpPolicies {
+    pub proxy: ProxyPolicy,
+    pub js_runtime: JsRuntimePolicy,
+}
+
 struct Inner {
     storage: Arc<Storage>,
     runtime: RuntimeManager,
@@ -50,8 +56,7 @@ impl DownloadManager {
         concurrency: usize,
         default_output: PathBuf,
         thumbnail_directory: PathBuf,
-        proxy: ProxyPolicy,
-        js_runtime: JsRuntimePolicy,
+        policies: YtDlpPolicies,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -62,8 +67,8 @@ impl DownloadManager {
                 controls: Mutex::new(HashMap::new()),
                 default_output: RwLock::new(default_output),
                 thumbnail_directory,
-                proxy,
-                js_runtime,
+                proxy: policies.proxy,
+                js_runtime: policies.js_runtime,
             }),
         }
     }
@@ -825,8 +830,10 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
-            ProxyPolicy::new(ProxySettings::default()).unwrap(),
-            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            YtDlpPolicies {
+                proxy: ProxyPolicy::new(ProxySettings::default()).unwrap(),
+                js_runtime: JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            },
         );
         let job = manager
             .create(DownloadRequest {
@@ -916,8 +923,10 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
-            ProxyPolicy::new(ProxySettings::default()).unwrap(),
-            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            YtDlpPolicies {
+                proxy: ProxyPolicy::new(ProxySettings::default()).unwrap(),
+                js_runtime: JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            },
         );
         let job = manager
             .create(DownloadRequest {
@@ -984,8 +993,10 @@ mod tests {
             1,
             temp.path().join("downloads"),
             temp.path().join("thumbnails"),
-            ProxyPolicy::new(ProxySettings::default()).unwrap(),
-            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            YtDlpPolicies {
+                proxy: ProxyPolicy::new(ProxySettings::default()).unwrap(),
+                js_runtime: JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            },
         );
         let request = |suffix: &str| DownloadRequest {
             url: format!("https://example.test/slow-{suffix}"),
@@ -1070,8 +1081,10 @@ mod tests {
             1,
             output.clone(),
             temp.path().join("thumbnails"),
-            policy.clone(),
-            JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            YtDlpPolicies {
+                proxy: policy.clone(),
+                js_runtime: JsRuntimePolicy::new(YtDlpJsRuntime::Auto),
+            },
         );
         let request = |url: &str| DownloadRequest {
             url: url.into(),

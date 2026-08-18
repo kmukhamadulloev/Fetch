@@ -11,7 +11,7 @@ use std::{net::SocketAddr, sync::Arc};
 use anyhow::Context;
 use config::FetchConfig;
 use diagnostics::DiagnosticsService;
-use downloads::DownloadManager;
+use downloads::{DownloadManager, YtDlpPolicies};
 use fetch_core::{
     ApplicationSettings, EventBus, FetchError, ListenerOperations, MediaAnalysis, MediaInfo,
     ProxyPolicy, RuntimeStatus, StatusService,
@@ -109,8 +109,10 @@ async fn run_fetch(
         settings.concurrent_downloads as usize,
         settings.download_directory.clone(),
         config.data_directory.join("thumbnails"),
-        proxy_policy.clone(),
-        js_runtime_policy.clone(),
+        YtDlpPolicies {
+            proxy: proxy_policy.clone(),
+            js_runtime: js_runtime_policy.clone(),
+        },
     ));
     let media = Arc::new(DynamicMediaAnalyzer {
         runtime: runtime.clone(),
