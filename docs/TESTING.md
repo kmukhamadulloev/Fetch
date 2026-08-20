@@ -126,8 +126,16 @@ explicit 0.1.4 release-gate work.
 
 A real Telegram bot is never required for ordinary CI. Any live smoke is
 manual or explicitly selected, reads its token from a CI secret/environment,
-targets a dedicated allowlisted test user, and does not print or retain the
-token or message content.
+uses only `getMe` unless a dedicated allowlisted test user is explicitly part
+of a manual command-flow run, and does not print or retain the token or message
+content.
+
+Run the read-only live bot-identity smoke explicitly with:
+
+```bash
+FETCH_TELEGRAM_BOT_TOKEN='...' \
+  cargo test -p fetch-telegram tests::live_bot_identity_smoke_is_opt_in -- --ignored --exact
+```
 
 ## Release acceptance
 - cargo fmt;

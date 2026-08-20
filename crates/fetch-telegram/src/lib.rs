@@ -558,4 +558,38 @@ mod tests {
         }
         assert_eq!(CallbackAction::parse("v:not-a-uuid"), None);
     }
+
+    #[test]
+    fn backoff_is_capped_and_honors_retry_after() {
+        let mut backoff = Backoff::default();
+        for _ in 0..20 {
+            assert!(backoff.next_delay(&TelegramError::Network) <= Duration::from_secs(30));
+        }
+        assert_eq!(
+            backoff.next_delay(&TelegramError::RateLimited {
+                retry_after_seconds: 7,
+            }),
+            Duration::from_secs(7)
+        );
+        assert_eq!(
+            backoff.next_delay(&TelegramError::RateLimited {
+                retry_after_seconds: 120,
+            }),
+            Duration::from_secs(30)
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires explicit FETCH_TELEGRAM_BOT_TOKEN and Telegram network access"]
+    async fn live_bot_identity_smoke_is_opt_in() {
+        let value = std::env::var("FETCH_TELEGRAM_BOT_TOKEN")
+            .expect("set FETCH_TELEGRAM_BOT_TOKEN to run the ignored live smoke");
+        let token = TelegramToken::try_from(value).expect("the live smoke token is invalid");
+        let bot = BotApiClient::new(token)
+            .expect("could not build Telegram client")
+            .get_me()
+            .await
+            .expect("Telegram getMe smoke failed");
+        assert!(bot.is_bot);
+    }
 }

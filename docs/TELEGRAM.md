@@ -219,23 +219,23 @@ test artifact into Git.
 
 ## Acceptance criteria
 
-- [ ] Telegram is disabled by default and Fetch works normally without a token
+- [x] Telegram is disabled by default and Fetch works normally without a token
   or Telegram network access.
-- [ ] Enabling, disabling, token replacement, and shutdown leave at most one
+- [x] Enabling, disabling, token replacement, and shutdown leave at most one
   polling task and never interrupt HTTP/download services.
-- [ ] Tokens never enter SQLite or observable API/log/event/process surfaces.
-- [ ] Only allowlisted private-chat users can read state or create/control jobs.
-- [ ] Duplicate updates and replayed/expired callbacks cannot duplicate jobs.
-- [ ] URL analysis and download creation reuse core services without HTTP or
+- [x] Tokens never enter SQLite or observable API/log/event/process surfaces.
+- [x] Only allowlisted private-chat users can read state or create/control jobs.
+- [x] Duplicate updates and replayed/expired callbacks cannot duplicate jobs.
+- [x] URL analysis and download creation reuse core services without HTTP or
   direct process execution.
-- [ ] Playlist downloads require a count-bearing second confirmation.
-- [ ] Notifications are bounded, preference-aware, and contain no media files,
+- [x] Playlist downloads require a count-bearing second confirmation.
+- [x] Notifications are bounded, preference-aware, and contain no media files,
   raw diagnostics, filesystem paths, or Fetch LAN URLs.
-- [ ] Host-only settings are usable on desktop and mobile; LAN browsers cannot
+- [x] Host-only settings are usable on desktop and mobile; LAN browsers cannot
   request integration secrets or configuration.
-- [ ] Timeouts, rate limits, invalid tokens, poller conflicts, network loss, and
+- [x] Timeouts, rate limits, invalid tokens, poller conflicts, network loss, and
   recovery produce actionable redacted state.
-- [ ] Deterministic tests require no Telegram account; live smoke is opt-in and
+- [x] Deterministic tests require no Telegram account; live smoke is opt-in and
   secret-backed.
 - [ ] Full local and native release gates pass with documentation aligned.
 

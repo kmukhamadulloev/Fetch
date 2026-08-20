@@ -149,13 +149,13 @@ turning Fetch into a hosted service.
 
 ### 0.1.4 verification and release gates
 
-- [ ] Cover Bot API parsing, authorization, replay/idempotency, persistence,
+- [x] Cover Bot API parsing, authorization, replay/idempotency, persistence,
   secret redaction, backoff, rate limits, cancellation, and service reuse with
   deterministic Rust tests against a fake local Telegram server.
-- [ ] Cover host/remote settings, token write-only behavior, connection states,
+- [x] Cover host/remote settings, token write-only behavior, connection states,
   URL confirmation, playlist confirmation, Stop, and terminal notifications in
   desktop/mobile frontend and browser tests.
-- [ ] Keep live Telegram testing opt-in and secret-backed; normal CI and release
+- [x] Keep live Telegram testing opt-in and secret-backed; normal CI and release
   acceptance must not require a real bot token or external Telegram access.
 - [ ] Pass the full Rust/frontend/browser suite, cross-platform native archive
   matrix, and interactive tray/startup gates before publishing 0.1.4.
