@@ -9,7 +9,16 @@ permissions:
   contents: write
 
 jobs:
+  validate-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/test-release-notes.sh
+      - if: startsWith(github.ref, 'refs/tags/v')
+        run: ./scripts/release-notes.sh "$GITHUB_REF_NAME" >/dev/null
+
   package:
+    needs: validate-release-notes
     strategy:
       fail-fast: false
       matrix:
@@ -72,6 +81,9 @@ jobs:
         with:
           path: release-artifacts
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" release-artifacts/* --generate-notes --verify-tag
+      - name: Extract curated release notes
+        run: ./scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
+      - name: Publish release
+        run: gh release create "$GITHUB_REF_NAME" release-artifacts/* --title "Fetch $GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}

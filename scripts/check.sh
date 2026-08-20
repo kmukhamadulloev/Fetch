@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+./scripts/test-release-notes.sh
 if [ -f web/package.json ]; then
   (cd web && npm ci && npm run typecheck && npm run lint && npm test && npm run build)
 fi

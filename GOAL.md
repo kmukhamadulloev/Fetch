@@ -21,6 +21,8 @@ Develop Fetch 0.1.4 as described in `ROADMAP.md` and `docs/TELEGRAM.md`:
   chat with a configurable 1–50 MB ceiling that defaults to 50 MB;
 - ship consistent Fetch application identity across Windows, macOS, Linux
   startup registration, the tray, and installable browser metadata;
+- publish the matching `RELEASE.md` version section as curated GitHub Release
+  notes and reject tags without documented changes;
 - preserve Fetch's local-first operation when Telegram is disabled or
   unavailable.
 

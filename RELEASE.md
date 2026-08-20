@@ -24,6 +24,8 @@ developer-visible behavior, compatibility, and release operations.
   configurable 1–50 MB limit, 50 MB default, and text-only failure fallback.
 - Branded Windows executables, macOS application bundles, Linux startup
   entries, and installable browser metadata with the approved Fetch logo.
+- Published each tagged version's curated `RELEASE.md` section on its GitHub
+  Release page, with validation for missing or empty notes.
 
 ## 0.1.3 — 2026-08-18
 

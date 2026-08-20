@@ -6,6 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: ./scripts/test-release-notes.sh
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

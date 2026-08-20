@@ -151,6 +151,8 @@ commands and live-smoke observations are recorded in the completion report.
 - [ ] PENDING RELEASE GATE — interactive tray creation, actions, and graceful Quit pass on every native release target.
 - [x] PASS — clean-data managed runtime preparation is scripted and live-tested.
 - [x] PASS — native target matrix smoke-tests every archive before publication.
+- [x] PASS — release automation validates and supplies the matching non-empty
+  `RELEASE.md` section to GitHub CLI through `--notes-file`.
 - [x] PASS — Fetch and managed-runtime license notices are included.
 - [x] PASS — README and release/API/runtime/testing documentation are current.
 - [x] PASS — `ISSUES.md` contains no release-blocking open defect.

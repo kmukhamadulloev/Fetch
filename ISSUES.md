@@ -16,6 +16,25 @@ Fetch 0.1.4 implementation and the complete local Rust/frontend/browser gate
 are green. Cross-platform native archive verification and interactive
 tray/startup gates remain before this section can return to COMPLETE.
 
+## BUG-025 — GitHub Releases omit curated version information
+
+Status: RESOLVED
+
+Affected:
+- release automation
+- release documentation
+
+Expected: Every tagged GitHub Release explains the user-visible changes for
+that exact version using the maintained release history.
+
+Actual: The publisher requested generated notes but never supplied the curated
+version entry from `RELEASE.md`, allowing sparse or empty release descriptions.
+
+Resolution: Added a validated release-note extractor that normalizes `v` tags,
+selects only the matching Markdown section, rejects missing or empty entries,
+and supplies the result to `gh release create --notes-file`. CI covers successful
+extraction and both failure modes.
+
 ## UX-026 — Native packages use a generic executable icon
 
 Status: RESOLVED

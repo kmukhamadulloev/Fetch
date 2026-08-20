@@ -28,6 +28,17 @@ including the GitHub `ubuntu-24.04-arm` runner. A tag matching `v*` publishes
 only after all five native builds start and answer `/api/status`. Manual runs
 produce downloadable workflow artifacts without publishing a release.
 
+The publisher strips the leading `v` from the tag, extracts the matching
+`## <version>` section from `RELEASE.md`, and passes that Markdown to GitHub CLI
+with `--notes-file`. Publication fails if the version section is missing or
+empty before the native build matrix starts, so every tag must have curated
+release information committed before the tag is created. Preview the exact
+notes locally with:
+
+```bash
+./scripts/release-notes.sh v0.1.4
+```
+
 Local Linux packaging:
 
 ```bash

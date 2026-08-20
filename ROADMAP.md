@@ -167,6 +167,8 @@ turning Fetch into a hosted service.
 
 ### 0.1.4 verification and release gates
 
+- [x] Publish curated GitHub Release notes from the matching `RELEASE.md`
+  section and reject missing or empty version entries.
 - [x] Cover Bot API parsing, authorization, replay/idempotency, persistence,
   secret redaction, backoff, rate limits, cancellation, and service reuse with
   deterministic Rust tests against a fake local Telegram server.

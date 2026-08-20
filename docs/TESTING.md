@@ -51,6 +51,12 @@ Desktop lifecycle:
 - graceful shutdown cancels queued/active downloads and owned child processes;
 - packaged startup smoke uses `--no-tray` for deterministic headless execution.
 
+Release automation:
+- `scripts/test-release-notes.sh` verifies tag normalization, exact version
+  section extraction, and rejection of missing or empty release notes;
+- the release publisher consumes only the matching `RELEASE.md` section through
+  GitHub CLI's `--notes-file` option.
+
 File serving:
 - Range parsing;
 - correct 206 ranges;
