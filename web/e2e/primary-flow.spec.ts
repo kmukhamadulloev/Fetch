@@ -195,6 +195,11 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
 })
 
 test('host can configure Telegram without the token appearing in responses or the input', async ({ page }) => {
+  const renderErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error' && /message compilation error|syntaxerror/i.test(message.text())) renderErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => renderErrors.push(error.message))
   await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
   await page.goto('/settings#general')
   const integrationsTab = page.getByRole('button', { name: 'Integrations' })
@@ -234,6 +239,7 @@ test('host can configure Telegram without the token appearing in responses or th
   await page.getByRole('button', { name: 'Save Telegram settings' }).click()
   expect((await settingsSave).postDataJSON()).toMatchObject({ enabled: true, use_proxy: true, send_completed_media: true, upload_limit_mb: 25, allowed_user_ids: [123456789] })
   await expect(page.getByText('Telegram updated')).toBeVisible()
+  expect(renderErrors).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientWidth),
   )

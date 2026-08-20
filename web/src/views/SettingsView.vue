@@ -340,7 +340,7 @@ async function saveTelegramToken() {
                   <p v-if="telegram.value.status.token_source === 'environment'" class="mt-2 text-[11px] leading-5 text-muted">{{ t('settings.environmentTokenHelp') }}</p>
                 </div>
 
-                <div class="info-panel"><Bot :size="18" class="shrink-0" /><span>{{ t('settings.botFatherHelp') }}</span></div>
+                <div class="info-panel"><Bot :size="18" class="shrink-0" /><i18n-t keypath="settings.botFatherHelp" tag="span"><template #botFather><a class="underline" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a></template></i18n-t></div>
                 <label class="field"><span>{{ t('settings.allowedUsers') }}</span><textarea v-model="telegramUsers" class="input min-h-28 resize-y font-mono text-xs" inputmode="numeric" spellcheck="false" placeholder="123456789"></textarea><small>{{ t('settings.allowedUsersHelp') }}</small></label>
                 <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3">
                   <span><span class="setting-title">{{ t('settings.useProxy') }}</span><span class="setting-help">{{ t('settings.useProxyHelp') }}</span></span>

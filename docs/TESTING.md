@@ -128,12 +128,18 @@ an existing Chrome/Chromium installation.
 Unit tests recursively compare every Russian and Tajik catalog leaf against the
 canonical English catalog. They also verify English defaulting for missing or
 invalid saved values, explicit preference persistence, root `lang` updates, and
-locale-aware number, byte-size, and timestamp formatting. Playwright changes
+locale-aware number, byte-size, and timestamp formatting. Every catalog value
+is compiled to reject reserved or malformed Vue I18n message syntax.
+Playwright changes
 from English to Russian and Tajik without reloading, reloads to confirm
 persistence, verifies representative translated navigation and settings text,
 and checks that longer labels do not create document overflow in either browser
 project. External media titles and diagnostic content remain test fixtures and
 are intentionally not translated.
+
+When `FETCH_RUN_E2E=1`, the repository check runs Playwright against the built
+Vite preview rather than the development server. This verifies the same
+optimized frontend assets embedded into release binaries.
 
 ## 0.1.4 Telegram coverage
 

@@ -18,6 +18,26 @@ without evidence. Fetch 0.1.5 multilingual implementation and its complete
 local Rust/frontend/browser verification are complete; native release gates
 remain for publication.
 
+## BUG-029 — Production Integrations route renders blank
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Opening Integrations renders the Telegram configuration in both the
+development server and the optimized frontend embedded in Fetch.
+
+Actual: A localized help message contained a literal `@BotFather`. Vue I18n
+reserves `@` for linked-message syntax, so its production message compiler
+reported `SyntaxError: 10` and aborted the Settings route render.
+
+Resolution: BotFather is now a named rich-text interpolation whose clickable
+label lives outside the message grammar. Unit tests compile every value in all
+three catalogs and reject compiler errors. Release-mode Playwright now runs
+against the production Vite preview and asserts Integrations has no render or
+message-compilation errors.
+
 ## BUG-028 — Integrations is hidden in compact Settings navigation
 
 Status: RESOLVED

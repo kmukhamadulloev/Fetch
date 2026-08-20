@@ -13,6 +13,8 @@ developer-visible behavior, compatibility, and release operations.
   tests, and desktop/mobile language persistence coverage.
 - Kept every Settings section, including Integrations, visibly reachable in a
   responsive tab grid instead of hiding later sections in an unmarked scroller.
+- Fixed a production-only blank Integrations route caused by reserved Vue I18n
+  message syntax and added catalog-compilation plus production-bundle coverage.
 
 ## 0.1.4 — 2026-08-20
 

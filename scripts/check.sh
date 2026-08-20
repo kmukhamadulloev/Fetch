@@ -10,5 +10,5 @@ cargo test --workspace
 cargo build --workspace
 
 if [ "${FETCH_RUN_E2E:-0}" = "1" ]; then
-  (cd web && npm run test:e2e)
+  (cd web && FETCH_E2E_PRODUCTION=1 npm run test:e2e)
 fi

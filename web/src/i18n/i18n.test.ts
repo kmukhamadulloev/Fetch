@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import { messages } from './messages'
 
 function leafKeys(value: unknown, prefix = ''): string[] {
@@ -25,6 +26,24 @@ describe('localization', () => {
     const englishKeys = leafKeys(messages.en)
     expect(leafKeys(messages.ru)).toEqual(englishKeys)
     expect(leafKeys(messages.tg)).toEqual(englishKeys)
+  })
+
+  it('compiles every translated message used by the production runtime', () => {
+    const parameters = {
+      botFather: '@BotFather', count: 2, date: 'date', duration: 'duration', level: 'level', name: 'name',
+      ready: 3, source: 'source', status: 200, time: 'time', total: 4,
+      url: 'url', value: 'value', visible: 2, watched: 1,
+    }
+    const compilerErrors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      for (const locale of ['en', 'ru', 'tg'] as const) {
+        const runtime = createI18n({ legacy: false, locale, messages })
+        for (const key of leafKeys(messages.en)) runtime.global.t(key, parameters)
+      }
+      expect(compilerErrors).not.toHaveBeenCalled()
+    } finally {
+      compilerErrors.mockRestore()
+    }
   })
 
   it('defaults invalid and missing preferences to English', async () => {
