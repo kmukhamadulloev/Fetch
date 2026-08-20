@@ -7,6 +7,7 @@ members = [
   "crates/fetch-runtime",
   "crates/fetch-storage",
   "crates/fetch-server",
+  "crates/fetch-telegram",
 ]
 
 [workspace.package]
@@ -21,6 +22,7 @@ async-stream = "0.3"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
+rand = "0.9"
 directories = "6"
 http = "1"
 if-addrs = "0.14"

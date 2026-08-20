@@ -112,7 +112,7 @@ turning Fetch into a hosted service.
 - [x] Add a secret-store abstraction: native OS credential storage for
   host-entered tokens and a `FETCH_TELEGRAM_BOT_TOKEN` override for headless
   operation. Never store tokens in SQLite or return them through the API.
-- [ ] Add a Rust-only `fetch-telegram` adapter with typed Bot API requests,
+- [x] Add a Rust-only `fetch-telegram` adapter with typed Bot API requests,
   outbound long polling, bounded timeouts, cancellation, rate-limit handling,
   redaction, and exponential backoff with jitter.
 - [ ] Start, stop, and hot-reconfigure one bot manager from `app/fetch`; bot
