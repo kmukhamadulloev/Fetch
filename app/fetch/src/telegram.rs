@@ -1143,6 +1143,7 @@ mod tests {
     struct FakeDownloads {
         storage: Arc<Storage>,
         jobs: Mutex<HashMap<Uuid, DownloadJob>>,
+        stopped: Mutex<Vec<Uuid>>,
     }
 
     #[derive(Clone)]
@@ -1195,7 +1196,9 @@ mod tests {
                 .ok_or(FetchError::NotFound)
         }
         async fn stop(&self, id: Uuid) -> Result<DownloadJob, FetchError> {
-            self.get(id).await
+            let job = self.get(id).await?;
+            self.stopped.lock().await.push(id);
+            Ok(job)
         }
         async fn resume(&self, id: Uuid) -> Result<DownloadJob, FetchError> {
             self.get(id).await
@@ -1262,6 +1265,7 @@ mod tests {
         let downloads = Arc::new(FakeDownloads {
             storage: storage.clone(),
             jobs: Mutex::new(HashMap::new()),
+            stopped: Mutex::new(Vec::new()),
         });
         let inner = ManagerInner {
             storage,
@@ -1485,6 +1489,115 @@ mod tests {
         assert!(slot.lock().await.is_none());
     }
 
+    #[tokio::test]
+    async fn playlists_require_a_second_confirmation_before_creating_jobs() {
+        let (inner, downloads) = test_inner().await;
+        let client = FakeTelegramApi::default();
+        let action = TelegramPendingAction {
+            id: Uuid::new_v4(),
+            user_id: 42,
+            chat_id: 42,
+            source_url: "https://example.test/playlist".into(),
+            media: playlist_media(),
+            stage: TelegramPendingStage::ChooseMode,
+            mode: None,
+            expires_at: Utc::now() + chrono::Duration::minutes(1),
+            consumed_at: None,
+        };
+        inner
+            .storage
+            .save_telegram_pending_action(&action)
+            .await
+            .unwrap();
+        let identity = TelegramIdentity {
+            user_id: 42,
+            chat_id: 42,
+            private_chat: true,
+        };
+
+        handle_callback(&inner, &client, identity, CallbackAction::Video(action.id))
+            .await
+            .unwrap();
+        assert!(downloads.list().await.unwrap().is_empty());
+        let confirmation = client.messages.lock().await[0]
+            .keyboard
+            .as_ref()
+            .unwrap()
+            .inline_keyboard[0][0]
+            .callback_data
+            .clone();
+        handle_callback(
+            &inner,
+            &client,
+            identity,
+            CallbackAction::parse(&confirmation).unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(downloads.list().await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn stop_actions_apply_only_to_the_owning_telegram_user() {
+        let (inner, downloads) = test_inner().await;
+        let client = FakeTelegramApi::default();
+        let job = downloads
+            .create(DownloadRequest {
+                url: "https://example.test/media".into(),
+                title: Some("Owned".into()),
+                duration_seconds: None,
+                mode: DownloadMode::Video,
+                format_id: None,
+                quality: None,
+                container: None,
+                video_codec: None,
+                audio_codec: None,
+                embed_metadata: false,
+                embed_thumbnail: false,
+                subtitles: false,
+                playlist: None,
+                output_directory: None,
+            })
+            .await
+            .unwrap();
+        inner
+            .storage
+            .associate_telegram_job(&TelegramJobOwner {
+                job_id: job.id,
+                user_id: 42,
+                chat_id: 42,
+            })
+            .await
+            .unwrap();
+
+        handle_callback(
+            &inner,
+            &client,
+            TelegramIdentity {
+                user_id: 7,
+                chat_id: 7,
+                private_chat: true,
+            },
+            CallbackAction::Stop(job.id),
+        )
+        .await
+        .unwrap();
+        assert!(downloads.stopped.lock().await.is_empty());
+        handle_callback(
+            &inner,
+            &client,
+            TelegramIdentity {
+                user_id: 42,
+                chat_id: 42,
+                private_chat: true,
+            },
+            CallbackAction::Stop(job.id),
+        )
+        .await
+        .unwrap();
+        assert_eq!(*downloads.stopped.lock().await, vec![job.id]);
+    }
+
     #[test]
     fn playlist_requests_preserve_order_and_require_downloadable_urls() {
         let action = TelegramPendingAction {
@@ -1535,5 +1648,35 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].playlist.as_ref().unwrap().index, 1);
         assert_eq!(requests[1].playlist.as_ref().unwrap().index, 2);
+    }
+
+    fn playlist_media() -> MediaInfo {
+        MediaInfo {
+            kind: MediaKind::Playlist,
+            id: Some("playlist-id".into()),
+            extractor: None,
+            title: "Playlist".into(),
+            webpage_url: None,
+            duration_seconds: None,
+            thumbnail_url: None,
+            playlist_count: Some(2),
+            entries: vec![
+                PlaylistEntry {
+                    id: Some("one".into()),
+                    title: "One".into(),
+                    url: Some("https://example.test/one".into()),
+                    duration_seconds: None,
+                    thumbnail_url: None,
+                },
+                PlaylistEntry {
+                    id: Some("two".into()),
+                    title: "Two".into(),
+                    url: Some("https://example.test/two".into()),
+                    duration_seconds: None,
+                    thumbnail_url: None,
+                },
+            ],
+            formats: Vec::new(),
+        }
     }
 }
