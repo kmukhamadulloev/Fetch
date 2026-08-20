@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Bot, Check, CheckCircle2, Clipboard, Cpu, Download, Eye, EyeOff, ExternalLink, FileClock, Film,
   KeyRound, Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, Trash2, TriangleAlert, Waypoints, Wrench,
@@ -10,20 +11,22 @@ import { useSettingsStore } from '@/stores/settings'
 import { useProxyStore } from '@/stores/proxy'
 import { useTelegramStore } from '@/stores/telegram'
 import { useAppearance, type ThemePreference } from '@/stores/appearance'
+import { setLocale, supportedLocales, type AppLocale } from '@/i18n'
 import type { ApplicationSettings, ProxyMode, ProxySettings, RuntimeComponent, TelegramSettings } from '@/app/api/client'
 
 const tabs = [
-  { id: 'general', label: 'General', icon: SlidersHorizontal },
-  { id: 'downloads', label: 'Downloads', icon: Download },
-  { id: 'network', label: 'Network', icon: Network },
-  { id: 'integrations', label: 'Integrations', icon: Bot },
-  { id: 'runtime', label: 'Runtime', icon: Cpu },
-  { id: 'advanced', label: 'Advanced', icon: Wrench },
+  { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
+  { id: 'downloads', label: 'settings.downloads', icon: Download },
+  { id: 'network', label: 'settings.network', icon: Network },
+  { id: 'integrations', label: 'settings.integrations', icon: Bot },
+  { id: 'runtime', label: 'settings.runtime', icon: Cpu },
+  { id: 'advanced', label: 'settings.advanced', icon: Wrench },
 ] as const
 type TabId = typeof tabs[number]['id']
 
 const route = useRoute()
 const router = useRouter()
+const { t, locale } = useI18n()
 const settings = useSettingsStore()
 const runtime = useRuntimeStore()
 const proxy = useProxyStore()
@@ -112,6 +115,10 @@ function changeTheme(event: Event) {
   appearance.setTheme((event.target as HTMLSelectElement).value as ThemePreference)
 }
 
+function changeLocale(event: Event) {
+  setLocale((event.target as HTMLSelectElement).value as AppLocale)
+}
+
 function changeProxyMode(event: Event) {
   if (!proxyForm.value) return
   const mode = (event.target as HTMLSelectElement).value as ProxyMode
@@ -165,39 +172,45 @@ async function saveTelegramToken() {
 
 <template>
   <section>
-    <p class="eyebrow">Configuration</p>
-    <h2 class="mt-2 text-2xl font-semibold">Settings</h2>
-    <p class="mt-1 text-sm text-muted">Application, network, download, and runtime preferences.</p>
+    <p class="eyebrow">{{ t('settings.eyebrow') }}</p>
+    <h2 class="mt-2 text-2xl font-semibold">{{ t('settings.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('settings.description') }}</p>
     <p v-if="settings.error || runtime.error || proxy.error || telegram.error" class="error-panel mt-5" role="alert">{{ settings.error ?? runtime.error ?? proxy.error ?? telegram.error }}</p>
 
     <div class="settings-layout mt-6">
-      <nav class="settings-nav card" aria-label="Settings sections">
+      <nav class="settings-nav card" :aria-label="t('settings.sections')">
         <button v-for="tab in tabs" :key="tab.id" class="settings-tab" :class="{ active: active === tab.id }" type="button" @click="active = tab.id">
-          <component :is="tab.icon" :size="16" />{{ tab.label }}
+          <component :is="tab.icon" :size="16" />{{ t(tab.label) }}
         </button>
       </nav>
 
       <div v-if="form" class="min-w-0">
         <section v-if="active === 'general'" class="card p-5 sm:p-6" aria-labelledby="settings-general">
-          <h3 id="settings-general" class="text-sm font-semibold">General</h3>
-          <p class="mt-1 text-xs text-muted">Appearance and startup behavior for this Fetch interface.</p>
+          <h3 id="settings-general" class="text-sm font-semibold">{{ t('settings.general') }}</h3>
+          <p class="mt-1 text-xs text-muted">{{ t('settings.generalDescription') }}</p>
           <div class="mt-6 space-y-5">
             <label class="setting-row">
-              <span><span class="setting-title">Open browser on startup</span><span class="setting-help">Open the local web UI when Fetch starts.</span></span>
+              <span><span class="setting-title">{{ t('settings.openBrowser') }}</span><span class="setting-help">{{ t('settings.openBrowserHelp') }}</span></span>
               <input v-model="form.open_browser_on_start" type="checkbox" />
             </label>
             <label class="setting-row">
-              <span><span class="setting-title">Start Fetch with system</span><span class="setting-help">{{ settings.network && !settings.network.local_client ? 'Change this setting on the device running Fetch.' : 'Launch Fetch in the tray when you sign in, without opening a browser.' }}</span></span>
+              <span><span class="setting-title">{{ t('settings.startSystem') }}</span><span class="setting-help">{{ settings.network && !settings.network.local_client ? t('settings.startSystemRemote') : t('settings.startSystemHelp') }}</span></span>
               <input v-model="form.start_with_system" type="checkbox" :disabled="Boolean(settings.network && !settings.network.local_client)" />
             </label>
             <label class="setting-row">
-              <span><span class="setting-title">Theme</span><span class="setting-help">System follows the appearance preference of this device.</span></span>
-              <select class="select setting-control" :value="appearance.preference.value" aria-label="Theme" @change="changeTheme">
-                <option value="system">Use system</option><option value="dark">Dark</option><option value="light">Light</option>
+              <span><span class="setting-title">{{ t('settings.theme') }}</span><span class="setting-help">{{ t('settings.themeHelp') }}</span></span>
+              <select class="select setting-control" :value="appearance.preference.value" :aria-label="t('settings.theme')" @change="changeTheme">
+                <option value="system">{{ t('settings.useSystem') }}</option><option value="dark">{{ t('settings.dark') }}</option><option value="light">{{ t('settings.light') }}</option>
+              </select>
+            </label>
+            <label class="setting-row">
+              <span><span class="setting-title">{{ t('language.label') }}</span><span class="setting-help">{{ t('language.help') }}</span></span>
+              <select class="select setting-control" :value="locale" :aria-label="t('language.label')" @change="changeLocale">
+                <option v-for="value in supportedLocales" :key="value" :value="value">{{ t(value === 'en' ? 'language.english' : value === 'ru' ? 'language.russian' : 'language.tajik') }}</option>
               </select>
             </label>
           </div>
-          <p class="mt-5 text-[11px] leading-5 text-muted">Theme is saved on this device. Server behavior settings are saved for every client.</p>
+          <p class="mt-5 text-[11px] leading-5 text-muted">{{ t('settings.localPreferenceHelp') }}</p>
         </section>
 
         <section v-else-if="active === 'downloads'" class="card p-5 sm:p-6" aria-labelledby="settings-downloads">

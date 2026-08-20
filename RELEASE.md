@@ -5,6 +5,9 @@ developer-visible behavior, compatibility, and release operations.
 
 ## 0.1.5 — In development
 
+- Added browser-local English, Russian, and Tajik language selection with
+  deterministic English defaults, live switching, and English fallback.
+
 ## 0.1.4 — 2026-08-20
 
 - Added automatic and explicit yt-dlp JavaScript-runtime controls.

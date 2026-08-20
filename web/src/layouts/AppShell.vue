@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { QrCode, Radio, RefreshCw, Settings, X } from '@lucide/vue'
 import AppLogo from '@/components/AppLogo.vue'
 import AppNavigation from '@/components/AppNavigation.vue'
@@ -12,6 +13,7 @@ import { useLibraryStore } from '@/stores/library'
 import { useRealtimeStore } from '@/stores/realtime'
 
 const route = useRoute()
+const { t } = useI18n()
 const status = useStatusStore()
 const runtime = useRuntimeStore()
 const downloads = useDownloadsStore()
@@ -21,14 +23,14 @@ const statusPanelOpen = ref(false)
 const secondaryNoticeDismissed = ref(false)
 const retrying = ref(false)
 const qrOpen = ref(false)
-const title = computed(() => String(route.meta.title ?? 'Fetch'))
-const subtitle = computed(() => String(route.meta.subtitle ?? ''))
+const title = computed(() => route.meta.titleKey ? t(String(route.meta.titleKey)) : 'Fetch')
+const subtitle = computed(() => route.meta.subtitleKey ? t(String(route.meta.subtitleKey)) : '')
 const serverLabel = computed(() => {
-  if (status.error) return 'Offline'
-  if (realtime.role === 'secondary') return 'Shared live'
-  if (realtime.connection === 'connected') return 'Live'
-  if (realtime.connection === 'reconnecting') return 'Reconnecting'
-  return status.value ? 'Connecting' : 'Starting'
+  if (status.error) return t('shell.offline')
+  if (realtime.role === 'secondary') return t('shell.sharedLive')
+  if (realtime.connection === 'connected') return t('shell.live')
+  if (realtime.connection === 'reconnecting') return t('shell.reconnecting')
+  return status.value ? t('shell.connecting') : t('shell.starting')
 })
 const statusDot = computed(() => status.error
   ? 'bg-rose-400'
@@ -49,14 +51,14 @@ async function retryAll() {
 
 <template>
   <div class="flex h-full bg-app text-app-text">
-    <a class="skip-link" href="#main-content">Skip to content</a>
+    <a class="skip-link" href="#main-content">{{ t('shell.skip') }}</a>
     <aside class="sidebar">
       <div class="flex h-16 items-center gap-3 px-5"><AppLogo /></div>
       <AppNavigation variant="desktop" />
       <div class="border-t border-border p-3">
         <div class="runtime-summary">
-          <div class="flex items-center justify-between text-xs font-medium"><span>Runtime</span><span class="status-dot" :class="{ muted: !status.value?.runtime_ready }">{{ status.value?.runtime_ready ? 'Ready' : 'Setup pending' }}</span></div>
-          <p class="mt-2 text-[11px] leading-5 text-muted">Managed yt-dlp, FFmpeg, and FFprobe health.</p>
+          <div class="flex items-center justify-between text-xs font-medium"><span>{{ t('shell.runtime') }}</span><span class="status-dot" :class="{ muted: !status.value?.runtime_ready }">{{ status.value?.runtime_ready ? t('shell.ready') : t('shell.setupPending') }}</span></div>
+          <p class="mt-2 text-[11px] leading-5 text-muted">{{ t('shell.runtimeHelp') }}</p>
         </div>
       </div>
     </aside>
@@ -66,21 +68,21 @@ async function retryAll() {
         <div class="flex items-center gap-3"><div class="flex items-center gap-3 lg:hidden"><AppLogo /></div><div class="hidden lg:block"><h1 class="text-sm font-semibold sm:text-base">{{ title }}</h1><p class="text-xs text-muted">{{ subtitle }}</p></div></div>
         <div class="flex items-center gap-2">
           <button class="toolbar-btn" type="button" :aria-label="serverLabel" :aria-expanded="statusPanelOpen" aria-controls="connection-status-panel" @click="statusPanelOpen = !statusPanelOpen"><span class="size-2 rounded-full" :class="statusDot"></span><span>{{ serverLabel }}</span></button>
-          <button class="icon-btn" type="button" aria-label="Open Fetch on mobile" @click="qrOpen = true"><QrCode :size="17" /></button>
-          <RouterLink class="icon-btn" to="/settings" aria-label="Settings"><Settings :size="16" /></RouterLink>
+          <button class="icon-btn" type="button" :aria-label="t('shell.openMobile')" @click="qrOpen = true"><QrCode :size="17" /></button>
+          <RouterLink class="icon-btn" to="/settings" :aria-label="t('shell.settings')"><Settings :size="16" /></RouterLink>
         </div>
         <div v-if="statusPanelOpen" id="connection-status-panel" class="connection-popover" role="status">
           <div class="flex items-start gap-3">
             <Radio class="mt-0.5 shrink-0 text-accent" :size="17" />
             <div class="min-w-0 flex-1">
-              <div class="text-xs font-semibold">{{ realtime.role === 'primary' ? 'Primary Fetch tab' : realtime.role === 'secondary' ? 'Secondary Fetch tab' : 'Choosing primary tab' }}</div>
+              <div class="text-xs font-semibold">{{ realtime.role === 'primary' ? t('shell.primaryTab') : realtime.role === 'secondary' ? t('shell.secondaryTab') : t('shell.choosingTab') }}</div>
               <p class="mt-1 text-[11px] leading-5 text-muted">
-                {{ realtime.role === 'primary' ? 'This tab owns the live server connection.' : realtime.role === 'secondary' ? 'Another tab owns the connection and relays live updates here.' : 'Fetch is coordinating realtime access with other tabs.' }}
+                {{ realtime.role === 'primary' ? t('shell.primaryHelp') : realtime.role === 'secondary' ? t('shell.secondaryHelp') : t('shell.choosingHelp') }}
               </p>
               <p v-if="status.error || realtime.error" class="mt-2 text-[11px] leading-5 text-rose-300">{{ status.error ?? realtime.error }}</p>
               <div class="mt-3 flex flex-wrap gap-2">
-                <button v-if="realtime.role === 'secondary'" class="secondary-btn" type="button" @click="realtime.takeOver(); statusPanelOpen = false">Make this tab primary</button>
-                <button v-if="status.error || realtime.error" class="secondary-btn" type="button" :disabled="retrying" @click="retryAll"><RefreshCw :class="{ 'animate-spin': retrying }" :size="14" />{{ retrying ? 'Retrying…' : 'Retry connection' }}</button>
+                <button v-if="realtime.role === 'secondary'" class="secondary-btn" type="button" @click="realtime.takeOver(); statusPanelOpen = false">{{ t('shell.makePrimary') }}</button>
+                <button v-if="status.error || realtime.error" class="secondary-btn" type="button" :disabled="retrying" @click="retryAll"><RefreshCw :class="{ 'animate-spin': retrying }" :size="14" />{{ retrying ? t('shell.retrying') : t('shell.retryConnection') }}</button>
               </div>
             </div>
           </div>
@@ -88,13 +90,13 @@ async function retryAll() {
       </header>
       <div v-if="showSecondaryNotice" class="connection-notice" role="status">
         <Radio class="shrink-0 text-accent" :size="18" />
-        <p class="min-w-0 flex-1"><strong>Another Fetch tab is primary.</strong> Live updates are being shared with this tab, so it remains fully usable.</p>
-        <button class="secondary-btn shrink-0" type="button" @click="realtime.takeOver()">Make primary</button>
-        <button class="icon-btn shrink-0" type="button" aria-label="Dismiss tab notice" @click="secondaryNoticeDismissed = true"><X :size="15" /></button>
+        <p class="min-w-0 flex-1"><strong>{{ t('shell.anotherPrimary') }}</strong> {{ t('shell.sharedHelp') }}</p>
+        <button class="secondary-btn shrink-0" type="button" @click="realtime.takeOver()">{{ t('shell.makePrimaryShort') }}</button>
+        <button class="icon-btn shrink-0" type="button" :aria-label="t('shell.dismissNotice')" @click="secondaryNoticeDismissed = true"><X :size="15" /></button>
       </div>
       <div v-if="status.error" class="connection-notice connection-error" role="alert">
-        <p class="min-w-0 flex-1"><strong>Fetch server is unavailable.</strong> Existing information may be out of date. {{ status.error }}</p>
-        <button class="secondary-btn shrink-0" type="button" :disabled="retrying" @click="retryAll"><RefreshCw :class="{ 'animate-spin': retrying }" :size="14" />{{ retrying ? 'Retrying…' : 'Retry' }}</button>
+        <p class="min-w-0 flex-1"><strong>{{ t('shell.unavailable') }}</strong> {{ t('shell.unavailableHelp') }} {{ status.error }}</p>
+        <button class="secondary-btn shrink-0" type="button" :disabled="retrying" @click="retryAll"><RefreshCw :class="{ 'animate-spin': retrying }" :size="14" />{{ retrying ? t('shell.retrying') : t('shell.retry') }}</button>
       </div>
       <div class="mx-auto w-full max-w-[1360px] p-4 sm:p-6 lg:p-8"><RouterView /></div>
     </main>

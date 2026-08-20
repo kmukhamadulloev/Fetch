@@ -190,11 +190,11 @@ and Tajik while preserving English as the deterministic default and fallback.
 
 ### Localization foundation
 
-- [ ] Add a Vue 3 Composition API localization layer with typed `en`, `ru`, and
+- [x] Add a Vue 3 Composition API localization layer with typed `en`, `ru`, and
   `tg` locale catalogs and English fallback behavior.
-- [ ] Keep language browser-local, default to English without automatic locale
+- [x] Keep language browser-local, default to English without automatic locale
   detection, persist explicit choices, and update the document language live.
-- [ ] Add an accessible language selector under General settings using English,
+- [x] Add an accessible language selector under General settings using English,
   Русский, and Тоҷикӣ labels.
 
 ### Complete interface coverage

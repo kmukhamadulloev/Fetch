@@ -7,12 +7,12 @@ import HistoryView from '@/views/HistoryView.vue'
 import LogsView from '@/views/LogsView.vue'
 
 export const routeMeta = {
-  new: ['New download', 'Paste any URL supported by yt-dlp.'],
-  downloads: ['Downloads', 'Monitor active jobs and queued items.'],
-  completed: ['Completed', 'Browse and download finished files.'],
-  history: ['History', 'Completed, failed and stopped jobs.'],
-  settings: ['Settings', 'Application, network and runtime preferences.'],
-  logs: ['Logs', 'Application, yt-dlp and FFmpeg output.'],
+  new: ['routes.newTitle', 'routes.newSubtitle'],
+  downloads: ['routes.downloadsTitle', 'routes.downloadsSubtitle'],
+  completed: ['routes.completedTitle', 'routes.completedSubtitle'],
+  history: ['routes.historyTitle', 'routes.historySubtitle'],
+  settings: ['routes.settingsTitle', 'routes.settingsSubtitle'],
+  logs: ['routes.logsTitle', 'routes.logsSubtitle'],
 } as const
 
 const router = createRouter({
@@ -29,7 +29,7 @@ const router = createRouter({
 })
 
 function meta(name: keyof typeof routeMeta) {
-  return { title: routeMeta[name][0], subtitle: routeMeta[name][1] }
+  return { titleKey: routeMeta[name][0], subtitleKey: routeMeta[name][1] }
 }
 
 export default router
