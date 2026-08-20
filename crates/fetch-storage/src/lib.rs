@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use fetch_core::{
     ApplicationSettings, CompletedFile, DiagnosticLogEntry, DownloadJob, DownloadStatus,
-    FetchError, PlaybackProgress, ProxySettings, SettingsOperations,
+    FetchError, PlaybackProgress, ProxySettings, SettingsOperations, TelegramJobOwner,
+    TelegramPendingAction, TelegramRepository, TelegramSettings,
 };
 use sqlx::{Row, SqlitePool, sqlite::SqlitePoolOptions};
 use thiserror::Error;
@@ -43,6 +44,68 @@ impl SettingsOperations for Storage {
             .await
             .map_err(|error| FetchError::Internal(error.to_string()))?;
         Ok(settings)
+    }
+}
+
+#[async_trait::async_trait]
+impl TelegramRepository for Storage {
+    async fn load_settings(&self) -> Result<TelegramSettings, FetchError> {
+        self.load_telegram_settings().await.map_err(fetch_error)
+    }
+
+    async fn save_settings(&self, settings: &TelegramSettings) -> Result<(), FetchError> {
+        self.save_telegram_settings(settings)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn polling_offset(&self) -> Result<i64, FetchError> {
+        self.telegram_polling_offset().await.map_err(fetch_error)
+    }
+
+    async fn claim_update(&self, update_id: i64) -> Result<bool, FetchError> {
+        self.claim_telegram_update(update_id)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn advance_polling_offset(&self, next_offset: i64) -> Result<(), FetchError> {
+        self.advance_telegram_polling_offset(next_offset)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn save_pending_action(&self, action: &TelegramPendingAction) -> Result<(), FetchError> {
+        self.save_telegram_pending_action(action)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn consume_pending_action(
+        &self,
+        id: uuid::Uuid,
+        user_id: i64,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<TelegramPendingAction>, FetchError> {
+        self.consume_telegram_pending_action(id, user_id, now)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn associate_job(&self, owner: &TelegramJobOwner) -> Result<(), FetchError> {
+        self.associate_telegram_job(owner)
+            .await
+            .map_err(fetch_error)
+    }
+
+    async fn job_owner(&self, job_id: uuid::Uuid) -> Result<Option<TelegramJobOwner>, FetchError> {
+        self.telegram_job_owner(job_id).await.map_err(fetch_error)
+    }
+
+    async fn owned_job_ids(&self, user_id: i64) -> Result<Vec<uuid::Uuid>, FetchError> {
+        self.telegram_owned_job_ids(user_id)
+            .await
+            .map_err(fetch_error)
     }
 }
 
@@ -288,6 +351,148 @@ impl Storage {
         Ok(())
     }
 
+    pub async fn load_telegram_settings(&self) -> Result<TelegramSettings, StorageError> {
+        let value: Option<String> =
+            sqlx::query_scalar("SELECT value FROM settings WHERE key = 'telegram'")
+                .fetch_optional(&self.pool)
+                .await?;
+        let settings: TelegramSettings = value.map(from_json).transpose()?.unwrap_or_default();
+        settings
+            .validate()
+            .map_err(|error| StorageError::Data(error.public_message()))?;
+        Ok(settings)
+    }
+
+    pub async fn save_telegram_settings(
+        &self,
+        settings: &TelegramSettings,
+    ) -> Result<(), StorageError> {
+        settings
+            .validate()
+            .map_err(|error| StorageError::Data(error.public_message()))?;
+        sqlx::query("INSERT INTO settings (key, value, updated_at) VALUES ('telegram', ?, CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP")
+            .bind(to_json(settings)?)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn telegram_polling_offset(&self) -> Result<i64, StorageError> {
+        sqlx::query_scalar("SELECT polling_offset FROM telegram_state WHERE singleton = 1")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(StorageError::from)
+    }
+
+    pub async fn claim_telegram_update(&self, update_id: i64) -> Result<bool, StorageError> {
+        if update_id < 0 {
+            return Err(StorageError::Data(
+                "Telegram update IDs must not be negative".into(),
+            ));
+        }
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO telegram_updates (update_id, claimed_at) VALUES (?, ?)",
+        )
+        .bind(update_id)
+        .bind(chrono::Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn advance_telegram_polling_offset(
+        &self,
+        next_offset: i64,
+    ) -> Result<(), StorageError> {
+        if next_offset < 0 {
+            return Err(StorageError::Data(
+                "Telegram polling offset must not be negative".into(),
+            ));
+        }
+        sqlx::query("UPDATE telegram_state SET polling_offset = MAX(polling_offset, ?), updated_at = CURRENT_TIMESTAMP WHERE singleton = 1")
+            .bind(next_offset)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn save_telegram_pending_action(
+        &self,
+        action: &TelegramPendingAction,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO telegram_pending_actions (id, user_id, action_json, expires_at, consumed_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id, action_json = excluded.action_json, expires_at = excluded.expires_at, consumed_at = excluded.consumed_at")
+            .bind(action.id.to_string())
+            .bind(action.user_id)
+            .bind(to_json(action)?)
+            .bind(action.expires_at.to_rfc3339())
+            .bind(action.consumed_at.map(|value| value.to_rfc3339()))
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn consume_telegram_pending_action(
+        &self,
+        id: uuid::Uuid,
+        user_id: i64,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<TelegramPendingAction>, StorageError> {
+        let value: Option<String> = sqlx::query_scalar("UPDATE telegram_pending_actions SET consumed_at = ? WHERE id = ? AND user_id = ? AND consumed_at IS NULL AND expires_at > ? RETURNING action_json")
+            .bind(now.to_rfc3339())
+            .bind(id.to_string())
+            .bind(user_id)
+            .bind(now.to_rfc3339())
+            .fetch_optional(&self.pool)
+            .await?;
+        value
+            .map(|value| {
+                let mut action: TelegramPendingAction = from_json(value)?;
+                action.consumed_at = Some(now);
+                Ok(action)
+            })
+            .transpose()
+    }
+
+    pub async fn associate_telegram_job(
+        &self,
+        owner: &TelegramJobOwner,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO telegram_job_owners (job_id, user_id, chat_id) VALUES (?, ?, ?) ON CONFLICT(job_id) DO UPDATE SET user_id = excluded.user_id, chat_id = excluded.chat_id")
+            .bind(owner.job_id.to_string())
+            .bind(owner.user_id)
+            .bind(owner.chat_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn telegram_job_owner(
+        &self,
+        job_id: uuid::Uuid,
+    ) -> Result<Option<TelegramJobOwner>, StorageError> {
+        sqlx::query("SELECT job_id, user_id, chat_id FROM telegram_job_owners WHERE job_id = ?")
+            .bind(job_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .map(decode_telegram_job_owner)
+            .transpose()
+    }
+
+    pub async fn telegram_owned_job_ids(
+        &self,
+        user_id: i64,
+    ) -> Result<Vec<uuid::Uuid>, StorageError> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT job_id FROM telegram_job_owners WHERE user_id = ? ORDER BY rowid DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(parse)
+        .collect()
+    }
+
     pub async fn append_log(
         &self,
         level: &str,
@@ -400,6 +605,20 @@ fn decode_completed(row: sqlx::sqlite::SqliteRow) -> Result<CompletedFile, Stora
     })
 }
 
+fn decode_telegram_job_owner(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<TelegramJobOwner, StorageError> {
+    Ok(TelegramJobOwner {
+        job_id: parse(row.try_get("job_id")?)?,
+        user_id: row.try_get("user_id")?,
+        chat_id: row.try_get("chat_id")?,
+    })
+}
+
+fn fetch_error(error: StorageError) -> FetchError {
+    FetchError::Internal(error.to_string())
+}
+
 fn from_json<T: serde::de::DeserializeOwned>(value: String) -> Result<T, StorageError> {
     serde_json::from_str(&value).map_err(|error| StorageError::Data(error.to_string()))
 }
@@ -426,7 +645,7 @@ mod tests {
             .fetch_one(storage.pool())
             .await
             .unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         assert_eq!(
             storage.load_proxy_settings().await.unwrap(),
             ProxySettings::default()
@@ -514,5 +733,123 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(loaded.playback, Some(progress));
+    }
+
+    #[tokio::test]
+    async fn persists_telegram_settings_without_a_token_and_deduplicates_updates() {
+        let storage = Storage::open(Path::new(":memory:")).await.unwrap();
+        assert_eq!(
+            storage.load_telegram_settings().await.unwrap(),
+            TelegramSettings::default()
+        );
+
+        let settings = TelegramSettings {
+            enabled: true,
+            allowed_user_ids: vec![42],
+            privacy_acknowledged: true,
+            ..TelegramSettings::default()
+        };
+        storage.save_telegram_settings(&settings).await.unwrap();
+        assert_eq!(storage.load_telegram_settings().await.unwrap(), settings);
+        let serialized: String =
+            sqlx::query_scalar("SELECT value FROM settings WHERE key = 'telegram'")
+                .fetch_one(storage.pool())
+                .await
+                .unwrap();
+        assert!(!serialized.contains("token"));
+
+        assert!(storage.claim_telegram_update(100).await.unwrap());
+        assert!(!storage.claim_telegram_update(100).await.unwrap());
+        storage.advance_telegram_polling_offset(101).await.unwrap();
+        storage.advance_telegram_polling_offset(50).await.unwrap();
+        assert_eq!(storage.telegram_polling_offset().await.unwrap(), 101);
+    }
+
+    #[tokio::test]
+    async fn atomically_consumes_owned_pending_actions_once() {
+        let storage = Storage::open(Path::new(":memory:")).await.unwrap();
+        let now = chrono::Utc::now();
+        let action = TelegramPendingAction {
+            id: uuid::Uuid::new_v4(),
+            user_id: 42,
+            chat_id: 42,
+            source_url: "https://example.test/media".into(),
+            media: fetch_core::MediaInfo {
+                kind: fetch_core::MediaKind::Media,
+                id: Some("fixture".into()),
+                extractor: Some("fixture".into()),
+                title: "Fixture".into(),
+                webpage_url: Some("https://example.test/media".into()),
+                duration_seconds: Some(42.0),
+                thumbnail_url: None,
+                playlist_count: None,
+                entries: Vec::new(),
+                formats: Vec::new(),
+            },
+            stage: fetch_core::TelegramPendingStage::ChooseMode,
+            mode: None,
+            expires_at: now + chrono::Duration::minutes(5),
+            consumed_at: None,
+        };
+        storage.save_telegram_pending_action(&action).await.unwrap();
+
+        assert!(
+            storage
+                .consume_telegram_pending_action(action.id, 7, now)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let consumed = storage
+            .consume_telegram_pending_action(action.id, 42, now)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(consumed.consumed_at, Some(now));
+        assert!(
+            storage
+                .consume_telegram_pending_action(action.id, 42, now)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn correlates_telegram_jobs_with_their_owner() {
+        let storage = Storage::open(Path::new(":memory:")).await.unwrap();
+        let job = DownloadJob::new(fetch_core::DownloadRequest {
+            url: "https://example.test/media".into(),
+            title: None,
+            duration_seconds: None,
+            mode: fetch_core::DownloadMode::Video,
+            format_id: None,
+            quality: None,
+            container: None,
+            video_codec: None,
+            audio_codec: None,
+            embed_metadata: false,
+            embed_thumbnail: false,
+            subtitles: false,
+            playlist: None,
+            output_directory: None,
+        });
+        storage.insert_job(&job).await.unwrap();
+        let owner = TelegramJobOwner {
+            job_id: job.id,
+            user_id: 42,
+            chat_id: 42,
+        };
+        storage.associate_telegram_job(&owner).await.unwrap();
+
+        assert_eq!(
+            storage.telegram_job_owner(job.id).await.unwrap(),
+            Some(owner)
+        );
+        assert_eq!(
+            storage.telegram_owned_job_ids(42).await.unwrap(),
+            vec![job.id]
+        );
+        assert!(storage.telegram_owned_job_ids(7).await.unwrap().is_empty());
     }
 }
