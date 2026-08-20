@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getNetworkInfo, getSettings, putSettings, type ApplicationSettings, type NetworkInfo } from '@/app/api/client'
+import { i18n } from '@/i18n'
 
 export function reconnectUrl(settings: ApplicationSettings, currentUrl: string) {
   const destination = new URL(currentUrl)
@@ -21,7 +22,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function refresh() {
     loading.value = true
     try { [value.value, network.value] = await Promise.all([getSettings(), getNetworkInfo()]); error.value = null }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Settings are unavailable' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.settingsUnavailable') }
     finally { loading.value = false }
   }
   async function save(settings: ApplicationSettings) {
@@ -37,7 +38,7 @@ export const useSettingsStore = defineStore('settings', () => {
       }
       network.value = await getNetworkInfo()
     }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Settings could not be saved' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.settingsSave') }
     finally { saving.value = false }
   }
   return { value, network, loading, saving, error, saved, refresh, save }

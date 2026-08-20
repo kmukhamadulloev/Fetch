@@ -8,6 +8,7 @@ const runtime = useRuntimeStore()
 const { t } = useI18n()
 const current = computed(() => runtime.ytdlp)
 const busy = computed(() => current.value?.status === 'installing' || current.value?.status === 'updating')
+const currentStatus = computed(() => current.value?.version ?? t(`statuses.${current.value?.status ?? 'checking'}`))
 </script>
 
 <template>
@@ -20,7 +21,7 @@ const busy = computed(() => current.value?.status === 'installing' || current.va
       <div class="runtime-card mt-6">
         <div class="flex items-center gap-3">
           <div class="empty-icon"><Download :size="19" /></div>
-          <div class="min-w-0 flex-1"><div class="text-sm font-semibold">yt-dlp</div><div class="mt-1 text-xs text-muted">{{ current?.version ?? current?.status ?? t('runtimeSetup.checking') }}</div></div>
+          <div class="min-w-0 flex-1"><div class="text-sm font-semibold">yt-dlp</div><div class="mt-1 text-xs text-muted">{{ currentStatus }}</div></div>
           <CheckCircle2 v-if="current?.status === 'ready'" class="text-emerald-300" :size="20" />
           <RefreshCw v-else-if="busy" class="animate-spin text-accent" :size="20" />
           <TriangleAlert v-else class="text-amber-300" :size="20" />

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { createDownload, downloadAction, getDownloads, type DownloadJob, type DownloadRequest } from '@/app/api/client'
+import { i18n } from '@/i18n'
 
 export const useDownloadsStore = defineStore('downloads', () => {
   const jobs = ref<DownloadJob[]>([])
@@ -17,7 +18,7 @@ export const useDownloadsStore = defineStore('downloads', () => {
   async function refresh() {
     loading.value = true
     try { jobs.value = await getDownloads(); error.value = null }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Downloads are unavailable' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.downloadsUnavailable') }
     finally { loading.value = false }
   }
 
@@ -28,14 +29,14 @@ export const useDownloadsStore = defineStore('downloads', () => {
       error.value = null
       return job
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Download could not be added'
+      error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.downloadAdd')
       throw cause
     }
   }
 
   async function act(job: DownloadJob, action: 'stop' | 'resume' | 'retry') {
     try { merge(await downloadAction(job.id, action)); error.value = null }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Download action failed' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.downloadAction') }
   }
 
   function applyEvent(payload: unknown) { merge(payload as DownloadJob) }

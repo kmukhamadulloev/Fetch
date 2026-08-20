@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getProxySettings, putProxySettings, type ProxySettings } from '@/app/api/client'
+import { i18n } from '@/i18n'
 
 export const useProxyStore = defineStore('proxy', () => {
   const value = ref<ProxySettings | null>(null)
@@ -15,7 +16,7 @@ export const useProxyStore = defineStore('proxy', () => {
       value.value = await getProxySettings()
       error.value = null
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Could not load proxy settings'
+      error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.proxyLoad')
     } finally {
       loading.value = false
     }
@@ -31,7 +32,7 @@ export const useProxyStore = defineStore('proxy', () => {
       window.setTimeout(() => { saved.value = false }, 1800)
       return true
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Could not save proxy settings'
+      error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.proxySave')
       return false
     } finally {
       saving.value = false

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { clearPlaybackProgress, deleteCompleted, getCompleted, getHistory, revealCompleted, savePlaybackProgress, type CompletedFile, type DownloadJob, type PlaybackProgress } from '@/app/api/client'
+import { i18n } from '@/i18n'
 
 export interface CompletedPlaylistGroup {
   id: string
@@ -58,14 +59,14 @@ export const useLibraryStore = defineStore('library', () => {
       completed.value = files
       history.value = jobs
       error.value = null
-    } catch (cause) { error.value = cause instanceof Error ? cause.message : 'Library is unavailable' }
+    } catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.libraryUnavailable') }
     finally { loading.value = false }
   }
 
   async function reveal(file: CompletedFile) {
     actingId.value = file.id
     try { await revealCompleted(file.id); error.value = null }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Could not open the containing folder' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.openFolder') }
     finally { actingId.value = null }
   }
 
@@ -77,7 +78,7 @@ export const useLibraryStore = defineStore('library', () => {
       error.value = null
       return true
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Could not delete the completed file'
+      error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.deleteFile')
       return false
     } finally { actingId.value = null }
   }

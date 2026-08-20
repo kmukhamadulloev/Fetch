@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import MediaPlayerDialog from './MediaPlayerDialog.vue'
 import type { CompletedFile } from '@/app/api/client'
 import { useLibraryStore } from '@/stores/library'
+import { i18n, setLocale } from '@/i18n'
 
 const file: CompletedFile = {
   id: 'af2bf705-8425-4178-9c5c-805e62db4f64',
@@ -27,10 +28,11 @@ afterEach(() => {
 
 describe('MediaPlayerDialog keyboard controls', () => {
   it('seeks, changes volume, and toggles fullscreen', async () => {
+    setLocale('en')
     const pinia = createPinia()
     const wrapper = mount(MediaPlayerDialog, {
       props: { file, localClient: false },
-      global: { plugins: [pinia] },
+      global: { plugins: [pinia, i18n] },
     })
     await flushPromises()
 

@@ -436,6 +436,26 @@ test('theme preference persists and mobile navigation exposes the primary flow',
   }
 })
 
+test('language switches immediately, persists, and remains responsive', async ({ page }) => {
+  await mockApi(page)
+  await page.goto('/settings#general')
+
+  await page.getByLabel('Language').selectOption('ru')
+  await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
+  await page.reload()
+  await expect(page.getByLabel('Язык')).toHaveValue('ru')
+  await expect(page.getByRole('button', { name: 'Загрузки' })).toBeVisible()
+
+  await page.getByLabel('Язык').selectOption('tg')
+  await expect(page.getByRole('heading', { name: 'Танзимот', exact: true })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'tg')
+  await expect(page.getByRole('button', { name: 'Боргириҳо' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  )
+})
+
 test('one primary tab owns realtime and another tab can take over', async ({ page, context }) => {
   await context.addInitScript(() => {
     class BrowserEventSource extends EventTarget {

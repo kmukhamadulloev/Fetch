@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n'
+
 export interface AppStatus {
   version: string
   server: 'ready'
@@ -188,10 +190,10 @@ async function fetchApi(path: string, init?: RequestInit): Promise<Response> {
     return await fetch(path, { ...init, signal: controller.signal })
   } catch (cause) {
     if (controller.signal.aborted && !init?.signal?.aborted) {
-      throw new ApiError(0, 'Fetch server did not respond within 10 seconds')
+      throw new ApiError(0, i18n.global.t('errors.serverTimeout'))
     }
     if (cause instanceof ApiError) throw cause
-    throw new ApiError(0, 'Fetch server is unavailable')
+    throw new ApiError(0, i18n.global.t('errors.serverUnavailable'))
   } finally {
     window.clearTimeout(timeout)
     init?.signal?.removeEventListener('abort', abortFromCaller)
@@ -200,7 +202,7 @@ async function fetchApi(path: string, init?: RequestInit): Promise<Response> {
 
 export async function getStatus(signal?: AbortSignal): Promise<AppStatus> {
   const response = await fetchApi('/api/status', { headers: { Accept: 'application/json' }, signal })
-  if (!response.ok) throw new ApiError(response.status, `Status request failed (${response.status})`)
+  if (!response.ok) throw new ApiError(response.status, i18n.global.t('errors.statusRequest', { status: response.status }))
   return response.json() as Promise<AppStatus>
 }
 
@@ -211,7 +213,7 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-    throw new ApiError(response.status, payload?.error?.message ?? `Request failed (${response.status})`)
+    throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.requestFailed', { status: response.status }))
   }
   return response.json() as Promise<T>
 }
@@ -252,7 +254,7 @@ export async function revealCompleted(id: string): Promise<void> {
   const response = await fetchApi(`/api/files/${id}/reveal`, { method: 'POST' })
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-    throw new ApiError(response.status, payload?.error?.message ?? `Could not open folder (${response.status})`)
+    throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.openFolderStatus', { status: response.status }))
   }
 }
 
@@ -260,7 +262,7 @@ export async function deleteCompleted(id: string): Promise<void> {
   const response = await fetchApi(`/api/files/${id}`, { method: 'DELETE' })
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-    throw new ApiError(response.status, payload?.error?.message ?? `Could not delete file (${response.status})`)
+    throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.deleteFileStatus', { status: response.status }))
   }
 }
 
@@ -273,7 +275,7 @@ export function savePlaybackProgress(id: string, positionSeconds: number, durati
 
 export async function clearPlaybackProgress(id: string): Promise<void> {
   const response = await fetchApi(`/api/files/${id}/progress`, { method: 'DELETE' })
-  if (!response.ok) throw new ApiError(response.status, `Could not reset playback progress (${response.status})`)
+  if (!response.ok) throw new ApiError(response.status, i18n.global.t('errors.resetProgress', { status: response.status }))
 }
 
 export function getHistory(): Promise<DownloadJob[]> {
@@ -306,5 +308,5 @@ export function getLogs(): Promise<DiagnosticLogEntry[]> { return jsonRequest('/
 export function getDiagnostics(): Promise<DiagnosticsReport> { return jsonRequest('/api/diagnostics') }
 export async function clearLogs(): Promise<void> {
   const response = await fetchApi('/api/logs', { method: 'DELETE' })
-  if (!response.ok) throw new ApiError(response.status, `Could not clear logs (${response.status})`)
+  if (!response.ok) throw new ApiError(response.status, i18n.global.t('errors.clearLogs', { status: response.status }))
 }

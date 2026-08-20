@@ -5,6 +5,7 @@ import {
   testTelegramConnection, type TelegramIntegration, type TelegramSettings,
   type TelegramStatus,
 } from '@/app/api/client'
+import { i18n } from '@/i18n'
 
 export const useTelegramStore = defineStore('telegram', () => {
   const value = ref<TelegramIntegration | null>(null)
@@ -22,7 +23,7 @@ export const useTelegramStore = defineStore('telegram', () => {
       saved.value = true
       return true
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Telegram settings could not be updated'
+      error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.telegramUpdate')
       return false
     } finally { saving.value = false }
   }
@@ -30,7 +31,7 @@ export const useTelegramStore = defineStore('telegram', () => {
   async function refresh() {
     loading.value = true
     try { value.value = await getTelegramIntegration(); error.value = null }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : 'Telegram integration is unavailable' }
+    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.telegramUnavailable') }
     finally { loading.value = false }
   }
 
