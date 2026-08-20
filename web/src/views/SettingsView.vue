@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Bot, Check, CheckCircle2, Clipboard, Cpu, Download, ExternalLink, FileClock, Film,
@@ -37,7 +37,6 @@ const proxyForm = ref<ProxySettings | null>(null)
 const telegramForm = ref<TelegramSettings | null>(null)
 const telegramUsers = ref('')
 const telegramToken = ref('')
-let telegramRefreshTimer: number | undefined
 
 function tabFromHash(hash: string): TabId {
   const candidate = hash.replace('#', '') as TabId
@@ -81,11 +80,7 @@ function javascriptRuntimeLabel(name: 'deno' | 'node' | 'quickjs') {
 onMounted(async () => {
   await Promise.all([settings.refresh(), runtime.refresh()])
   if (isHost.value) await Promise.all([proxy.refresh(), telegram.refresh()])
-  telegramRefreshTimer = window.setInterval(() => {
-    if (isHost.value && active.value === 'integrations' && !telegram.saving) void telegram.refresh()
-  }, 5000)
 })
-onUnmounted(() => window.clearInterval(telegramRefreshTimer))
 
 function save() {
   if (!form.value) return

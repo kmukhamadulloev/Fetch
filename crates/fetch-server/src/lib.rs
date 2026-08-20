@@ -837,10 +837,13 @@ async fn start_runtime_action(
 
 async fn events(
     State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
 ) -> Sse<impl futures::Stream<Item = Result<Event, Infallible>>> {
     let mut runtime_events = state.services.runtime.subscribe();
     let mut application_events = state.services.events.subscribe();
     let shutdown = state.services.shutdown.clone();
+    let host_client =
+        connection.is_some_and(|Extension(ConnectInfo(address))| is_host_client(address.ip()));
     let stream = async_stream::stream! {
         loop {
             tokio::select! {
@@ -871,6 +874,11 @@ async fn events(
                             Event::default().event(application.event_name()).json_data(progress)
                         } else if let Some(id) = application.cleared_playback_file() {
                             Event::default().event(application.event_name()).json_data(id)
+                        } else if let Some(status) = application.telegram_status() {
+                            if !host_client {
+                                continue;
+                            }
+                            Event::default().event(application.event_name()).json_data(status)
                         } else {
                             continue;
                         };
@@ -991,8 +999,9 @@ fn embedded_asset(path: &str) -> Option<Response> {
 mod tests {
     use super::*;
     use axum::body::to_bytes;
-    use fetch_core::{MediaInfo, MediaKind};
+    use fetch_core::{DownloadMode, MediaInfo, MediaKind, TelegramConnectionState, TelegramStatus};
     use fetch_runtime::RuntimePaths;
+    use futures::StreamExt;
     use tower::ServiceExt;
 
     struct TestMedia;
@@ -1244,7 +1253,14 @@ mod tests {
         completed: Arc<dyn CompletedOperations>,
         shutdown: CancellationToken,
     ) -> Router {
-        let events = EventBus::default();
+        app_with_event_bus(completed, shutdown, EventBus::default())
+    }
+
+    fn app_with_event_bus(
+        completed: Arc<dyn CompletedOperations>,
+        shutdown: CancellationToken,
+        events: EventBus,
+    ) -> Router {
         router(ServerServices {
             status: StatusService::new("0.1.0", true, false),
             runtime: RuntimeManager::new(RuntimePaths::new("test-runtime")).unwrap(),
@@ -1364,6 +1380,84 @@ mod tests {
             .expect("SSE body did not close after shutdown cancellation")
             .expect("SSE body task panicked")
             .expect("SSE body returned an error");
+    }
+
+    #[tokio::test]
+    async fn telegram_status_events_are_visible_to_host_clients_only() {
+        let host_events = EventBus::default();
+        let host_shutdown = CancellationToken::new();
+        let host_app = app_with_event_bus(
+            Arc::new(TestCompleted),
+            host_shutdown.clone(),
+            host_events.clone(),
+        );
+        let host = request_from(
+            host_app.clone(),
+            "/api/events",
+            "GET",
+            ([127, 0, 0, 1], 4000).into(),
+        )
+        .await;
+        host_events.publish(ApplicationEvent::TelegramStatusUpdated(TelegramStatus {
+            state: TelegramConnectionState::Connected,
+            ..TelegramStatus::default()
+        }));
+        let mut host_body = host.into_body().into_data_stream();
+        let host_chunk = tokio::time::timeout(Duration::from_secs(1), host_body.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&host_chunk).contains("event: telegram.status"));
+        host_shutdown.cancel();
+
+        let remote_events = EventBus::default();
+        let remote_shutdown = CancellationToken::new();
+        let remote_app = app_with_event_bus(
+            Arc::new(TestCompleted),
+            remote_shutdown.clone(),
+            remote_events.clone(),
+        );
+        let remote = request_from(
+            remote_app.clone(),
+            "/api/events",
+            "GET",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        assert_eq!(remote.status(), StatusCode::OK);
+        remote_events.publish(ApplicationEvent::TelegramStatusUpdated(TelegramStatus {
+            state: TelegramConnectionState::Connected,
+            ..TelegramStatus::default()
+        }));
+        remote_events.publish(ApplicationEvent::DownloadCreated(
+            fetch_core::DownloadJob::new(DownloadRequest {
+                url: "https://example.test/media".into(),
+                title: None,
+                duration_seconds: None,
+                mode: DownloadMode::Video,
+                format_id: None,
+                quality: None,
+                container: None,
+                video_codec: None,
+                audio_codec: None,
+                embed_metadata: false,
+                embed_thumbnail: false,
+                subtitles: false,
+                playlist: None,
+                output_directory: None,
+            }),
+        ));
+        let mut remote_body = remote.into_body().into_data_stream();
+        let remote_chunk = tokio::time::timeout(Duration::from_secs(1), remote_body.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let remote_text = String::from_utf8_lossy(&remote_chunk);
+        assert!(remote_text.contains("event: download.created"));
+        assert!(!remote_text.contains("telegram.status"));
+        remote_shutdown.cancel();
     }
 
     #[tokio::test]

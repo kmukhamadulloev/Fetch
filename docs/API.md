@@ -144,9 +144,12 @@ runtime, and disabled mode clears all runtime defaults.
 - `library.completed`, `library.progress`, `library.progress-cleared`
 - `runtime.missing`, `runtime.installing`, `runtime.updating`, `runtime.ready`,
   `runtime.failed`
+- `telegram.status` (host clients only)
 
 Download event data is the current job, `library.completed` data is the newly
 persisted completed file, progress events carry the saved record or cleared file
-ID, and runtime event data is the current component.
+ID, runtime event data is the current component, and `telegram.status` carries
+only the non-secret operational status already available to host clients. It is
+filtered out of LAN-client streams.
 Unknown `/api/*` paths always return typed JSON 404 responses and are never
 handled by the SPA fallback.

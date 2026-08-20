@@ -14,6 +14,8 @@ developer-visible behavior, compatibility, and release operations.
   video/audio and playlist confirmation, owned-job Stop, and bounded notices.
 - Added native credential storage, a headless token override, hot polling
   lifecycle, redacted diagnostics, and host-only responsive setup controls.
+- Streamed Telegram connection status to host settings without periodic API
+  polling or form/UI reloads.
 
 ## 0.1.3 — 2026-08-18
 

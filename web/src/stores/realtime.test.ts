@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDownloadsStore } from './downloads'
 import { useLibraryStore } from './library'
 import { useRealtimeStore } from './realtime'
-import type { CompletedFile, DownloadJob } from '@/app/api/client'
+import { useTelegramStore } from './telegram'
+import type { CompletedFile, DownloadJob, TelegramIntegration } from '@/app/api/client'
 
 const fixtureJob: DownloadJob = {
   id: 'b64c93b5-55cb-4c33-9e65-c03cd7f85310',
@@ -36,6 +37,24 @@ const fixtureFile: CompletedFile = {
   browser_playable: true,
   playback: null,
   created_at: '2026-08-09T00:00:00Z',
+}
+const fixtureTelegram: TelegramIntegration = {
+  settings: {
+    enabled: true,
+    allowed_user_ids: [123],
+    notify_queued: false,
+    notify_completed: true,
+    notify_failed: true,
+    privacy_acknowledged: true,
+  },
+  status: {
+    state: 'connecting',
+    token_configured: true,
+    token_source: 'native',
+    bot_username: null,
+    last_success_at: null,
+    error: null,
+  },
 }
 
 class TestBroadcastChannel extends EventTarget {
@@ -89,6 +108,8 @@ describe('realtime coordinator', () => {
   it('owns one SSE connection and dispatches all event types through it', async () => {
     const realtime = useRealtimeStore()
     const downloads = useDownloadsStore()
+    const telegram = useTelegramStore()
+    telegram.value = fixtureTelegram
     realtime.start()
     await vi.advanceTimersByTimeAsync(100)
 
@@ -97,9 +118,17 @@ describe('realtime coordinator', () => {
     const source = TestEventSource.instances[0]
     source.onopen?.(new Event('open'))
     source.dispatchEvent(new MessageEvent('download.progress', { data: JSON.stringify(fixtureJob) }))
+    source.dispatchEvent(new MessageEvent('telegram.status', { data: JSON.stringify({
+      ...fixtureTelegram.status,
+      state: 'connected',
+      bot_username: 'fetch_bot',
+    }) }))
 
     expect(realtime.connection).toBe('connected')
     expect(downloads.jobs[0]?.progress_percent).toBe(42)
+    expect(telegram.value?.status.state).toBe('connected')
+    expect(telegram.value?.status.bot_username).toBe('fetch_bot')
+    expect(telegram.value?.settings.allowed_user_ids).toEqual([123])
     realtime.stop()
   })
 

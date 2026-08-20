@@ -134,7 +134,8 @@ defined in `TELEGRAM.md`. Configuration is host-only; remote LAN browsers see
 an explanation rather than requesting integration state. The token is
 write-only, connection testing has independent progress/error feedback, and
 the card remains contained in the mobile settings layout. While visible, it
-refreshes live connection state without replacing unsaved form edits.
+receives live connection state through the shared host-only SSE stream without
+polling the settings endpoint or replacing unsaved form edits.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.

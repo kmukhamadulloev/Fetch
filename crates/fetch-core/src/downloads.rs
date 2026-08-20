@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{FetchError, YtDlpJsRuntime};
+use crate::{FetchError, TelegramStatus, YtDlpJsRuntime};
 
 #[async_trait::async_trait]
 pub trait DownloadOperations: Send + Sync {
@@ -58,6 +58,8 @@ pub enum ApplicationEvent {
     PlaybackProgressUpdated(PlaybackProgress),
     #[serde(rename = "library.progress-cleared")]
     PlaybackProgressCleared(Uuid),
+    #[serde(rename = "telegram.status")]
+    TelegramStatusUpdated(TelegramStatus),
 }
 
 impl ApplicationEvent {
@@ -72,6 +74,7 @@ impl ApplicationEvent {
             Self::CompletedFileCreated(_) => "library.completed",
             Self::PlaybackProgressUpdated(_) => "library.progress",
             Self::PlaybackProgressCleared(_) => "library.progress-cleared",
+            Self::TelegramStatusUpdated(_) => "telegram.status",
         }
     }
 
@@ -85,7 +88,8 @@ impl ApplicationEvent {
             | Self::DownloadStopped(job) => Some(job),
             Self::CompletedFileCreated(_)
             | Self::PlaybackProgressUpdated(_)
-            | Self::PlaybackProgressCleared(_) => None,
+            | Self::PlaybackProgressCleared(_)
+            | Self::TelegramStatusUpdated(_) => None,
         }
     }
 
@@ -106,6 +110,13 @@ impl ApplicationEvent {
     pub fn cleared_playback_file(&self) -> Option<&Uuid> {
         match self {
             Self::PlaybackProgressCleared(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn telegram_status(&self) -> Option<&TelegramStatus> {
+        match self {
+            Self::TelegramStatusUpdated(status) => Some(status),
             _ => None,
         }
     }
@@ -324,5 +335,15 @@ mod tests {
         job.transition(DownloadStatus::Stopped).unwrap();
         job.transition(DownloadStatus::Queued).unwrap();
         assert!(job.transition(DownloadStatus::Completed).is_err());
+    }
+
+    #[test]
+    fn exposes_telegram_status_as_a_typed_realtime_event() {
+        let status = TelegramStatus::default();
+        let event = ApplicationEvent::TelegramStatusUpdated(status.clone());
+
+        assert_eq!(event.event_name(), "telegram.status");
+        assert_eq!(event.telegram_status(), Some(&status));
+        assert!(event.job().is_none());
     }
 }

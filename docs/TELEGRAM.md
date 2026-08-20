@@ -89,12 +89,14 @@ The settings/status API exposes only `token_configured` and
 
 Never place the token in SQLite, URLs retained by Fetch, tracing fields,
 diagnostic details, API responses, SSE payloads, Telegram messages, or command
-line arguments. Redact the exact token and Bot API URL token segment from every
+line arguments. The host-only SSE status event contains non-secret operational
+state only. Redact the exact token and Bot API URL token segment from every
 transport error before it crosses the adapter boundary.
 
 Only a host browser may read or change Telegram configuration or invoke Test
 connection. Remote LAN clients receive `LOCAL_CLIENT_REQUIRED` and the UI does
-not request the configuration endpoint.
+not request the configuration endpoint. Telegram status events are likewise
+filtered out of remote LAN SSE streams.
 
 Planned host-only API surface:
 

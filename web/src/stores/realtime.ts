@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useLibraryStore } from '@/stores/library'
 import { useRuntimeStore } from '@/stores/runtime'
+import { useTelegramStore } from '@/stores/telegram'
+import type { TelegramStatus } from '@/app/api/client'
 
 const channelName = 'fetch.realtime.v1'
 const leaseKey = 'fetch.realtime.primary'
@@ -26,7 +28,8 @@ const runtimeEvents = new Set([
   'runtime.missing',
 ])
 const libraryEvents = new Set(['library.completed', 'library.progress', 'library.progress-cleared'])
-const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents]
+const telegramEvents = new Set(['telegram.status'])
+const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents, ...telegramEvents]
 
 type RealtimeRole = 'electing' | 'primary' | 'secondary'
 type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -45,6 +48,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const downloads = useDownloadsStore()
   const library = useLibraryStore()
   const runtime = useRuntimeStore()
+  const telegram = useTelegramStore()
   const tabId = createTabId()
   const role = ref<RealtimeRole>('electing')
   const connection = ref<ConnectionState>('connecting')
@@ -106,6 +110,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
       else if (name === 'library.completed') library.applyCompleted(payload)
       else if (name === 'library.progress') library.applyPlayback(payload)
       else if (name === 'library.progress-cleared') library.clearPlayback(payload)
+      else if (name === 'telegram.status') telegram.applyStatus(payload as TelegramStatus)
     } catch {
       setConnection('reconnecting', 'Fetch received an invalid realtime update. Reconnecting…')
     }

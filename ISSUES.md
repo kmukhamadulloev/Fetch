@@ -25,6 +25,27 @@ the current archive release. `docs/RELEASE.md` calls out the required review
 before broad public distribution. This does not affect local execution or the
 native package startup gates.
 
+## BUG-023 — Telegram status polling refreshes the settings UI
+
+Status: RESOLVED
+
+Affected:
+- app/fetch
+- fetch-core
+- fetch-server
+- web
+
+Expected: Telegram connection state updates in place without recurring settings
+requests, resetting unsaved fields, or visibly reloading the Integrations UI.
+
+Actual: The Integrations view fetched the full Telegram configuration every five
+seconds while visible, toggling loading state and replacing store data.
+
+Resolution: Telegram lifecycle changes now publish a typed `telegram.status`
+event through the existing realtime coordinator. The UI updates only the status
+object, and the server filters this host-only integration event out of LAN SSE
+streams. The recurring timer and configuration request were removed.
+
 ## BUG-022 — Installed JavaScript runtimes are not enabled for yt-dlp
 
 Status: RESOLVED

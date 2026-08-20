@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   deleteTelegramToken, getTelegramIntegration, putTelegramSettings, putTelegramToken,
   testTelegramConnection, type TelegramIntegration, type TelegramSettings,
+  type TelegramStatus,
 } from '@/app/api/client'
 
 export const useTelegramStore = defineStore('telegram', () => {
@@ -33,10 +34,14 @@ export const useTelegramStore = defineStore('telegram', () => {
     finally { loading.value = false }
   }
 
+  function applyStatus(status: TelegramStatus) {
+    if (value.value) value.value = { ...value.value, status }
+  }
+
   const saveSettings = (settings: TelegramSettings) => run(() => putTelegramSettings(settings))
   const saveToken = (token: string) => run(() => putTelegramToken(token))
   const removeToken = () => run(deleteTelegramToken)
   const test = () => run(testTelegramConnection)
 
-  return { value, loading, saving, error, saved, refresh, saveSettings, saveToken, removeToken, test }
+  return { value, loading, saving, error, saved, refresh, applyStatus, saveSettings, saveToken, removeToken, test }
 })

@@ -181,11 +181,15 @@ impl TelegramBotManager {
         };
         if !settings.enabled {
             let current = self.inner.status.read().await.clone();
-            *self.inner.status.write().await = TelegramStatus {
-                token_configured: current.token_configured,
-                token_source: current.token_source,
-                ..TelegramStatus::default()
-            };
+            publish_status(
+                &self.inner,
+                TelegramStatus {
+                    token_configured: current.token_configured,
+                    token_source: current.token_source,
+                    ..TelegramStatus::default()
+                },
+            )
+            .await;
             return;
         }
         let (token, source) = match self.effective_token().await {
@@ -197,13 +201,17 @@ impl TelegramBotManager {
             }
         };
         let Some(token) = token else {
-            *self.inner.status.write().await = TelegramStatus {
-                state: TelegramConnectionState::Error,
-                token_configured: false,
-                token_source: TelegramTokenSource::Missing,
-                error: Some("Add a Telegram bot token before enabling the integration".into()),
-                ..TelegramStatus::default()
-            };
+            publish_status(
+                &self.inner,
+                TelegramStatus {
+                    state: TelegramConnectionState::Error,
+                    token_configured: false,
+                    token_source: TelegramTokenSource::Missing,
+                    error: Some("Add a Telegram bot token before enabling the integration".into()),
+                    ..TelegramStatus::default()
+                },
+            )
+            .await;
             return;
         };
         let client = match BotApiClient::new(token) {
@@ -213,12 +221,16 @@ impl TelegramBotManager {
                 return;
             }
         };
-        *self.inner.status.write().await = TelegramStatus {
-            state: TelegramConnectionState::Connecting,
-            token_configured: true,
-            token_source: source,
-            ..TelegramStatus::default()
-        };
+        publish_status(
+            &self.inner,
+            TelegramStatus {
+                state: TelegramConnectionState::Connecting,
+                token_configured: true,
+                token_source: source,
+                ..TelegramStatus::default()
+            },
+        )
+        .await;
         let cancellation = CancellationToken::new();
         let task_cancellation = cancellation.clone();
         let inner = self.inner.clone();
@@ -242,17 +254,21 @@ impl TelegramBotManager {
             .storage
             .append_log("error", "telegram", public, Some(diagnostic))
             .await;
-        let mut status = self.inner.status.write().await;
-        status.state = TelegramConnectionState::Error;
-        status.error = Some(public.to_owned());
+        update_status(&self.inner, |status| {
+            status.state = TelegramConnectionState::Error;
+            status.error = Some(public.to_owned());
+        })
+        .await;
     }
 
     async fn set_telegram_error(&self, error: &TelegramError, source: TelegramTokenSource) {
         let public = error.to_string();
         self.set_error(&public, &public).await;
-        let mut status = self.inner.status.write().await;
-        status.token_configured = true;
-        status.token_source = source;
+        update_status(&self.inner, |status| {
+            status.token_configured = true;
+            status.token_source = source;
+        })
+        .await;
     }
 }
 
@@ -306,30 +322,32 @@ impl TelegramOperations for TelegramBotManager {
 
     async fn put_token(&self, token: TelegramToken) -> Result<TelegramIntegration, FetchError> {
         self.inner.secrets.store(token).await?;
-        {
-            let mut status = self.inner.status.write().await;
+        update_status(&self.inner, |status| {
             status.token_configured = true;
             status.token_source = if token_from_environment()?.is_some() {
                 TelegramTokenSource::Environment
             } else {
                 TelegramTokenSource::Native
             };
-        }
+            Ok::<(), FetchError>(())
+        })
+        .await?;
         self.restart_poller().await;
         self.get_integration().await
     }
 
     async fn delete_token(&self) -> Result<TelegramIntegration, FetchError> {
         self.inner.secrets.delete().await?;
-        {
-            let mut status = self.inner.status.write().await;
+        update_status(&self.inner, |status| {
             status.token_configured = token_from_environment()?.is_some();
             status.token_source = if status.token_configured {
                 TelegramTokenSource::Environment
             } else {
                 TelegramTokenSource::Missing
             };
-        }
+            Ok::<(), FetchError>(())
+        })
+        .await?;
         self.restart_poller().await;
         self.get_integration().await
     }
@@ -343,15 +361,17 @@ impl TelegramOperations for TelegramBotManager {
             BotApiClient::new(token).map_err(|error| FetchError::Internal(error.to_string()))?;
         match client.get_me().await {
             Ok(bot) => {
-                let mut status = self.inner.status.write().await;
-                status.token_configured = true;
-                status.token_source = source;
-                status.bot_username = bot.username;
-                status.last_success_at = Some(Utc::now());
-                status.error = None;
-                if status.state == TelegramConnectionState::Error {
-                    status.state = TelegramConnectionState::Disabled;
-                }
+                update_status(&self.inner, |status| {
+                    status.token_configured = true;
+                    status.token_source = source;
+                    status.bot_username = bot.username;
+                    status.last_success_at = Some(Utc::now());
+                    status.error = None;
+                    if status.state == TelegramConnectionState::Error {
+                        status.state = TelegramConnectionState::Disabled;
+                    }
+                })
+                .await;
             }
             Err(error) => {
                 self.set_telegram_error(&error, source).await;
@@ -379,6 +399,27 @@ async fn stop_task(slot: &tokio::sync::Mutex<Option<RunningTask>>) {
     }
 }
 
+async fn publish_status(inner: &ManagerInner, status: TelegramStatus) {
+    *inner.status.write().await = status.clone();
+    inner
+        .events
+        .publish(ApplicationEvent::TelegramStatusUpdated(status));
+}
+
+async fn update_status<F, R>(inner: &ManagerInner, update: F) -> R
+where
+    F: FnOnce(&mut TelegramStatus) -> R,
+{
+    let mut status = inner.status.write().await;
+    let result = update(&mut status);
+    let event = status.clone();
+    drop(status);
+    inner
+        .events
+        .publish(ApplicationEvent::TelegramStatusUpdated(event));
+    result
+}
+
 async fn run_poller(
     inner: Arc<ManagerInner>,
     client: BotApiClient,
@@ -388,14 +429,18 @@ async fn run_poller(
 ) {
     match client.get_me().await {
         Ok(bot) => {
-            *inner.status.write().await = TelegramStatus {
-                state: TelegramConnectionState::Connected,
-                token_configured: true,
-                token_source: source,
-                bot_username: bot.username,
-                last_success_at: Some(Utc::now()),
-                error: None,
-            };
+            publish_status(
+                &inner,
+                TelegramStatus {
+                    state: TelegramConnectionState::Connected,
+                    token_configured: true,
+                    token_source: source,
+                    bot_username: bot.username,
+                    last_success_at: Some(Utc::now()),
+                    error: None,
+                },
+            )
+            .await;
             let _ = inner
                 .storage
                 .append_log("info", "telegram", "Telegram bot connected", None)
@@ -462,19 +507,21 @@ async fn run_poller(
                         return;
                     }
                 }
-                let mut status = inner.status.write().await;
-                status.state = TelegramConnectionState::Connected;
-                status.last_success_at = Some(Utc::now());
-                status.error = None;
+                update_status(&inner, |status| {
+                    status.state = TelegramConnectionState::Connected;
+                    status.last_success_at = Some(Utc::now());
+                    status.error = None;
+                })
+                .await;
             }
             Err(TelegramError::Cancelled) => return,
             Err(error) if error.retryable() => {
                 let delay = backoff.next_delay(&error);
-                {
-                    let mut status = inner.status.write().await;
+                update_status(&inner, |status| {
                     status.state = TelegramConnectionState::BackingOff;
                     status.error = Some(error.to_string());
-                }
+                })
+                .await;
                 tokio::select! {
                     _ = cancellation.cancelled() => return,
                     _ = tokio::time::sleep(delay) => {}
@@ -499,13 +546,17 @@ async fn record_poller_error(
         .storage
         .append_log("error", "telegram", &message, None)
         .await;
-    *inner.status.write().await = TelegramStatus {
-        state: TelegramConnectionState::Error,
-        token_configured: true,
-        token_source: source,
-        error: Some(message),
-        ..TelegramStatus::default()
-    };
+    publish_status(
+        inner,
+        TelegramStatus {
+            state: TelegramConnectionState::Error,
+            token_configured: true,
+            token_source: source,
+            error: Some(message),
+            ..TelegramStatus::default()
+        },
+    )
+    .await;
 }
 
 async fn handle_update(
@@ -1300,6 +1351,29 @@ mod tests {
             }),
             callback_query: None,
         }
+    }
+
+    #[tokio::test]
+    async fn status_changes_publish_realtime_events() {
+        let (inner, _) = test_inner().await;
+        let mut events = inner.events.subscribe();
+
+        update_status(&inner, |status| {
+            status.state = TelegramConnectionState::Connected;
+            status.bot_username = Some("fetch_bot".into());
+        })
+        .await;
+
+        let event = events.recv().await.unwrap();
+        assert_eq!(event.event_name(), "telegram.status");
+        assert_eq!(
+            event.telegram_status().unwrap().state,
+            TelegramConnectionState::Connected
+        );
+        assert_eq!(
+            event.telegram_status().unwrap().bot_username.as_deref(),
+            Some("fetch_bot")
+        );
     }
 
     fn callback_update(update_id: i64, user_id: i64, data: String) -> Update {
