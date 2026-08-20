@@ -1117,11 +1117,21 @@ mod tests {
     use super::*;
 
     struct FakeMedia;
-    struct FakeDownloads;
+    struct FakeDownloads {
+        storage: Arc<Storage>,
+        jobs: Mutex<HashMap<Uuid, DownloadJob>>,
+    }
+
+    #[derive(Clone)]
+    struct SentMessage {
+        chat_id: i64,
+        text: String,
+        keyboard: Option<InlineKeyboardMarkup>,
+    }
 
     #[derive(Default)]
     struct FakeTelegramApi {
-        messages: Mutex<Vec<(i64, String)>>,
+        messages: Mutex<Vec<SentMessage>>,
     }
 
     #[async_trait::async_trait]
@@ -1145,13 +1155,21 @@ mod tests {
     #[async_trait::async_trait]
     impl DownloadOperations for FakeDownloads {
         async fn create(&self, request: DownloadRequest) -> Result<DownloadJob, FetchError> {
-            Ok(DownloadJob::new(request))
+            let job = DownloadJob::new(request);
+            self.storage.insert_job(&job).await.map_err(storage_error)?;
+            self.jobs.lock().await.insert(job.id, job.clone());
+            Ok(job)
         }
         async fn list(&self) -> Result<Vec<DownloadJob>, FetchError> {
-            Ok(Vec::new())
+            Ok(self.jobs.lock().await.values().cloned().collect())
         }
-        async fn get(&self, _id: Uuid) -> Result<DownloadJob, FetchError> {
-            Err(FetchError::NotFound)
+        async fn get(&self, id: Uuid) -> Result<DownloadJob, FetchError> {
+            self.jobs
+                .lock()
+                .await
+                .get(&id)
+                .cloned()
+                .ok_or(FetchError::NotFound)
         }
         async fn stop(&self, id: Uuid) -> Result<DownloadJob, FetchError> {
             self.get(id).await
@@ -1189,10 +1207,11 @@ mod tests {
             unreachable!()
         }
         async fn send_message(&self, request: SendMessage<'_>) -> Result<Message, TelegramError> {
-            self.messages
-                .lock()
-                .await
-                .push((request.chat_id, request.text.into()));
+            self.messages.lock().await.push(SentMessage {
+                chat_id: request.chat_id,
+                text: request.text.into(),
+                keyboard: request.reply_markup.cloned(),
+            });
             Ok(Message {
                 message_id: 1,
                 from: None,
@@ -1211,23 +1230,29 @@ mod tests {
         }
     }
 
-    async fn test_inner() -> ManagerInner {
-        ManagerInner {
-            storage: Arc::new(
-                Storage::open(std::path::Path::new(":memory:"))
-                    .await
-                    .unwrap(),
-            ),
+    async fn test_inner() -> (ManagerInner, Arc<FakeDownloads>) {
+        let storage = Arc::new(
+            Storage::open(std::path::Path::new(":memory:"))
+                .await
+                .unwrap(),
+        );
+        let downloads = Arc::new(FakeDownloads {
+            storage: storage.clone(),
+            jobs: Mutex::new(HashMap::new()),
+        });
+        let inner = ManagerInner {
+            storage,
             secrets: NativeTelegramSecretStore,
             media: Arc::new(FakeMedia),
-            downloads: Arc::new(FakeDownloads),
+            downloads: downloads.clone(),
             events: EventBus::default(),
             app_status: fetch_core::StatusService::new("0.1.4", true, true),
             status: RwLock::new(TelegramStatus::default()),
             poller: tokio::sync::Mutex::new(None),
             notifier: tokio::sync::Mutex::new(None),
             command_windows: tokio::sync::Mutex::new(HashMap::new()),
-        }
+        };
+        (inner, downloads)
     }
 
     fn message_update(update_id: i64, user_id: i64, text: &str) -> Update {
@@ -1250,9 +1275,34 @@ mod tests {
         }
     }
 
+    fn callback_update(update_id: i64, user_id: i64, data: String) -> Update {
+        Update {
+            update_id,
+            message: None,
+            callback_query: Some(fetch_telegram::CallbackQuery {
+                id: format!("callback-{update_id}"),
+                from: User {
+                    id: user_id,
+                    is_bot: false,
+                    username: None,
+                },
+                message: Some(Message {
+                    message_id: 1,
+                    from: None,
+                    chat: Chat {
+                        id: user_id,
+                        kind: "private".into(),
+                    },
+                    text: None,
+                }),
+                data: Some(data),
+            }),
+        }
+    }
+
     #[tokio::test]
     async fn ignores_unauthorized_updates_and_answers_authorized_status() {
-        let inner = test_inner().await;
+        let (inner, _) = test_inner().await;
         let client = FakeTelegramApi::default();
         let settings = TelegramSettings {
             allowed_user_ids: vec![42],
@@ -1266,8 +1316,79 @@ mod tests {
         handle_update(&inner, &client, &settings, message_update(2, 42, "/status"))
             .await
             .unwrap();
-        assert_eq!(client.messages.lock().await[0].0, 42);
-        assert!(client.messages.lock().await[0].1.contains("Runtime: ready"));
+        assert_eq!(client.messages.lock().await[0].chat_id, 42);
+        assert!(
+            client.messages.lock().await[0]
+                .text
+                .contains("Runtime: ready")
+        );
+    }
+
+    #[tokio::test]
+    async fn url_and_single_use_callback_create_one_owned_download() {
+        let (inner, downloads) = test_inner().await;
+        let client = FakeTelegramApi::default();
+        let settings = TelegramSettings {
+            allowed_user_ids: vec![42],
+            notify_queued: true,
+            ..TelegramSettings::default()
+        };
+        handle_update(
+            &inner,
+            &client,
+            &settings,
+            message_update(1, 42, "https://example.test/media"),
+        )
+        .await
+        .unwrap();
+        let callback_data = client.messages.lock().await[1]
+            .keyboard
+            .as_ref()
+            .unwrap()
+            .inline_keyboard[0][0]
+            .callback_data
+            .clone();
+
+        handle_update(
+            &inner,
+            &client,
+            &settings,
+            callback_update(2, 42, callback_data.clone()),
+        )
+        .await
+        .unwrap();
+        let jobs = downloads.list().await.unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(
+            inner
+                .storage
+                .telegram_job_owner(jobs[0].id)
+                .await
+                .unwrap()
+                .unwrap()
+                .user_id,
+            42
+        );
+
+        handle_update(
+            &inner,
+            &client,
+            &settings,
+            callback_update(3, 42, callback_data),
+        )
+        .await
+        .unwrap();
+        assert_eq!(downloads.list().await.unwrap().len(), 1);
+        assert!(
+            client
+                .messages
+                .lock()
+                .await
+                .last()
+                .unwrap()
+                .text
+                .contains("already used")
+        );
     }
 
     #[test]
