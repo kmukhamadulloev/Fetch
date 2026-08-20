@@ -114,11 +114,26 @@ Required:
   host-only system startup, host-only proxy configuration, mobile navigation,
   JavaScript-runtime discovery and hot-apply controls,
   detailed severity log filtering and accordions, and multi-tab automatic
-  failover.
+  failover;
+- localization catalog parity, deterministic English fallback, browser-local
+  persistence, live English/Russian/Tajik switching, document language,
+  locale-aware values, and translated-layout containment on desktop and mobile.
 
 Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using
 an existing Chrome/Chromium installation.
+
+## 0.1.5 localization coverage
+
+Unit tests recursively compare every Russian and Tajik catalog leaf against the
+canonical English catalog. They also verify English defaulting for missing or
+invalid saved values, explicit preference persistence, root `lang` updates, and
+locale-aware number, byte-size, and timestamp formatting. Playwright changes
+from English to Russian and Tajik without reloading, reloads to confirm
+persistence, verifies representative translated navigation and settings text,
+and checks that longer labels do not create document overflow in either browser
+project. External media titles and diagnostic content remain test fixtures and
+are intentionally not translated.
 
 ## 0.1.4 Telegram coverage
 

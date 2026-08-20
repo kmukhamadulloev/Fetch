@@ -156,3 +156,20 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — Fetch and managed-runtime license notices are included.
 - [x] PASS — README and release/API/runtime/testing documentation are current.
 - [x] PASS — `ISSUES.md` contains no release-blocking open defect.
+
+## Phase 10 — Localization
+
+- [x] PASS — English is the deterministic first-run language and fallback for
+  invalid or incomplete preferences.
+- [x] PASS — English, Russian, and Tajik catalogs have identical leaf-key
+  coverage.
+- [x] PASS — language selection is browser-local, persists, applies without
+  reload, and updates the root document language.
+- [x] PASS — navigation, workflows, settings, dialogs, statuses, frontend
+  errors, and accessibility labels are translated.
+- [x] PASS — application-owned dates, numbers, byte sizes, and plural counts
+  use locale-aware formatting.
+- [x] PASS — external media metadata, paths, URLs, runtime output, and retained
+  diagnostics remain unchanged.
+- [x] PASS — translated desktop and mobile layouts remain contained and
+  functional in browser tests.

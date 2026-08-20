@@ -199,21 +199,21 @@ and Tajik while preserving English as the deterministic default and fallback.
 
 ### Complete interface coverage
 
-- [ ] Translate navigation, download creation and progress, completed media,
+- [x] Translate navigation, download creation and progress, completed media,
   history, logs, runtime setup, settings, dialogs, actions, empty/error states,
   confirmations, and accessibility labels.
-- [ ] Localize application-owned dates, times, counts, progress summaries, and
+- [x] Localize application-owned dates, times, counts, progress summaries, and
   status labels without altering external logs, media metadata, paths, or URLs.
-- [ ] Preserve responsive desktop/mobile layouts with longer Russian and Tajik
+- [x] Preserve responsive desktop/mobile layouts with longer Russian and Tajik
   labels and change languages without a page reload.
 
 ### 0.1.5 verification and release gates
 
-- [ ] Cover English defaulting, invalid-value fallback, persistence, live
+- [x] Cover English defaulting, invalid-value fallback, persistence, live
   switching, document language, and locale-key completeness with unit tests.
-- [ ] Cover language selection and representative translated desktop/mobile
+- [x] Cover language selection and representative translated desktop/mobile
   flows with browser tests.
-- [ ] Pass the complete Rust/frontend/browser suite and synchronize README,
+- [x] Pass the complete Rust/frontend/browser suite and synchronize README,
   UI, testing, acceptance, issue, roadmap, and release documentation.
 
 ## Candidate ideas

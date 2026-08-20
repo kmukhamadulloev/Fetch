@@ -36,7 +36,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   requests. Shared watch progress resumes across allowed devices, with visible
   progress lines and a Start over action. Unsupported formats remain available
   through Open and Download.
-- Use a responsive desktop/mobile UI with Dark, Light, and system themes.
+- Use a responsive desktop/mobile UI in English, Russian, or Tajik with Dark,
+  Light, and system themes.
 - Open Fetch on a phone by scanning the LAN QR code instead of typing an IP and
   port.
 - Open completed media in the host file manager, download it from remote
@@ -180,8 +181,10 @@ native credential store rather than SQLite. Headless installations can set
 returned by the API. See [Telegram integration](docs/TELEGRAM.md) for the
 privacy boundary and supported command flow.
 
-Appearance remains a browser-local preference so desktop and mobile clients
-can independently use Dark, Light, or Use system.
+Appearance and language remain browser-local preferences so desktop and mobile
+clients can independently use Dark, Light, or Use system and select English,
+Russian, or Tajik. English is the deterministic first-run language and fallback;
+language changes apply immediately without restarting or reloading Fetch.
 
 ## Scope and security
 
@@ -198,6 +201,7 @@ See [Security](docs/SECURITY.md) before enabling LAN access.
 - [Download engine](docs/DOWNLOAD_ENGINE.md)
 - [Runtime management](docs/RUNTIME.md)
 - [Telegram integration](docs/TELEGRAM.md)
+- [Localization](docs/LOCALIZATION.md)
 - [Testing](docs/TESTING.md)
 - [Roadmap](ROADMAP.md)
 - [Release history](RELEASE.md)

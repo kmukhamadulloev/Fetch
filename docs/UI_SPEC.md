@@ -146,6 +146,12 @@ and receive a text-only completion notice.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.
+Language supports English, Russian, and Tajik from General settings. English is
+the deterministic default and fallback; the browser-local choice applies live,
+persists independently on every client, and updates the document language.
+Application-owned labels, statuses, errors, dates, numbers, plural counts, and
+accessibility text follow the selected language. External media metadata,
+paths, URLs, runtime output, and retained diagnostics remain verbatim.
 General settings include **Start Fetch with system**. It applies immediately on
 the host, starts Fetch in its tray without opening the browser, and is disabled
 with explanatory copy for LAN clients.

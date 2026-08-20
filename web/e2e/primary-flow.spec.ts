@@ -200,7 +200,7 @@ test('host can configure Telegram without the token appearing in responses or th
   await expect(page.getByRole('heading', { name: 'Telegram bot' })).toBeVisible()
   const tokenInput = page.getByLabel('New bot token')
   await expect(tokenInput).toBeDisabled()
-  await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status').getByText('Disabled', { exact: true })).toBeVisible()
   await page.getByLabel('Enable Telegram bot').check()
   await expect(page.getByText('Action needed')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeDisabled()
@@ -441,14 +441,14 @@ test('language switches immediately, persists, and remains responsive', async ({
   await page.goto('/settings#general')
 
   await page.getByLabel('Language').selectOption('ru')
-  await expect(page.getByRole('heading', { name: 'Настройки', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Настройки', exact: true })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
   await page.reload()
   await expect(page.getByLabel('Язык')).toHaveValue('ru')
   await expect(page.getByRole('button', { name: 'Загрузки' })).toBeVisible()
 
   await page.getByLabel('Язык').selectOption('tg')
-  await expect(page.getByRole('heading', { name: 'Танзимот', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2, name: 'Танзимот', exact: true })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'tg')
   await expect(page.getByRole('button', { name: 'Боргириҳо' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(

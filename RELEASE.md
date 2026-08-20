@@ -7,6 +7,10 @@ developer-visible behavior, compatibility, and release operations.
 
 - Added browser-local English, Russian, and Tajik language selection with
   deterministic English defaults, live switching, and English fallback.
+- Translated the complete responsive interface, settings, player, dialogs,
+  statuses, frontend errors, and accessibility labels.
+- Added locale-aware dates, numbers, byte sizes, plural counts, catalog-parity
+  tests, and desktop/mobile language persistence coverage.
 
 ## 0.1.4 — 2026-08-20
 

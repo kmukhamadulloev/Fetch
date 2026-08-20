@@ -14,8 +14,25 @@ matrix is `docs/ACCEPTANCE.md`.
 
 Fetch 0.1.4 is published. Its interactive tray/startup evidence remains marked
 as pending in `docs/ACCEPTANCE.md`; do not retroactively claim that manual gate
-without evidence. Fetch 0.1.5 multilingual implementation and verification are
-now in progress.
+without evidence. Fetch 0.1.5 multilingual implementation and its complete
+local Rust/frontend/browser verification are complete; native release gates
+remain for publication.
+
+## UX-027 — Web interface is English-only
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Every browser can independently choose English, Russian, or Tajik,
+with English as a predictable first-run fallback and no reload required.
+
+Resolution: Added complete Vue I18n catalogs, a browser-local General settings
+selector, live document-language updates, locale-aware application values, and
+translated frontend validation and accessibility text. Catalog parity and
+desktop/mobile browser tests protect persistence and responsive containment;
+external media metadata and diagnostic output remain verbatim.
 
 ## BUG-025 — GitHub Releases omit curated version information
 
