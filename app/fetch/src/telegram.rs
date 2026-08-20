@@ -1748,7 +1748,7 @@ mod tests {
             media: Arc::new(FakeMedia),
             downloads: downloads.clone(),
             events: EventBus::default(),
-            app_status: fetch_core::StatusService::new("0.1.4", true, true),
+            app_status: fetch_core::StatusService::new("0.1.5", true, true),
             proxy: ProxyPolicy::new(fetch_core::ProxySettings::default()).unwrap(),
             status: RwLock::new(TelegramStatus::default()),
             poller: tokio::sync::Mutex::new(None),

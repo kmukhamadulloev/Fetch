@@ -84,7 +84,7 @@ The approved design and acceptance details are in `docs/PROXY.md`.
 - [ ] Confirm interactive tray creation, actions, system-start registration,
   and graceful Quit on supported Windows, macOS, and Linux desktops.
 
-## 0.1.4 — In development
+## 0.1.4 — Released
 
 Objective: improve extractor compatibility and add an optional, tightly scoped
 Telegram remote-control surface without exposing Fetch's local HTTP server or
@@ -182,6 +182,39 @@ turning Fetch into a hosted service.
 
 The approved behavior, architecture, privacy boundary, milestones, and
 acceptance criteria are in `docs/TELEGRAM.md`.
+
+## 0.1.5 — In development
+
+Objective: make the complete Fetch web interface usable in English, Russian,
+and Tajik while preserving English as the deterministic default and fallback.
+
+### Localization foundation
+
+- [ ] Add a Vue 3 Composition API localization layer with typed `en`, `ru`, and
+  `tg` locale catalogs and English fallback behavior.
+- [ ] Keep language browser-local, default to English without automatic locale
+  detection, persist explicit choices, and update the document language live.
+- [ ] Add an accessible language selector under General settings using English,
+  Русский, and Тоҷикӣ labels.
+
+### Complete interface coverage
+
+- [ ] Translate navigation, download creation and progress, completed media,
+  history, logs, runtime setup, settings, dialogs, actions, empty/error states,
+  confirmations, and accessibility labels.
+- [ ] Localize application-owned dates, times, counts, progress summaries, and
+  status labels without altering external logs, media metadata, paths, or URLs.
+- [ ] Preserve responsive desktop/mobile layouts with longer Russian and Tajik
+  labels and change languages without a page reload.
+
+### 0.1.5 verification and release gates
+
+- [ ] Cover English defaulting, invalid-value fallback, persistence, live
+  switching, document language, and locale-key completeness with unit tests.
+- [ ] Cover language selection and representative translated desktop/mobile
+  flows with browser tests.
+- [ ] Pass the complete Rust/frontend/browser suite and synchronize README,
+  UI, testing, acceptance, issue, roadmap, and release documentation.
 
 ## Candidate ideas
 

@@ -6,15 +6,16 @@ subsystem, expected behavior, actual behavior, and notes.
 
 ## Release verification
 
-Status: IN PROGRESS FOR 0.1.4
+Status: IN PROGRESS FOR 0.1.5
 
 Phases 01 through 09 were audited against their acceptance criteria. No known
 release-blocking implementation defect remains. The authoritative evidence
 matrix is `docs/ACCEPTANCE.md`.
 
-Fetch 0.1.4 implementation and the complete local Rust/frontend/browser gate
-are green. Cross-platform native archive verification and interactive
-tray/startup gates remain before this section can return to COMPLETE.
+Fetch 0.1.4 is published. Its interactive tray/startup evidence remains marked
+as pending in `docs/ACCEPTANCE.md`; do not retroactively claim that manual gate
+without evidence. Fetch 0.1.5 multilingual implementation and verification are
+now in progress.
 
 ## BUG-025 — GitHub Releases omit curated version information
 

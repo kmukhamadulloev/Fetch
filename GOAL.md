@@ -1,30 +1,22 @@
 # Active Goal
 
-Develop Fetch 0.1.4 as described in `ROADMAP.md` and `docs/TELEGRAM.md`:
+Develop Fetch 0.1.5 as a complete multilingual frontend release:
 
-- release the implemented typed JavaScript-runtime controls as part of 0.1.4;
-- add an optional Telegram bot that remotely submits and controls downloads
-  without exposing the Axum server to the public internet;
-- keep the bot disabled by default and authorize only explicitly allowlisted
-  Telegram users in private chats;
-- store the bot token outside SQLite and never return or retain it in APIs,
-  logs, diagnostics, events, or process arguments;
-- use outbound long polling rather than webhooks, public ports, tunnels, or an
-  additional runtime service;
-- reuse Fetch application services for analysis and download operations rather
-  than routing bot commands through HTTP or invoking processes directly;
-- provide host-only responsive integration settings, actionable connection
-  state, bounded retries, persistence, tests, and documentation;
-- optionally route Telegram Bot API traffic through the shared host-managed
-  outbound proxy policy, default to direct, and hot-reconnect when enabled;
-- optionally stream completed Telegram-owned downloads back to their private
-  chat with a configurable 1–50 MB ceiling that defaults to 50 MB;
-- ship consistent Fetch application identity across Windows, macOS, Linux
-  startup registration, the tray, and installable browser metadata;
-- publish the matching `RELEASE.md` version section as curated GitHub Release
-  notes and reject tags without documented changes;
-- preserve Fetch's local-first operation when Telegram is disabled or
-  unavailable.
+- use English as the deterministic first-run and fallback language;
+- support explicit English, Russian, and Tajik interface selections;
+- persist the selected language locally per browser/device without adding
+  accounts, server profiles, or a database migration;
+- apply language changes immediately without reloading Fetch;
+- translate all application-owned navigation, views, dialogs, settings,
+  validation feedback, empty states, actions, and accessibility labels;
+- localize application-owned dates, times, counts, and status labels while
+  leaving media metadata, URLs, filesystem values, retained logs, and external
+  process messages unchanged;
+- keep desktop and mobile layouts usable with longer translated labels;
+- update the document language and use English whenever a translation key or
+  saved locale is unavailable;
+- cover defaulting, persistence, switching, translation completeness, and
+  desktop/mobile flows with automated tests and synchronized documentation.
 
-Do not upload files from web-created jobs or unrelated library entries,
-introduce user accounts, or regress the mandatory architecture.
+Do not add automatic browser-language detection, server-side user preferences,
+machine translation, user accounts, or regress the mandatory architecture.
