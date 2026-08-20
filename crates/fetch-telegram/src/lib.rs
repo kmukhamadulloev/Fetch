@@ -217,7 +217,10 @@ impl Backoff {
             retry_after_seconds,
         } = error
         {
-            return Duration::from_secs(*retry_after_seconds).min(self.maximum);
+            // Telegram's explicit retry-after is authoritative. Keep only a
+            // defensive upper bound so a malformed response cannot park the
+            // manager indefinitely; cancellation remains immediate.
+            return Duration::from_secs(*retry_after_seconds).min(Duration::from_secs(3_600));
         }
         let exponent = self.attempt.min(5);
         self.attempt = self.attempt.saturating_add(1);
@@ -575,7 +578,7 @@ mod tests {
             backoff.next_delay(&TelegramError::RateLimited {
                 retry_after_seconds: 120,
             }),
-            Duration::from_secs(30)
+            Duration::from_secs(120)
         );
     }
 
