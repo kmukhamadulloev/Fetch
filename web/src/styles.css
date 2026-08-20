@@ -113,7 +113,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--app-border); padding-bottom: 1rem; }.setting-title,.setting-help { display: block; }.setting-title { font-size: .8rem; font-weight: 600; }.setting-help { margin-top: .25rem; color: var(--app-muted); font-size: .7rem; line-height: 1.45; }.setting-row input[type='checkbox'] { width: 1rem; height: 1rem; accent-color: var(--app-accent); }
 .setting-control { width: 10rem; flex: 0 0 auto; }
 .settings-layout { display: grid; gap: 1.25rem; }
-.settings-nav { display: flex; gap: .25rem; overflow-x: auto; padding: .5rem; scrollbar-width: none; }
+.settings-nav { display: flex; gap: .25rem; overflow-x: auto; padding: .5rem; scrollbar-width: none; height: fit-content; }
 .settings-nav::-webkit-scrollbar { display: none; }
 .settings-nav .settings-tab { width: auto; flex: 0 0 auto; white-space: nowrap; }
 .settings-savebar { position: relative; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; border: 1px solid var(--app-border); border-radius: .85rem; background: var(--app-topbar); padding: .75rem; box-shadow: 0 12px 35px var(--app-shadow); backdrop-filter: blur(18px); }
