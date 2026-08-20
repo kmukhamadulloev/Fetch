@@ -1008,6 +1008,7 @@ mod tests {
         let unreachable = format!("http://{}", listener.local_addr().unwrap());
         drop(listener);
         let client = reqwest::Client::builder()
+            .no_proxy()
             .connect_timeout(Duration::from_millis(100))
             .timeout(Duration::from_millis(250))
             .build()
@@ -1040,6 +1041,7 @@ mod tests {
         let unreachable = format!("http://{}", listener.local_addr().unwrap());
         drop(listener);
         let client = reqwest::Client::builder()
+            .no_proxy()
             .connect_timeout(Duration::from_millis(100))
             .timeout(Duration::from_millis(250))
             .build()
