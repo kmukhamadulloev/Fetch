@@ -56,18 +56,18 @@ Affected:
 - app/fetch
 - web
 
-Expected: Telegram Bot API calls use the same host-managed System, Direct, or
-Custom route as other outbound Fetch work, connection tests return before the
-frontend deadline, and failures leave actionable redacted diagnostics.
+Expected: Telegram Bot API calls can use the host-managed System, Direct, or
+Custom route when explicitly enabled, otherwise remain direct, return before
+the frontend deadline, and leave actionable redacted diagnostics.
 
 Actual: The Telegram HTTP client forced `no_proxy()`, so networks requiring a
 proxy could not reach Telegram. The frontend aborted Test connection after ten
 seconds, before the backend request timeout, and no attempt/success record was
 written to retained logs.
 
-Resolution: The typed Telegram transport now consumes the shared proxy policy,
-including HTTP, HTTPS, SOCKS4, SOCKS5, system discovery, and explicit direct
-mode. Active polling watches policy changes and reconnects immediately. Test
+Resolution: Telegram is explicitly direct by default and can opt into the
+shared proxy policy, including HTTP, HTTPS, SOCKS4, SOCKS5, and system discovery.
+Opted-in polling watches policy changes and reconnects immediately. Test
 connection completes within eight seconds and lifecycle logs retain only proxy
 mode, generic errors, and retry delays—never tokens or proxy endpoints.
 

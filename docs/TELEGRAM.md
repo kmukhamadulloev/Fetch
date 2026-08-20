@@ -57,12 +57,12 @@ TelegramBotManager (app/fetch)
 callback serialization, timeouts, Telegram error mapping, and redaction. It
 does not know about SQLite, Axum, or yt-dlp.
 
-The adapter consumes Fetch's shared outbound proxy policy. System mode honors
-the host proxy environment, Direct mode disables proxy discovery, and Custom
-mode uses the validated HTTP, HTTPS, SOCKS4, or SOCKS5 endpoint. The active
-poller watches policy changes and reconnects without restarting Fetch. Bot API
-test calls, polling, replies, and terminal notifications all use the same
-current route.
+The integration is direct by default. When `use_proxy` is enabled, the adapter
+consumes Fetch's shared outbound proxy policy: System mode honors the host proxy
+environment, Direct mode disables discovery, and Custom mode uses the validated
+HTTP, HTTPS, SOCKS4, or SOCKS5 endpoint. An opted-in active poller watches
+policy changes and reconnects without restarting Fetch. Bot API test calls,
+polling, replies, and terminal notifications all follow this setting.
 
 `TelegramBotManager` owns polling lifecycle and product flow. It calls the same
 core analysis and download services used by the web UI; it must not call Fetch
@@ -80,6 +80,7 @@ settings:
 
 ```text
 enabled: boolean
+use_proxy: boolean
 allowed_user_ids: integer[]
 notify_queued: boolean
 notify_completed: boolean
@@ -89,6 +90,8 @@ privacy_acknowledged: boolean
 
 The Bot API token is write-only. A token entered from the host UI is stored
 through a `SecretStore` abstraction backed by the native OS credential store.
+The UI can reveal only the unsaved value currently being typed; it never reads
+an existing token back from the credential store.
 Headless installations may supply `FETCH_TELEGRAM_BOT_TOKEN`; the environment
 value takes precedence and cannot be read back or overwritten through the UI.
 The settings/status API exposes only `token_configured` and
@@ -246,8 +249,8 @@ test artifact into Git.
   recovery produce actionable redacted state.
 - [x] Connection attempts, results, retry delays, and proxy-route reconnects
   are retained with proxy mode only; endpoints and tokens are never logged.
-- [x] Shared proxy changes interrupt and reconnect the active long poll, and
-  connection tests finish before the frontend request deadline.
+- [x] Telegram is direct by default; when proxy use is enabled, shared policy
+  changes reconnect the active long poll. Tests finish before the UI deadline.
 - [x] Deterministic tests require no Telegram account; live smoke is opt-in and
   secret-backed.
 - [ ] Full local and native release gates pass with documentation aligned.

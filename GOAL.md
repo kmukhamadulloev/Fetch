@@ -15,8 +15,8 @@ Develop Fetch 0.1.4 as described in `ROADMAP.md` and `docs/TELEGRAM.md`:
   than routing bot commands through HTTP or invoking processes directly;
 - provide host-only responsive integration settings, actionable connection
   state, bounded retries, persistence, tests, and documentation;
-- route Telegram Bot API traffic through the shared host-managed outbound
-  proxy policy and hot-reconnect when that policy changes;
+- optionally route Telegram Bot API traffic through the shared host-managed
+  outbound proxy policy, default to direct, and hot-reconnect when enabled;
 - preserve Fetch's local-first operation when Telegram is disabled or
   unavailable.
 

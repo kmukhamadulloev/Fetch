@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Bot, Check, CheckCircle2, Clipboard, Cpu, Download, ExternalLink, FileClock, Film,
+  Bot, Check, CheckCircle2, Clipboard, Cpu, Download, Eye, EyeOff, ExternalLink, FileClock, Film,
   KeyRound, Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, Trash2, TriangleAlert, Waypoints, Wrench,
 } from '@lucide/vue'
 import { useRuntimeStore } from '@/stores/runtime'
@@ -37,6 +37,7 @@ const proxyForm = ref<ProxySettings | null>(null)
 const telegramForm = ref<TelegramSettings | null>(null)
 const telegramUsers = ref('')
 const telegramToken = ref('')
+const telegramTokenVisible = ref(false)
 
 function tabFromHash(hash: string): TabId {
   const candidate = hash.replace('#', '') as TabId
@@ -71,6 +72,20 @@ const selectedJsRuntimeMissing = computed(() => {
   const selected = form.value?.ytdlp_js_runtime
   if (!selected || selected === 'auto' || selected === 'disabled') return false
   return runtime.javascript.find((item) => item.name === selected)?.detected === false
+})
+const telegramUserValues = computed(() => telegramUsers.value.split(/\s+/).filter(Boolean))
+const telegramParsedUserIds = computed(() => telegramUserValues.value.map((value) => Number(value)))
+const telegramUserIdsValid = computed(() => telegramUserValues.value.length > 0
+  && telegramUserValues.value.length <= 64
+  && new Set(telegramParsedUserIds.value).size === telegramParsedUserIds.value.length
+  && telegramParsedUserIds.value.every((value) => Number.isSafeInteger(value) && value > 0))
+const telegramSetupIssues = computed(() => {
+  if (!telegramForm.value?.enabled || !telegram.value) return []
+  const issues: string[] = []
+  if (!telegram.value.status.token_configured) issues.push('Save a bot token before enabling Telegram.')
+  if (!telegramUserIdsValid.value) issues.push('Add at least one valid numeric Telegram user ID.')
+  if (!telegramForm.value.privacy_acknowledged) issues.push('Accept the Telegram privacy notice.')
+  return issues
 })
 
 function javascriptRuntimeLabel(name: 'deno' | 'node' | 'quickjs') {
@@ -116,11 +131,15 @@ async function copyUrl(url: string) {
 }
 
 function parsedTelegramUsers() {
-  return telegramUsers.value.split(/\s+/).filter(Boolean).map((value) => Number(value))
+  return telegramParsedUserIds.value
 }
 
 async function saveTelegramSettings() {
   if (!telegramForm.value || !isHost.value) return
+  if (telegramSetupIssues.value.length) {
+    telegram.error = telegramSetupIssues.value[0]
+    return
+  }
   const users = parsedTelegramUsers()
   if (users.some((value) => !Number.isSafeInteger(value) || value <= 0)) {
     telegram.error = 'Telegram user IDs must be positive whole numbers.'
@@ -131,7 +150,10 @@ async function saveTelegramSettings() {
 
 async function saveTelegramToken() {
   if (!telegramToken.value.trim() || !isHost.value) return
-  if (await telegram.saveToken(telegramToken.value)) telegramToken.value = ''
+  if (await telegram.saveToken(telegramToken.value)) {
+    telegramToken.value = ''
+    telegramTokenVisible.value = false
+  }
 }
 </script>
 
@@ -230,7 +252,7 @@ async function saveTelegramToken() {
                 <span>Proxy URL</span>
                 <input v-model="proxyForm.url" class="input font-mono text-xs" type="url" inputmode="url" autocomplete="off" placeholder="socks5://127.0.0.1:1080" aria-describedby="proxy-help" />
               </label>
-              <p id="proxy-help" class="text-[11px] leading-5 text-muted">Supports unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. Active downloads keep their route; queued work and Telegram reconnect using the saved mode.</p>
+              <p id="proxy-help" class="text-[11px] leading-5 text-muted">Supports unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. Active downloads keep their route; queued work and opted-in Telegram reconnect using the saved mode.</p>
               <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
                 <span class="text-xs" aria-live="polite"><span v-if="proxy.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Proxy saved</span></span>
                 <button class="secondary-btn" type="button" :disabled="proxy.saving" @click="saveProxy">{{ proxy.saving ? 'Saving…' : 'Save proxy' }}</button>
@@ -255,34 +277,66 @@ async function saveTelegramToken() {
             <div v-if="!isHost" class="info-panel mt-5"><Network :size="18" class="shrink-0" /><span>Telegram configuration is private to the host. Open this page on the device running Fetch.</span></div>
             <div v-else-if="telegram.loading" class="mt-5 min-h-36 animate-pulse rounded-xl bg-[var(--app-surface-2)]" aria-label="Loading Telegram settings"></div>
             <div v-else-if="telegramForm && telegram.value" class="mt-6 space-y-5">
-              <div class="rounded-xl bg-[var(--app-surface-2)] p-4">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div><div class="text-xs font-medium">Bot token</div><p class="mt-1 text-[11px] text-muted">{{ telegram.value.status.token_configured ? `Configured via ${telegram.value.status.token_source}` : 'Not configured' }}<template v-if="telegram.value.status.bot_username"> · @{{ telegram.value.status.bot_username }}</template><template v-if="telegram.value.status.last_success_at"> · Last contact {{ new Date(telegram.value.status.last_success_at).toLocaleString() }}</template></p></div>
-                  <button v-if="telegram.value.status.token_configured && telegram.value.status.token_source === 'native'" class="icon-btn" type="button" aria-label="Remove Telegram token" :disabled="telegram.saving" @click="telegram.removeToken"><Trash2 :size="15" /></button>
-                </div>
-                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <label class="field min-w-0 flex-1"><span class="sr-only">New bot token</span><input v-model="telegramToken" class="input font-mono text-xs" type="password" autocomplete="new-password" placeholder="Paste a BotFather token" :disabled="telegram.value.status.token_source === 'environment'" /></label>
-                  <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegramToken.trim() || telegram.value.status.token_source === 'environment'" @click="saveTelegramToken"><KeyRound :size="14" />Save token</button>
-                  <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegram.value.status.token_configured" @click="telegram.test">Test connection</button>
-                </div>
-                <p v-if="telegram.value.status.token_source === 'environment'" class="mt-2 text-[11px] leading-5 text-muted">The environment token overrides the native credential store and must be changed outside this page.</p>
-              </div>
-              <div class="info-panel"><Bot :size="18" class="shrink-0" /><span>Create a bot with Telegram's <a class="underline" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>, save its token here, and enter the numeric IDs of the private accounts you trust. Telegram usernames are not accepted because they can change.</span></div>
-              <label class="setting-row">
-                <span><span class="setting-title">Enable Telegram bot</span><span class="setting-help">Starts one outbound poller immediately after settings are saved.</span></span>
+              <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3">
+                <span><span class="setting-title">Enable Telegram bot</span><span class="setting-help">Turn on configuration and start the outbound poller after saving.</span></span>
                 <input v-model="telegramForm.enabled" type="checkbox" />
               </label>
-              <label class="field"><span>Allowed Telegram user IDs, one per line</span><textarea v-model="telegramUsers" class="input min-h-28 resize-y font-mono text-xs" inputmode="numeric" spellcheck="false" placeholder="123456789"></textarea><small>Only matching private chats are accepted. Group chats and every other user are silently ignored.</small></label>
-              <div class="grid gap-3 sm:grid-cols-3">
-                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Queued</span><input v-model="telegramForm.notify_queued" type="checkbox" /></label>
-                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Completed</span><input v-model="telegramForm.notify_completed" type="checkbox" /></label>
-                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Failed / stopped</span><input v-model="telegramForm.notify_failed" type="checkbox" /></label>
+
+              <div class="runtime-summary" role="status" aria-live="polite">
+                <div class="flex items-center justify-between gap-3 text-xs font-medium">
+                  <span>Telegram setup</span>
+                  <span class="badge" :class="{ muted: !telegramForm.enabled || telegramSetupIssues.length }">{{ !telegramForm.enabled ? 'Disabled' : telegramSetupIssues.length ? 'Action needed' : 'Ready to save' }}</span>
+                </div>
+                <p v-if="!telegramForm.enabled" class="mt-2 text-[11px] leading-5 text-muted">Enable the bot to edit its token, access list, proxy route, notifications, and privacy settings.</p>
+                <ul v-else-if="telegramSetupIssues.length" class="mt-2 space-y-1 text-[11px] leading-5 text-amber-500">
+                  <li v-for="issue in telegramSetupIssues" :key="issue" class="flex items-start gap-2"><TriangleAlert class="mt-0.5 shrink-0" :size="13" />{{ issue }}</li>
+                </ul>
+                <p v-else class="mt-2 text-[11px] leading-5 text-emerald-500">Required settings are complete. Save to apply the Telegram configuration.</p>
               </div>
-              <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>I understand that submitted URLs, titles, commands, Telegram identifiers, and status messages pass through Telegram's service. Fetch does not upload downloaded media.</span></label>
+
+              <fieldset class="space-y-5 transition-opacity" :class="{ 'opacity-50': !telegramForm.enabled }" :disabled="!telegramForm.enabled">
+                <div class="rounded-xl bg-[var(--app-surface-2)] p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div><div class="text-xs font-medium">Bot token</div><p class="mt-1 text-[11px] text-muted">{{ telegram.value.status.token_configured ? `Configured via ${telegram.value.status.token_source}` : 'Not configured' }}<template v-if="telegram.value.status.bot_username"> · @{{ telegram.value.status.bot_username }}</template><template v-if="telegram.value.status.last_success_at"> · Last contact {{ new Date(telegram.value.status.last_success_at).toLocaleString() }}</template></p></div>
+                    <button v-if="telegram.value.status.token_configured && telegram.value.status.token_source === 'native'" class="icon-btn" type="button" aria-label="Remove Telegram token" :disabled="telegram.saving" @click="telegram.removeToken"><Trash2 :size="15" /></button>
+                  </div>
+                  <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <label class="field min-w-0 flex-1">
+                      <span class="sr-only">New bot token</span>
+                      <span class="relative block">
+                        <input v-model="telegramToken" class="input pr-12 font-mono text-xs" :type="telegramTokenVisible ? 'text' : 'password'" autocomplete="new-password" :placeholder="telegram.value.status.token_configured ? 'Enter a new token to replace the saved token' : 'Paste a BotFather token'" :disabled="telegram.value.status.token_source === 'environment'" />
+                        <button class="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted hover:text-app-text disabled:opacity-40" type="button" :aria-label="telegramTokenVisible ? 'Hide bot token' : 'Show bot token'" :disabled="!telegramToken || telegram.value.status.token_source === 'environment'" @click="telegramTokenVisible = !telegramTokenVisible">
+                          <EyeOff v-if="telegramTokenVisible" :size="16" /><Eye v-else :size="16" />
+                        </button>
+                      </span>
+                    </label>
+                    <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegramToken.trim() || telegram.value.status.token_source === 'environment'" @click="saveTelegramToken"><KeyRound :size="14" />Save token</button>
+                    <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegram.value.status.token_configured" @click="telegram.test">Test connection</button>
+                  </div>
+                  <p class="mt-2 text-[11px] leading-5 text-muted">The eye reveals only the token currently typed here. For safety, a saved token cannot be read back from Fetch.</p>
+                  <p v-if="telegram.value.status.token_source === 'environment'" class="mt-2 text-[11px] leading-5 text-muted">The environment token overrides the native credential store and must be changed outside this page.</p>
+                </div>
+
+                <div class="info-panel"><Bot :size="18" class="shrink-0" /><span>Create a bot with Telegram's <a class="underline" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>, save its token here, and enter the numeric IDs of the private accounts you trust. Telegram usernames are not accepted because they can change.</span></div>
+                <label class="field"><span>Allowed Telegram user IDs, one per line</span><textarea v-model="telegramUsers" class="input min-h-28 resize-y font-mono text-xs" inputmode="numeric" spellcheck="false" placeholder="123456789"></textarea><small>Only matching private chats are accepted. Group chats and every other user are silently ignored.</small></label>
+                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3">
+                  <span><span class="setting-title">Use Fetch proxy</span><span class="setting-help">Use the proxy configured under Network. When off, Telegram connects directly.</span></span>
+                  <input v-model="telegramForm.use_proxy" type="checkbox" />
+                </label>
+                <div>
+                  <div class="mb-2 text-xs font-medium">Notifications</div>
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Queued</span><input v-model="telegramForm.notify_queued" type="checkbox" /></label>
+                    <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Completed</span><input v-model="telegramForm.notify_completed" type="checkbox" /></label>
+                    <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Failed / stopped</span><input v-model="telegramForm.notify_failed" type="checkbox" /></label>
+                  </div>
+                </div>
+                <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>I understand that submitted URLs, titles, commands, Telegram identifiers, and status messages pass through Telegram's service. Fetch does not upload downloaded media.</span></label>
+              </fieldset>
               <div v-if="telegram.value.status.error" class="warning-panel"><TriangleAlert :size="18" class="shrink-0" /><span>{{ telegram.value.status.error }}</span></div>
               <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
                 <span class="text-xs" aria-live="polite"><span v-if="telegram.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Telegram updated</span></span>
-                <button class="primary-btn" type="button" :disabled="telegram.saving" @click="saveTelegramSettings">{{ telegram.saving ? 'Saving…' : 'Save Telegram settings' }}</button>
+                <button class="primary-btn" type="button" :disabled="telegram.saving || (telegramForm.enabled && telegramSetupIssues.length > 0)" @click="saveTelegramSettings">{{ telegram.saving ? 'Saving…' : 'Save Telegram settings' }}</button>
               </div>
             </div>
           </div>

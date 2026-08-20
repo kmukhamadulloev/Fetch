@@ -12,11 +12,12 @@ Fetch will provide one host-managed outbound route for yt-dlp operations:
 - `direct`: pass an explicit empty `--proxy` value so yt-dlp connects directly;
 - `custom`: pass a validated HTTP, HTTPS, SOCKS4, or SOCKS5 proxy URL.
 
-The selected route applies to media and playlist analysis, each yt-dlp download
-process when it is spawned, and all Telegram Bot API traffic. Changing it does
-not interrupt an active download; queued work uses the latest setting. An
-enabled Telegram poller cancels its current request and reconnects immediately
-through the new route.
+The selected route applies to media and playlist analysis and each yt-dlp
+download process when it is spawned. Telegram Bot API traffic can opt into it
+with its integration setting and is explicitly direct otherwise. Changing the
+route does not interrupt an active download; queued work uses the latest
+setting. An opted-in Telegram poller cancels its current request and reconnects
+immediately through the new route.
 
 The proxy does not route Fetch's Axum listener, browser-to-Fetch traffic, file
 streaming over the LAN, browser navigation, or managed runtime downloads.
@@ -98,8 +99,8 @@ Add an **Outbound connections** card to Settings → Network:
 - a proxy URL input shown only for Custom proxy;
 - supported-scheme and unauthenticated-only guidance;
 - saved/error feedback consistent with existing settings;
-- explanatory text that active downloads are not restarted and Telegram
-  reconnects;
+- explanatory text that active downloads are not restarted and opted-in
+  Telegram reconnects;
 - a disabled host-only state on LAN devices.
 
 Do not imply that the proxy protects or exposes the Fetch web interface. Do
@@ -118,8 +119,8 @@ not display the configured endpoint to a LAN client.
   retained diagnostics, or API errors.
 - [x] PASS — Changing the setting affects queued/new processes and does not terminate an
   active download.
-- [x] PASS — Telegram tests, polling, replies, and notifications use the shared
-  route, and live polling reconnects when it changes.
+- [x] PASS — Telegram is direct by default; when opted in, tests, polling,
+  replies, and notifications use the shared route and reconnect on changes.
 - [x] PASS — Desktop and mobile UI clearly represent all modes, validation failures, and
   the LAN-disabled state.
 - [x] PASS — The local server, LAN file transfer, and managed runtime installation remain

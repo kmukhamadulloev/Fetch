@@ -785,6 +785,7 @@ mod tests {
 
         let settings = TelegramSettings {
             enabled: true,
+            use_proxy: true,
             allowed_user_ids: vec![42],
             privacy_acknowledged: true,
             ..TelegramSettings::default()

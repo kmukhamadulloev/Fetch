@@ -27,7 +27,7 @@ async function mockApi(
   let completed = [...completedFixture]
   let proxy: ProxySettings = { mode: 'system', url: null }
   let telegram: TelegramIntegration = {
-    settings: { enabled: false, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
+    settings: { enabled: false, use_proxy: false, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
     status: { state: 'disabled', token_configured: false, token_source: 'missing', bot_username: null, last_success_at: null, error: null },
   }
   await page.route('**/*', async (route) => {
@@ -179,7 +179,7 @@ test('host can hot-apply the shared outbound proxy', async ({ page }) => {
   await page.getByRole('button', { name: 'Save proxy' }).click()
   expect((await save).postDataJSON()).toEqual({ mode: 'custom', url: 'socks5://127.0.0.1:1080' })
   await expect(page.getByText('Proxy saved')).toBeVisible()
-  await expect(page.getByText('Telegram reconnect using the saved mode')).toBeVisible()
+  await expect(page.getByText('opted-in Telegram reconnect using the saved mode')).toBeVisible()
 })
 
 test('LAN clients cannot read or change the host proxy endpoint', async ({ page }) => {
@@ -198,8 +198,17 @@ test('host can configure Telegram without the token appearing in responses or th
   await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
   await page.goto('/settings#integrations')
   await expect(page.getByRole('heading', { name: 'Telegram bot' })).toBeVisible()
-  const tokenInput = page.getByPlaceholder('Paste a BotFather token')
+  const tokenInput = page.getByLabel('New bot token')
+  await expect(tokenInput).toBeDisabled()
+  await expect(page.getByText('Disabled', { exact: true })).toBeVisible()
+  await page.getByLabel('Enable Telegram bot').check()
+  await expect(page.getByText('Action needed')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeDisabled()
   await tokenInput.fill('123456:fixture-secret')
+  await page.getByRole('button', { name: 'Show bot token' }).click()
+  await expect(tokenInput).toHaveAttribute('type', 'text')
+  await page.getByRole('button', { name: 'Hide bot token' }).click()
+  await expect(tokenInput).toHaveAttribute('type', 'password')
   const tokenSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/token' && request.method() === 'PUT')
   await page.getByRole('button', { name: 'Save token' }).click()
   expect((await tokenSave).postDataJSON()).toEqual({ token: '123456:fixture-secret' })
@@ -207,11 +216,13 @@ test('host can configure Telegram without the token appearing in responses or th
   await expect(page.getByText('Configured via native')).toBeVisible()
 
   await page.getByLabel('Allowed Telegram user IDs, one per line').fill('123456789')
+  await page.getByLabel('Use Fetch proxy').check()
   await page.getByText('I understand that submitted URLs').click()
-  await page.getByLabel('Enable Telegram bot').check()
+  await expect(page.getByText('Ready to save')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeEnabled()
   const settingsSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/settings' && request.method() === 'PUT')
   await page.getByRole('button', { name: 'Save Telegram settings' }).click()
-  expect((await settingsSave).postDataJSON().allowed_user_ids).toEqual([123456789])
+  expect((await settingsSave).postDataJSON()).toMatchObject({ enabled: true, use_proxy: true, allowed_user_ids: [123456789] })
   await expect(page.getByText('Telegram updated')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientWidth),

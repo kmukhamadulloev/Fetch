@@ -51,6 +51,8 @@ pub struct TelegramSettings {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default)]
+    pub use_proxy: bool,
+    #[serde(default)]
     pub allowed_user_ids: Vec<i64>,
     #[serde(default = "default_true")]
     pub notify_queued: bool,
@@ -66,6 +68,7 @@ impl Default for TelegramSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            use_proxy: false,
             allowed_user_ids: Vec::new(),
             notify_queued: true,
             notify_completed: true,
@@ -103,6 +106,16 @@ impl TelegramSettings {
         if self.enabled && !self.privacy_acknowledged {
             return Err(FetchError::InvalidSettings(
                 "Telegram privacy acknowledgement is required before enabling the bot".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_activation(&self, token_configured: bool) -> Result<(), FetchError> {
+        self.validate()?;
+        if self.enabled && !token_configured {
+            return Err(FetchError::InvalidSettings(
+                "save a Telegram bot token before enabling the integration".into(),
             ));
         }
         Ok(())
@@ -255,6 +268,12 @@ mod tests {
         let settings: TelegramSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(settings, TelegramSettings::default());
         settings.validate().unwrap();
+
+        let previous: TelegramSettings = serde_json::from_str(
+            r#"{"enabled":true,"allowed_user_ids":[42],"privacy_acknowledged":true}"#,
+        )
+        .unwrap();
+        assert!(!previous.use_proxy);
     }
 
     #[test]
@@ -274,6 +293,19 @@ mod tests {
             ..TelegramSettings::default()
         };
         assert!(missing_acknowledgement.validate().is_err());
+    }
+
+    #[test]
+    fn enabled_settings_require_a_saved_token_at_activation() {
+        let settings = TelegramSettings {
+            enabled: true,
+            allowed_user_ids: vec![42],
+            privacy_acknowledged: true,
+            ..TelegramSettings::default()
+        };
+
+        assert!(settings.validate_activation(false).is_err());
+        settings.validate_activation(true).unwrap();
     }
 
     #[test]

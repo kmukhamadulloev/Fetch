@@ -115,8 +115,8 @@ Sections:
 
 Network includes bind address, port, allowed networks, current URLs and no-auth warning.
 On the Fetch host it also provides System default, Direct connection, and
-Custom proxy modes for outbound yt-dlp and Telegram traffic. Custom mode accepts
-a validated unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 URL. LAN clients see only
+Custom proxy modes for outbound yt-dlp traffic and opt-in Telegram traffic.
+Custom mode accepts a validated unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 URL. LAN clients see only
 a host-only explanation and never request or display the endpoint. Proxy saves
 have independent progress, success, validation-error, and retry states.
 Download directory, concurrency, and allowed networks apply without restarting.
@@ -131,9 +131,12 @@ applies to analysis and queued/new downloads without interrupting active work.
 
 The 0.1.4 Integrations section contains the optional Telegram bot card
 defined in `TELEGRAM.md`. Configuration is host-only; remote LAN browsers see
-an explanation rather than requesting integration state. The token is
-write-only, connection testing has independent progress/error feedback, and
-the card remains contained in the mobile settings layout. While visible, it
+an explanation rather than requesting integration state. Enable is the first
+control and gates every dependent field. A `runtime-summary` readiness panel
+lists missing token, allowlist, and privacy requirements. The token is
+write-only; an eye control reveals only the currently typed unsaved value.
+Connection testing has independent progress/error feedback, and the card
+remains contained in the mobile settings layout. While visible, it
 receives live connection state through the shared host-only SSE stream without
 polling the settings endpoint or replacing unsaved form edits.
 

@@ -195,7 +195,8 @@ paths:
   /api/proxy:
     get:
       description: >-
-        Read shared outbound yt-dlp and Telegram proxy settings from the Fetch host
+        Read outbound proxy settings available to yt-dlp and opt-in Telegram
+        traffic from the Fetch host
       responses:
         '200':
           description: Proxy settings
@@ -205,8 +206,8 @@ paths:
         '403': {$ref: '#/components/responses/Error'}
     put:
       description: >-
-        Validate, persist, and hot-apply shared outbound yt-dlp and Telegram
-        proxy settings on the Fetch host
+        Validate, persist, and hot-apply outbound proxy settings available to
+        yt-dlp and opt-in Telegram traffic on the Fetch host
       requestBody:
         required: true
         content:
@@ -553,9 +554,10 @@ components:
     TelegramSettings:
       type: object
       additionalProperties: false
-      required: [enabled, allowed_user_ids, notify_queued, notify_completed, notify_failed, privacy_acknowledged]
+      required: [enabled, use_proxy, allowed_user_ids, notify_queued, notify_completed, notify_failed, privacy_acknowledged]
       properties:
         enabled: {type: boolean, default: false}
+        use_proxy: {type: boolean, default: false}
         allowed_user_ids:
           type: array
           maxItems: 64

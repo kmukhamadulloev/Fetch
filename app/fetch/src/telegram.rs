@@ -9,9 +9,9 @@ use chrono::Utc;
 use fetch_core::{
     AppStatus, ApplicationEvent, DownloadMode, DownloadOperations, DownloadRequest, DownloadStatus,
     EventBus, FetchError, MediaAnalysis, MediaKind, PlaylistContext, ProxyMode, ProxyPolicy,
-    TelegramConnectionState, TelegramIdentity, TelegramIntegration, TelegramJobOwner,
-    TelegramOperations, TelegramPendingAction, TelegramPendingStage, TelegramSecretStore,
-    TelegramSettings, TelegramStatus, TelegramToken, TelegramTokenSource,
+    ProxySettings, TelegramConnectionState, TelegramIdentity, TelegramIntegration,
+    TelegramJobOwner, TelegramOperations, TelegramPendingAction, TelegramPendingStage,
+    TelegramSecretStore, TelegramSettings, TelegramStatus, TelegramToken, TelegramTokenSource,
 };
 use fetch_storage::Storage;
 use fetch_telegram::{
@@ -217,7 +217,7 @@ impl TelegramBotManager {
             .await;
             return;
         };
-        let proxy_mode = proxy_mode_name(self.inner.proxy.current().mode);
+        let proxy_mode = proxy_mode_name(telegram_proxy(&self.inner, &settings).mode);
         tracing::info!(
             subsystem = "telegram",
             proxy_mode,
@@ -308,7 +308,8 @@ impl TelegramOperations for TelegramBotManager {
         &self,
         settings: TelegramSettings,
     ) -> Result<TelegramIntegration, FetchError> {
-        settings.validate()?;
+        let token_configured = !settings.enabled || self.effective_token().await?.0.is_some();
+        settings.validate_activation(token_configured)?;
         self.inner
             .storage
             .save_telegram_settings(&settings)
@@ -369,7 +370,13 @@ impl TelegramOperations for TelegramBotManager {
         let token = token.ok_or_else(|| {
             FetchError::InvalidSettings("Add a Telegram bot token before testing".into())
         })?;
-        let proxy = self.inner.proxy.current();
+        let settings = self
+            .inner
+            .storage
+            .load_telegram_settings()
+            .await
+            .map_err(storage_error)?;
+        let proxy = telegram_proxy(&self.inner, &settings);
         let proxy_mode = proxy_mode_name(proxy.mode);
         tracing::info!(
             subsystem = "telegram",
@@ -427,14 +434,7 @@ impl TelegramOperations for TelegramBotManager {
                 return Err(FetchError::InvalidSettings(error.to_string()));
             }
         }
-        if self
-            .inner
-            .storage
-            .load_telegram_settings()
-            .await
-            .map_err(storage_error)?
-            .enabled
-        {
+        if settings.enabled {
             self.restart_poller().await;
         }
         self.get_integration().await
@@ -478,7 +478,7 @@ async fn run_poller(
 ) {
     let mut proxy_updates = inner.proxy.subscribe();
     loop {
-        let proxy = proxy_updates.borrow_and_update().clone();
+        let proxy = telegram_proxy(&inner, &settings);
         let proxy_mode = proxy_mode_name(proxy.mode);
         let client = match BotApiClient::new(token.clone(), &proxy) {
             Ok(client) => client,
@@ -489,7 +489,7 @@ async fn run_poller(
         };
         let identity = tokio::select! {
             _ = cancellation.cancelled() => return,
-            changed = proxy_updates.changed() => {
+            changed = proxy_updates.changed(), if settings.use_proxy => {
                 if changed.is_err() {
                     return;
                 }
@@ -543,7 +543,7 @@ async fn run_poller(
             };
             let poll_result = tokio::select! {
                 _ = cancellation.cancelled() => return,
-                changed = proxy_updates.changed() => {
+                changed = proxy_updates.changed(), if settings.use_proxy => {
                     if changed.is_err() {
                         return;
                     }
@@ -643,7 +643,7 @@ async fn run_poller(
                     .await;
                     let proxy_changed = tokio::select! {
                         _ = cancellation.cancelled() => return,
-                        changed = proxy_updates.changed() => {
+                        changed = proxy_updates.changed(), if settings.use_proxy => {
                             if changed.is_err() {
                                 return;
                             }
@@ -1178,7 +1178,14 @@ async fn run_notifications(inner: Arc<ManagerInner>, cancellation: CancellationT
         let Ok((Some(token), _)) = effective_token_for(&inner.secrets).await else {
             continue;
         };
-        let proxy = inner.proxy.current();
+        let settings = match inner.storage.load_telegram_settings().await {
+            Ok(settings) => settings,
+            Err(error) => {
+                tracing::warn!(subsystem = "telegram", %error, "could not load Telegram notification settings");
+                continue;
+            }
+        };
+        let proxy = telegram_proxy(&inner, &settings);
         let proxy_mode = proxy_mode_name(proxy.mode);
         let client = match BotApiClient::new(token, &proxy) {
             Ok(client) => client,
@@ -1218,6 +1225,17 @@ fn proxy_mode_name(mode: ProxyMode) -> &'static str {
         ProxyMode::System => "system",
         ProxyMode::Direct => "direct",
         ProxyMode::Custom => "custom",
+    }
+}
+
+fn telegram_proxy(inner: &ManagerInner, settings: &TelegramSettings) -> ProxySettings {
+    if settings.use_proxy {
+        inner.proxy.current()
+    } else {
+        ProxySettings {
+            mode: ProxyMode::Direct,
+            url: None,
+        }
     }
 }
 
@@ -1588,6 +1606,31 @@ mod tests {
                 && entry.details.as_deref() == Some("proxy_mode: custom")
         }));
         assert!(!format!("{logs:?}").contains("private.proxy"));
+    }
+
+    #[tokio::test]
+    async fn telegram_proxy_is_explicitly_opt_in() {
+        let (inner, _) = test_inner().await;
+        let custom = fetch_core::ProxySettings {
+            mode: ProxyMode::Custom,
+            url: Some("http://private.proxy:8080".into()),
+        };
+        inner.proxy.replace(custom.clone()).unwrap();
+
+        assert_eq!(
+            telegram_proxy(&inner, &TelegramSettings::default()).mode,
+            ProxyMode::Direct
+        );
+        assert_eq!(
+            telegram_proxy(
+                &inner,
+                &TelegramSettings {
+                    use_proxy: true,
+                    ..TelegramSettings::default()
+                }
+            ),
+            custom
+        );
     }
 
     fn callback_update(update_id: i64, user_id: i64, data: String) -> Update {

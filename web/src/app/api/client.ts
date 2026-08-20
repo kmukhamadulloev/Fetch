@@ -137,6 +137,7 @@ export interface ProxySettings {
 }
 export interface TelegramSettings {
   enabled: boolean
+  use_proxy: boolean
   allowed_user_ids: number[]
   notify_queued: boolean
   notify_completed: boolean

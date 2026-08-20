@@ -41,6 +41,7 @@ const fixtureFile: CompletedFile = {
 const fixtureTelegram: TelegramIntegration = {
   settings: {
     enabled: true,
+    use_proxy: true,
     allowed_user_ids: [123],
     notify_queued: false,
     notify_completed: true,

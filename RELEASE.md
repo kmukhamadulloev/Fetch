@@ -16,8 +16,10 @@ developer-visible behavior, compatibility, and release operations.
   lifecycle, redacted diagnostics, and host-only responsive setup controls.
 - Streamed Telegram connection status to host settings without periodic API
   polling or form/UI reloads.
-- Routed Telegram Bot API traffic through the shared proxy policy with live
-  reconnects, bounded connection tests, and redacted lifecycle diagnostics.
+- Added opt-in shared proxy routing for Telegram with direct-by-default
+  behavior, live reconnects, bounded tests, and redacted diagnostics.
+- Reworked Telegram setup with enable-gated fields, readiness warnings, and a
+  safe show/hide control for newly entered tokens.
 
 ## 0.1.3 — 2026-08-18
 
