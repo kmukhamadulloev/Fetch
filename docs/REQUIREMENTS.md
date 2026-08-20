@@ -106,6 +106,15 @@ unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 proxy modes. It does not proxy the
 Fetch listener, LAN file traffic, or managed runtime installation. See
 `PROXY.md` for the implementation and security contract.
 
+## Optional Telegram integration
+
+Fetch 0.1.4 may use Telegram's Bot API as an explicitly configured outbound
+remote-control integration. It remains disabled by default, uses long polling
+instead of a webhook, accepts commands only from allowlisted users in private
+chats, and reuses core analysis/download services. It must not expose the Fetch
+listener, upload completed media, accept arbitrary yt-dlp arguments, or make
+local operation depend on Telegram. See `TELEGRAM.md`.
+
 ## Logs
 - application logs;
 - yt-dlp stdout/stderr;

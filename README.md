@@ -184,6 +184,7 @@ See [Security](docs/SECURITY.md) before enabling LAN access.
 - [API and SSE events](docs/API.md)
 - [Download engine](docs/DOWNLOAD_ENGINE.md)
 - [Runtime management](docs/RUNTIME.md)
+- [Telegram 0.1.4 development plan](docs/TELEGRAM.md)
 - [Testing](docs/TESTING.md)
 - [Roadmap](ROADMAP.md)
 - [Release history](RELEASE.md)

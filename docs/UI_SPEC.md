@@ -110,6 +110,7 @@ Sections:
 - Downloads
 - Network
 - Runtime
+- Integrations (0.1.4)
 - Advanced
 
 Network includes bind address, port, allowed networks, current URLs and no-auth warning.
@@ -127,6 +128,12 @@ It also includes a JavaScript-runtime selector with Automatic, Deno, Node,
 QuickJS, and Disabled modes, plus detected/not-found state and versions for the
 host executables. Missing explicit selections are called out inline. Saving
 applies to analysis and queued/new downloads without interrupting active work.
+
+The planned 0.1.4 Integrations section contains the optional Telegram bot card
+defined in `TELEGRAM.md`. Configuration is host-only; remote LAN browsers see
+an explanation rather than requesting integration state. The token is
+write-only, connection testing has independent progress/error feedback, and
+the card remains contained in the mobile settings layout.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.

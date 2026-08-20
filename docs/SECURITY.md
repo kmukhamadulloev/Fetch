@@ -30,6 +30,24 @@ or normal diagnostics. The initial scope rejects embedded credentials because
 command arguments, process listings, persistence, and subprocess output are
 not suitable secret stores. See `PROXY.md` for the complete boundary.
 
+## Telegram integration security
+
+Telegram bot support is an explicit optional exception to the normal
+no-external-service boundary. It is disabled by default and uses outbound long
+polling, so it does not expose Axum, add a public port, or configure a tunnel.
+
+The token is write-only, stored in a native secret store or supplied by the
+`FETCH_TELEGRAM_BOT_TOKEN` environment variable, and never stored in SQLite or
+returned through APIs, logs, diagnostics, SSE, or command arguments. Only a
+host browser may configure or test the integration.
+
+Bot commands are accepted only from explicitly allowlisted Telegram users in
+private chats. Authorization precedes parsing or retaining message content.
+Opaque expiring single-use callbacks and persisted update deduplication prevent
+replay and duplicate downloads. Fetch sends status metadata to Telegram but
+does not upload completed media, raw diagnostics, filesystem paths, or LAN
+URLs. See `TELEGRAM.md` for the complete privacy and threat boundary.
+
 ## Filesystem
 File and thumbnail endpoints use opaque stored IDs, not arbitrary paths.
 Validate output directories independently. Playlist titles and IDs are

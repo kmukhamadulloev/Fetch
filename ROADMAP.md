@@ -74,17 +74,6 @@ The approved design and acceptance details are in `docs/PROXY.md`.
 - [x] Cover runtime fallback, retained diagnostics, and log filtering with
   backend, frontend, and browser regression tests.
 
-### JavaScript runtime compatibility
-
-- [x] Add a persisted typed yt-dlp JavaScript-runtime policy with automatic,
-  Deno, Node, QuickJS, and disabled modes.
-- [x] Hot-apply the policy to analysis and newly spawned downloads while
-  leaving active downloads unchanged.
-- [x] Discover supported host runtimes and show actionable availability and
-  version information in responsive Runtime settings.
-- [x] Cover argument construction, persistence, discovery, API behavior, and
-  desktop/mobile controls with automated tests and documentation.
-
 ### 0.1.3 release gates
 
 - [x] Pass formatting, linting, Rust/frontend tests, production builds, and
@@ -94,6 +83,85 @@ The approved design and acceptance details are in `docs/PROXY.md`.
   macOS x86_64/arm64, and Windows x86_64.
 - [ ] Confirm interactive tray creation, actions, system-start registration,
   and graceful Quit on supported Windows, macOS, and Linux desktops.
+
+## 0.1.4 — In development
+
+Objective: improve extractor compatibility and add an optional, tightly scoped
+Telegram remote-control surface without exposing Fetch's local HTTP server or
+turning Fetch into a hosted service.
+
+### JavaScript runtime compatibility
+
+- [x] Add a persisted typed yt-dlp JavaScript-runtime policy with Automatic,
+  Deno, Node, QuickJS, and Disabled modes.
+- [x] Hot-apply the policy to analysis and newly spawned downloads while
+  leaving active downloads unchanged.
+- [x] Discover supported host runtimes and show actionable availability and
+  version information in responsive Runtime settings.
+- [x] Cover argument construction, persistence, discovery, API behavior, and
+  desktop/mobile controls with automated tests and documentation.
+- [ ] Align 0.1.4 package metadata and release notes after the 0.1.3 release
+  baseline is finalized.
+
+### Telegram bot foundation
+
+- [ ] Add typed Telegram settings, status, authorization, pending-action, and
+  job-notification domain models without coupling `fetch-core` to HTTP.
+- [ ] Add SQLite migrations for non-secret integration settings, polling
+  offset, expiring analysis confirmations, and job notification ownership.
+- [ ] Add a secret-store abstraction: native OS credential storage for
+  host-entered tokens and a `FETCH_TELEGRAM_BOT_TOKEN` override for headless
+  operation. Never store tokens in SQLite or return them through the API.
+- [ ] Add a Rust-only `fetch-telegram` adapter with typed Bot API requests,
+  outbound long polling, bounded timeouts, cancellation, rate-limit handling,
+  redaction, and exponential backoff with jitter.
+- [ ] Start, stop, and hot-reconfigure one bot manager from `app/fetch`; bot
+  failure must not affect the HTTP server, downloads, tray, or shutdown.
+
+### Telegram command flow
+
+- [ ] Restrict 0.1.4 to allowlisted Telegram user IDs in private chats; ignore
+  unauthorized updates without revealing application state.
+- [ ] Support `/start`, `/help`, `/status`, and `/downloads` with concise,
+  rate-limited responses.
+- [ ] Treat a plain URL message as an analysis request, then present expiring,
+  single-use **Download video**, **Download audio**, and **Cancel** actions.
+- [ ] Require an explicit second confirmation before queueing every item in a
+  playlist and show the item count before acceptance.
+- [ ] Reuse DownloadManager defaults and expose Stop actions for jobs owned by
+  the requesting Telegram user; never accept arbitrary yt-dlp arguments.
+- [ ] Send queued, completed, failed, and stopped notifications without noisy
+  per-progress-message updates or uploading completed media to Telegram.
+- [ ] Persist update offsets and command/job correlations so polling retries or
+  process restarts cannot create duplicate downloads.
+
+### Telegram settings and observability
+
+- [ ] Add a host-only Integrations settings section for enable/disable, a
+  write-only token, allowed user IDs, notification preferences, Test
+  connection, bot identity, polling state, last success, and actionable error.
+- [ ] Keep LAN clients from reading or changing integration configuration;
+  display only a host-only explanation to remote browsers.
+- [ ] Retain redacted lifecycle and command-result diagnostics without message
+  bodies, submitted URLs, tokens, or full Telegram identifiers.
+- [ ] Document data sent to Telegram and require explicit host acknowledgement
+  before the integration can be enabled.
+
+### 0.1.4 verification and release gates
+
+- [ ] Cover Bot API parsing, authorization, replay/idempotency, persistence,
+  secret redaction, backoff, rate limits, cancellation, and service reuse with
+  deterministic Rust tests against a fake local Telegram server.
+- [ ] Cover host/remote settings, token write-only behavior, connection states,
+  URL confirmation, playlist confirmation, Stop, and terminal notifications in
+  desktop/mobile frontend and browser tests.
+- [ ] Keep live Telegram testing opt-in and secret-backed; normal CI and release
+  acceptance must not require a real bot token or external Telegram access.
+- [ ] Pass the full Rust/frontend/browser suite, cross-platform native archive
+  matrix, and interactive tray/startup gates before publishing 0.1.4.
+
+The approved behavior, architecture, privacy boundary, milestones, and
+acceptance criteria are in `docs/TELEGRAM.md`.
 
 ## Candidate ideas
 
@@ -105,6 +173,7 @@ implementation:
 - Authenticated proxy credentials using native operating-system secret storage.
 - Named proxy profiles and per-download proxy selection.
 - Optional proxy routing for managed runtime downloads.
+- Telegram proxy routing and multiple named bot profiles.
 - Code signing and notarization for native release artifacts.
 
 ## Deferred or out of scope

@@ -13,9 +13,6 @@ developer-visible behavior, compatibility, and release operations.
 - Kept verified runtimes ready when automatic provider updates fail.
 - Bounded runtime provider requests and retained actionable operation details.
 - Added responsive severity filters, counts, and collapsible details to Logs.
-- Added automatic and explicit yt-dlp JavaScript-runtime controls.
-- Added Deno, Node, and QuickJS host discovery with version/status feedback.
-- Hot-applied JavaScript-runtime changes to analysis and queued/new downloads.
 
 ## 0.1.2
 

@@ -14,6 +14,7 @@ Desktop Browser / Phone / Tablet
 │ ├── fetch-core                  │
 │ ├── Download Manager            │
 │ ├── Runtime Manager             │
+│ ├── optional Telegram poller    │
 │ ├── SQLite                      │
 │ ├── yt-dlp                      │
 │ ├── FFmpeg / FFprobe            │
@@ -66,6 +67,13 @@ Owns:
 - completed-file thumbnail references;
 - runtime metadata repository if useful.
 
+### fetch-telegram
+
+Owns the optional Telegram Bot API transport, typed update/message/callback
+serialization, long polling, timeout/rate-limit mapping, and token redaction.
+It does not depend on Axum, SQLite, yt-dlp, or Vue and contains no download
+policy.
+
 ### fetch-server
 Owns:
 - Axum router;
@@ -87,6 +95,12 @@ Composition root:
 - Axum startup;
 - optional default-browser opening;
 - platform tray and per-user startup-registration adapters.
+
+The composition root also owns the optional `TelegramBotManager`. It authorizes
+updates and calls the same media-analysis and download application services as
+the web interface. It never invokes HTTP routes or processes directly. Its
+poller is independently cancellable and cannot make server startup or shutdown
+depend on Telegram availability. See `TELEGRAM.md`.
 
 The tray is a thin native lifecycle adapter, not a second frontend. Windows and
 macOS use their native tray APIs through `tray-icon`; Linux uses the
@@ -176,6 +190,11 @@ allowed clients; deleting a completed file cascades to its progress record.
 The proxy policy is stored separately from LAN-readable application
 settings and is read or changed only through a host-authorized application
 service. See `PROXY.md`.
+
+Telegram configuration, polling offset, pending confirmations, and job
+correlations are stored separately from LAN-readable application settings. The
+bot token is held by a secret-store adapter or a headless environment override,
+never SQLite. Telegram settings application services are host-authorized.
 
 ## Process ownership
 

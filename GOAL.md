@@ -1,24 +1,22 @@
 # Active Goal
 
-Publish the verified Fetch 0.1.3 release described in `ROADMAP.md` and
-`RELEASE.md`:
+Develop Fetch 0.1.4 as described in `ROADMAP.md` and `docs/TELEGRAM.md`:
 
-- add typed, persisted, host-only outbound proxy configuration;
-- hot-apply the selected route to yt-dlp analysis and newly spawned downloads;
-- integrate responsive Network settings without exposing the endpoint to LAN
-  clients or retained diagnostics;
-- validate the Rust, API, frontend, browser, and compatibility paths required
-  by the proxy acceptance criteria;
-- keep `ROADMAP.md`, `RELEASE.md`, `docs/ACCEPTANCE.md`, and `ISSUES.md` aligned
-  with verified behavior.
-- preserve an already healthy managed runtime when an automatic update fails;
-- bound managed-runtime network stalls and retain actionable lifecycle details;
-- add responsive severity filters to the retained Logs interface.
-- explicitly configure yt-dlp JavaScript runtimes, automatically use supported
-  host installations such as Node, and expose typed hot-reload controls plus
-  availability diagnostics in Settings;
-- pass the automated native archive matrix and retain its artifacts;
-- complete the documented interactive native tray release gate;
-- publish the annotated `v0.1.3` tag and generated GitHub release.
+- release the implemented typed JavaScript-runtime controls as part of 0.1.4;
+- add an optional Telegram bot that remotely submits and controls downloads
+  without exposing the Axum server to the public internet;
+- keep the bot disabled by default and authorize only explicitly allowlisted
+  Telegram users in private chats;
+- store the bot token outside SQLite and never return or retain it in APIs,
+  logs, diagnostics, events, or process arguments;
+- use outbound long polling rather than webhooks, public ports, tunnels, or an
+  additional runtime service;
+- reuse Fetch application services for analysis and download operations rather
+  than routing bot commands through HTTP or invoking processes directly;
+- provide host-only responsive integration settings, actionable connection
+  state, bounded retries, persistence, tests, and documentation;
+- preserve Fetch's local-first operation when Telegram is disabled or
+  unavailable.
 
-Do not regress the mandatory architecture or introduce a forbidden component.
+Do not upload completed media to Telegram in 0.1.4, introduce user accounts, or
+regress the mandatory architecture.
