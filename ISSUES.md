@@ -46,6 +46,31 @@ event through the existing realtime coordinator. The UI updates only the status
 object, and the server filters this host-only integration event out of LAN SSE
 streams. The recurring timer and configuration request were removed.
 
+## BUG-024 — Telegram bypasses the configured outbound proxy
+
+Status: RESOLVED
+
+Affected:
+- fetch-core
+- fetch-telegram
+- app/fetch
+- web
+
+Expected: Telegram Bot API calls use the same host-managed System, Direct, or
+Custom route as other outbound Fetch work, connection tests return before the
+frontend deadline, and failures leave actionable redacted diagnostics.
+
+Actual: The Telegram HTTP client forced `no_proxy()`, so networks requiring a
+proxy could not reach Telegram. The frontend aborted Test connection after ten
+seconds, before the backend request timeout, and no attempt/success record was
+written to retained logs.
+
+Resolution: The typed Telegram transport now consumes the shared proxy policy,
+including HTTP, HTTPS, SOCKS4, SOCKS5, system discovery, and explicit direct
+mode. Active polling watches policy changes and reconnects immediately. Test
+connection completes within eight seconds and lifecycle logs retain only proxy
+mode, generic errors, and retry delays—never tokens or proxy endpoints.
+
 ## BUG-022 — Installed JavaScript runtimes are not enabled for yt-dlp
 
 Status: RESOLVED

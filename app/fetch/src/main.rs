@@ -126,6 +126,7 @@ async fn run_fetch(
         downloads.clone(),
         events.clone(),
         status.clone(),
+        proxy_policy.clone(),
     ));
     telegram.start().await;
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;

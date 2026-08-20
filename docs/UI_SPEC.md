@@ -115,10 +115,10 @@ Sections:
 
 Network includes bind address, port, allowed networks, current URLs and no-auth warning.
 On the Fetch host it also provides System default, Direct connection, and
-Custom proxy modes for outbound yt-dlp traffic. Custom mode accepts a validated
-unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 URL. LAN clients see only a host-only
-explanation and never request or display the endpoint. Proxy saves have
-independent progress, success, validation-error, and retry states.
+Custom proxy modes for outbound yt-dlp and Telegram traffic. Custom mode accepts
+a validated unauthenticated HTTP/HTTPS/SOCKS4/SOCKS5 URL. LAN clients see only
+a host-only explanation and never request or display the endpoint. Proxy saves
+have independent progress, success, validation-error, and retry states.
 Download directory, concurrency, and allowed networks apply without restarting.
 Listener changes bind the replacement address before retiring the old listener;
 the current browser tab then replaces its location with the new URL.

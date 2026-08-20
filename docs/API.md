@@ -101,7 +101,8 @@ System and direct modes require a null URL. Custom mode accepts only a validated
 unauthenticated HTTP, HTTPS, SOCKS4, or SOCKS5 endpoint. Both proxy operations
 require a host client; remote allowed clients receive `LOCAL_CLIENT_REQUIRED`.
 Saving hot-applies to analysis and queued/new yt-dlp processes without
-interrupting an active download.
+interrupting an active download. Telegram Bot API tests, polling, replies, and
+notifications use the same route; an active long poll reconnects on changes.
 
 ## Telegram integration
 

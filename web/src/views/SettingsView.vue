@@ -204,8 +204,8 @@ async function saveTelegramToken() {
             <div class="flex items-start gap-3 sm:gap-4">
               <div class="empty-icon shrink-0"><Waypoints :size="18" /></div>
               <div class="min-w-0 flex-1">
-                <h3 id="settings-proxy" class="text-sm font-semibold">Outbound downloads</h3>
-                <p class="mt-1 text-xs leading-5 text-muted">Choose how yt-dlp analyzes media and starts new downloads.</p>
+                <h3 id="settings-proxy" class="text-sm font-semibold">Outbound connections</h3>
+                <p class="mt-1 text-xs leading-5 text-muted">Choose how yt-dlp and the Telegram bot reach internet services.</p>
               </div>
             </div>
             <div v-if="!isHost" class="info-panel mt-5">
@@ -220,7 +220,7 @@ async function saveTelegramToken() {
             <div v-else class="mt-5 space-y-4">
               <label class="field max-w-md">
                 <span>Connection mode</span>
-                <select class="select" :value="proxyForm.mode" aria-label="Download proxy mode" @change="changeProxyMode">
+                <select class="select" :value="proxyForm.mode" aria-label="Outbound proxy mode" @change="changeProxyMode">
                   <option value="system">System default</option>
                   <option value="direct">Direct connection</option>
                   <option value="custom">Custom proxy</option>
@@ -230,7 +230,7 @@ async function saveTelegramToken() {
                 <span>Proxy URL</span>
                 <input v-model="proxyForm.url" class="input font-mono text-xs" type="url" inputmode="url" autocomplete="off" placeholder="socks5://127.0.0.1:1080" aria-describedby="proxy-help" />
               </label>
-              <p id="proxy-help" class="text-[11px] leading-5 text-muted">Supports unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. Active downloads keep their current route; queued and new work use the saved mode.</p>
+              <p id="proxy-help" class="text-[11px] leading-5 text-muted">Supports unauthenticated HTTP, HTTPS, SOCKS4, and SOCKS5 proxies. Active downloads keep their route; queued work and Telegram reconnect using the saved mode.</p>
               <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
                 <span class="text-xs" aria-live="polite"><span v-if="proxy.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Proxy saved</span></span>
                 <button class="secondary-btn" type="button" :disabled="proxy.saving" @click="saveProxy">{{ proxy.saving ? 'Saving…' : 'Save proxy' }}</button>

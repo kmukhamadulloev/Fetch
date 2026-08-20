@@ -1,6 +1,5 @@
-use std::sync::{Arc, RwLock};
-
 use serde::{Deserialize, Serialize};
+use tokio::sync::watch;
 
 use crate::FetchError;
 
@@ -111,31 +110,29 @@ impl ProxySettings {
 
 #[derive(Clone)]
 pub struct ProxyPolicy {
-    current: Arc<RwLock<ProxySettings>>,
+    current: watch::Sender<ProxySettings>,
 }
 
 impl ProxyPolicy {
     pub fn new(settings: ProxySettings) -> Result<Self, FetchError> {
         settings.validate()?;
         Ok(Self {
-            current: Arc::new(RwLock::new(settings)),
+            current: watch::channel(settings).0,
         })
     }
 
     pub fn current(&self) -> ProxySettings {
-        self.current
-            .read()
-            .expect("proxy policy lock is not poisoned")
-            .clone()
+        self.current.borrow().clone()
     }
 
     pub fn replace(&self, settings: ProxySettings) -> Result<(), FetchError> {
         settings.validate()?;
-        *self
-            .current
-            .write()
-            .expect("proxy policy lock is not poisoned") = settings;
+        self.current.send_replace(settings);
         Ok(())
+    }
+
+    pub fn subscribe(&self) -> watch::Receiver<ProxySettings> {
+        self.current.subscribe()
     }
 }
 
@@ -202,12 +199,14 @@ mod tests {
     #[test]
     fn hot_policy_replaces_valid_settings_and_redacts_the_endpoint() {
         let policy = ProxyPolicy::new(ProxySettings::default()).unwrap();
+        let changes = policy.subscribe();
         let custom = ProxySettings {
             mode: ProxyMode::Custom,
             url: Some("http://private.proxy:8080/".into()),
         };
         policy.replace(custom.clone()).unwrap();
         assert_eq!(policy.current(), custom);
+        assert!(changes.has_changed().unwrap());
         assert_eq!(
             custom.redact("failed through http://private.proxy:8080"),
             "failed through <redacted-proxy>"

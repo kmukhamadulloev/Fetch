@@ -33,7 +33,7 @@ Telegram is disabled or unreachable.
 - arbitrary yt-dlp arguments or format IDs;
 - accepting commands in groups, channels, or non-allowlisted private chats;
 - webhooks, public ports, UPnP, tunnels, or a hosted relay;
-- multiple bots, per-user output directories, or Telegram proxy settings.
+- multiple bots or per-user output directories.
 
 ## Architecture
 
@@ -56,6 +56,13 @@ TelegramBotManager (app/fetch)
 `fetch-telegram` owns Bot API JSON, HTTPS transport, update parsing, message and
 callback serialization, timeouts, Telegram error mapping, and redaction. It
 does not know about SQLite, Axum, or yt-dlp.
+
+The adapter consumes Fetch's shared outbound proxy policy. System mode honors
+the host proxy environment, Direct mode disables proxy discovery, and Custom
+mode uses the validated HTTP, HTTPS, SOCKS4, or SOCKS5 endpoint. The active
+poller watches policy changes and reconnects without restarting Fetch. Bot API
+test calls, polling, replies, and terminal notifications all use the same
+current route.
 
 `TelegramBotManager` owns polling lifecycle and product flow. It calls the same
 core analysis and download services used by the web UI; it must not call Fetch
@@ -237,6 +244,10 @@ test artifact into Git.
   request integration secrets or configuration.
 - [x] Timeouts, rate limits, invalid tokens, poller conflicts, network loss, and
   recovery produce actionable redacted state.
+- [x] Connection attempts, results, retry delays, and proxy-route reconnects
+  are retained with proxy mode only; endpoints and tokens are never logged.
+- [x] Shared proxy changes interrupt and reconnect the active long poll, and
+  connection tests finish before the frontend request deadline.
 - [x] Deterministic tests require no Telegram account; live smoke is opt-in and
   secret-backed.
 - [ ] Full local and native release gates pass with documentation aligned.
@@ -245,7 +256,6 @@ test artifact into Git.
 
 - group/channel operation;
 - multiple bot profiles;
-- Telegram-specific or shared proxy routing;
 - uploading or streaming completed files through Telegram;
 - browsing/deleting the Completed library;
 - per-user formats, output roots, history, quotas, or recommendations;

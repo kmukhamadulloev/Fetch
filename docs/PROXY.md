@@ -1,6 +1,7 @@
 # Proxy Support Design
 
-Status: implemented for Fetch 0.1.3.
+Status: implemented for yt-dlp in Fetch 0.1.3 and extended to Telegram in
+Fetch 0.1.4.
 
 ## Scope
 
@@ -11,9 +12,11 @@ Fetch will provide one host-managed outbound route for yt-dlp operations:
 - `direct`: pass an explicit empty `--proxy` value so yt-dlp connects directly;
 - `custom`: pass a validated HTTP, HTTPS, SOCKS4, or SOCKS5 proxy URL.
 
-The selected route applies to media and playlist analysis and to each yt-dlp
-download process when it is spawned. Changing it does not interrupt an active
-process; queued and future work uses the latest saved setting.
+The selected route applies to media and playlist analysis, each yt-dlp download
+process when it is spawned, and all Telegram Bot API traffic. Changing it does
+not interrupt an active download; queued work uses the latest setting. An
+enabled Telegram poller cancels its current request and reconnects immediately
+through the new route.
 
 The proxy does not route Fetch's Axum listener, browser-to-Fetch traffic, file
 streaming over the LAN, browser navigation, or managed runtime downloads.
@@ -49,7 +52,8 @@ available to allowed LAN clients. Existing databases default to `system`.
 Downloads reference the active policy at process-spawn time rather than
 copying the endpoint into job JSON or download history.
 
-A shared proxy-policy provider is composed into the yt-dlp adapter. The
+A shared proxy-policy provider is composed into the yt-dlp and Telegram
+adapters. The
 host-only application service validates and persists a replacement before
 publishing it to that provider. Failed persistence leaves the active policy
 unchanged.
@@ -88,13 +92,14 @@ request in this version.
 
 ## User interface
 
-Add an **Outbound downloads** card to Settings → Network:
+Add an **Outbound connections** card to Settings → Network:
 
 - a mode selector for System default, Direct connection, and Custom proxy;
 - a proxy URL input shown only for Custom proxy;
 - supported-scheme and unauthenticated-only guidance;
 - saved/error feedback consistent with existing settings;
-- explanatory text that active downloads are not restarted;
+- explanatory text that active downloads are not restarted and Telegram
+  reconnects;
 - a disabled host-only state on LAN devices.
 
 Do not imply that the proxy protects or exposes the Fetch web interface. Do
@@ -113,6 +118,8 @@ not display the configured endpoint to a LAN client.
   retained diagnostics, or API errors.
 - [x] PASS — Changing the setting affects queued/new processes and does not terminate an
   active download.
+- [x] PASS — Telegram tests, polling, replies, and notifications use the shared
+  route, and live polling reconnects when it changes.
 - [x] PASS — Desktop and mobile UI clearly represent all modes, validation failures, and
   the LAN-disabled state.
 - [x] PASS — The local server, LAN file transfer, and managed runtime installation remain

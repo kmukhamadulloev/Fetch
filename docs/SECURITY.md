@@ -24,11 +24,12 @@ Never concatenate URL/user input into shell command strings. Use structured proc
 
 ## Outbound proxy security
 
-The proxy policy is host-managed and applies only to yt-dlp analysis and
-downloads. Its endpoint is not exposed to LAN clients, download records, SSE,
-or normal diagnostics. The initial scope rejects embedded credentials because
-command arguments, process listings, persistence, and subprocess output are
-not suitable secret stores. See `PROXY.md` for the complete boundary.
+The proxy policy is host-managed and applies to yt-dlp analysis/downloads and
+Telegram Bot API traffic. Its endpoint is not exposed to LAN clients, download
+records, SSE, or normal diagnostics. The initial scope rejects embedded
+credentials because command arguments, process listings, persistence, and
+subprocess output are not suitable secret stores. See `PROXY.md` for the
+complete boundary.
 
 ## Telegram integration security
 

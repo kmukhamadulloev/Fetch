@@ -48,7 +48,7 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
 - Optionally start Fetch in the tray when the current operating-system user
   signs in, without forcing a browser window open.
 - Bind locally or to a trusted LAN with a CIDR allow-list.
-- Route yt-dlp analysis and downloads through a host-managed HTTP, HTTPS,
+- Route yt-dlp and Telegram Bot API traffic through a host-managed HTTP, HTTPS,
   SOCKS4, or SOCKS5 proxy without exposing its endpoint to LAN clients.
 - Optionally queue and stop downloads from allowlisted private Telegram chats
   through outbound-only long polling, without uploading completed media.
@@ -160,8 +160,8 @@ new address; an unavailable replacement leaves the existing listener active.
 Start-with-system registration applies immediately on the host and launches
 Fetch in background mode. Use `--no-tray` for terminal-only or headless runs.
 Outbound proxy mode is configured separately under Network settings and applies
-immediately to analysis and newly spawned downloads. The initial implementation
-intentionally rejects proxy credentials.
+immediately to analysis, newly spawned downloads, and Telegram Bot API traffic.
+The initial implementation intentionally rejects proxy credentials.
 
 Runtime settings also provide a typed JavaScript-runtime selector. Automatic
 mode is the default and lets yt-dlp use detected Deno, Node, or QuickJS

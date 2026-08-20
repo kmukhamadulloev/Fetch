@@ -194,7 +194,8 @@ paths:
               schema: {$ref: '#/components/schemas/NetworkInfo'}
   /api/proxy:
     get:
-      description: Read outbound yt-dlp proxy settings from the Fetch host
+      description: >-
+        Read shared outbound yt-dlp and Telegram proxy settings from the Fetch host
       responses:
         '200':
           description: Proxy settings
@@ -203,7 +204,9 @@ paths:
               schema: {$ref: '#/components/schemas/ProxySettings'}
         '403': {$ref: '#/components/responses/Error'}
     put:
-      description: Validate, persist, and hot-apply outbound yt-dlp proxy settings on the Fetch host
+      description: >-
+        Validate, persist, and hot-apply shared outbound yt-dlp and Telegram
+        proxy settings on the Fetch host
       requestBody:
         required: true
         content:

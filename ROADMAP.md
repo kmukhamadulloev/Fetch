@@ -117,6 +117,9 @@ turning Fetch into a hosted service.
   redaction, and exponential backoff with jitter.
 - [x] Start, stop, and hot-reconfigure one bot manager from `app/fetch`; bot
   failure must not affect the HTTP server, downloads, tray, or shutdown.
+- [x] Apply the shared System, Direct, or Custom outbound proxy policy to Bot
+  API tests, polling, replies, and notifications; reconnect live polling when
+  the saved policy changes.
 
 ### Telegram command flow
 
@@ -144,6 +147,8 @@ turning Fetch into a hosted service.
   display only a host-only explanation to remote browsers.
 - [x] Retain redacted lifecycle and command-result diagnostics without message
   bodies, submitted URLs, tokens, or full Telegram identifiers.
+- [x] Retain connection-test attempts/results, poller failures/retries, and
+  proxy-route reconnects with mode-only diagnostics and bounded test timeouts.
 - [x] Document data sent to Telegram and require explicit host acknowledgement
   before the integration can be enabled.
 
@@ -173,7 +178,7 @@ implementation:
 - Authenticated proxy credentials using native operating-system secret storage.
 - Named proxy profiles and per-download proxy selection.
 - Optional proxy routing for managed runtime downloads.
-- Telegram proxy routing and multiple named bot profiles.
+- Multiple named Telegram bot profiles.
 - Code signing and notarization for native release artifacts.
 
 ## Deferred or out of scope

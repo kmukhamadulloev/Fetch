@@ -2,7 +2,7 @@
 
 use std::{fmt, sync::Arc, time::Duration};
 
-use fetch_core::TelegramToken;
+use fetch_core::{ProxyMode, ProxySettings, TelegramToken};
 use rand::Rng;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -34,26 +34,54 @@ pub struct BotApiClient {
 }
 
 impl BotApiClient {
-    pub fn new(token: TelegramToken) -> Result<Self, TelegramError> {
-        Self::with_api_root(token, DEFAULT_API_ROOT)
+    pub fn new(token: TelegramToken, proxy: &ProxySettings) -> Result<Self, TelegramError> {
+        Self::with_api_root_and_proxy(token, DEFAULT_API_ROOT, proxy)
     }
 
     pub fn with_api_root(
         token: TelegramToken,
         api_root: impl Into<Arc<str>>,
     ) -> Result<Self, TelegramError> {
-        let client = reqwest::Client::builder()
-            .no_proxy()
+        Self::with_api_root_and_proxy(
+            token,
+            api_root,
+            &ProxySettings {
+                mode: ProxyMode::Direct,
+                url: None,
+            },
+        )
+    }
+
+    pub fn with_api_root_and_proxy(
+        token: TelegramToken,
+        api_root: impl Into<Arc<str>>,
+        proxy: &ProxySettings,
+    ) -> Result<Self, TelegramError> {
+        let builder = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(45))
-            .user_agent(concat!("Fetch/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Fetch/", env!("CARGO_PKG_VERSION")));
+        let builder = match proxy.mode {
+            ProxyMode::System => builder,
+            ProxyMode::Direct => builder.no_proxy(),
+            ProxyMode::Custom => builder.proxy(
+                reqwest::Proxy::all(
+                    proxy
+                        .url
+                        .as_deref()
+                        .ok_or(TelegramError::ClientConfiguration)?,
+                )
+                .map_err(|_| TelegramError::ClientConfiguration)?,
+            ),
+        };
+        let client = builder
             .build()
             .map_err(|_| TelegramError::ClientConfiguration)?;
         Ok(Self {
             client,
             api_root: api_root.into(),
             token,
-            request_timeout: Duration::from_secs(15),
+            request_timeout: Duration::from_secs(8),
         })
     }
 
@@ -447,6 +475,7 @@ mod tests {
         let client = BotApiClient::with_api_root(token, format!("http://{address}")).unwrap();
 
         assert!(!format!("{client:?}").contains("fixture"));
+        assert!(client.request_timeout < Duration::from_secs(10));
         assert_eq!(
             client.get_me().await.unwrap().username.as_deref(),
             Some("fetch_bot")
@@ -462,6 +491,41 @@ mod tests {
             body["allowed_updates"],
             json!(["message", "callback_query"])
         );
+    }
+
+    #[tokio::test]
+    async fn custom_proxy_routes_bot_api_requests() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let proxy = Router::new()
+            .fallback(post(
+                |State(requests): State<Arc<Mutex<Vec<String>>>>, uri: axum::http::Uri| async move {
+                    requests.lock().await.push(uri.to_string());
+                    Json(json!({
+                        "ok": true,
+                        "result": {"id": 1, "is_bot": true, "username": "fetch_bot"}
+                    }))
+                },
+            ))
+            .with_state(requests.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, proxy).await.unwrap() });
+        let settings = ProxySettings {
+            mode: ProxyMode::Custom,
+            url: Some(format!("http://{address}")),
+        };
+        let client = BotApiClient::with_api_root_and_proxy(
+            TelegramToken::try_from("fixture".to_owned()).unwrap(),
+            "http://telegram.invalid",
+            &settings,
+        )
+        .unwrap();
+
+        assert_eq!(
+            client.get_me().await.unwrap().username.as_deref(),
+            Some("fetch_bot")
+        );
+        assert!(requests.lock().await[0].contains("telegram.invalid/botfixture/getMe"));
     }
 
     async fn record_updates(
@@ -588,7 +652,7 @@ mod tests {
         let value = std::env::var("FETCH_TELEGRAM_BOT_TOKEN")
             .expect("set FETCH_TELEGRAM_BOT_TOKEN to run the ignored live smoke");
         let token = TelegramToken::try_from(value).expect("the live smoke token is invalid");
-        let bot = BotApiClient::new(token)
+        let bot = BotApiClient::new(token, &ProxySettings::default())
             .expect("could not build Telegram client")
             .get_me()
             .await

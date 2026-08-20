@@ -170,16 +170,16 @@ test('remote settings cannot change host system startup', async ({ page }) => {
   await expect(page.getByText('Change this setting on the device running Fetch.')).toBeVisible()
 })
 
-test('host can hot-apply an outbound download proxy', async ({ page }) => {
+test('host can hot-apply the shared outbound proxy', async ({ page }) => {
   await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
   await page.goto('/settings#network')
-  await page.getByLabel('Download proxy mode').selectOption('custom')
+  await page.getByLabel('Outbound proxy mode').selectOption('custom')
   await page.getByLabel('Proxy URL').fill('socks5://127.0.0.1:1080')
   const save = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/proxy' && request.method() === 'PUT')
   await page.getByRole('button', { name: 'Save proxy' }).click()
   expect((await save).postDataJSON()).toEqual({ mode: 'custom', url: 'socks5://127.0.0.1:1080' })
   await expect(page.getByText('Proxy saved')).toBeVisible()
-  await expect(page.getByText('Active downloads keep their current route')).toBeVisible()
+  await expect(page.getByText('Telegram reconnect using the saved mode')).toBeVisible()
 })
 
 test('LAN clients cannot read or change the host proxy endpoint', async ({ page }) => {
@@ -190,7 +190,7 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
   await mockApi(page, readyRuntime, { urls: ['http://192.168.1.25:8080'], local_client: false })
   await page.goto('/settings#network')
   await expect(page.getByText('Proxy configuration is private to the host.')).toBeVisible()
-  await expect(page.getByLabel('Download proxy mode')).toHaveCount(0)
+  await expect(page.getByLabel('Outbound proxy mode')).toHaveCount(0)
   expect(proxyRequests).toBe(0)
 })
 

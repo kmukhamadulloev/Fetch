@@ -101,6 +101,8 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — analysis and downloads receive the same structured proxy arguments without copying endpoints into job or event payloads.
 - [x] PASS — proxy endpoints are host-only and redacted from process diagnostics before logging or persistence.
 - [x] PASS — host and LAN-disabled proxy UI states pass desktop and mobile browser tests.
+- [x] PASS — Telegram Bot API traffic shares the selected proxy route, hot
+  reconnects on changes, and retains mode-only lifecycle diagnostics.
 - [x] PASS — JavaScript-runtime selection persists and hot-applies to analysis
   and queued/new downloads while active processes remain unchanged.
 - [x] PASS — Runtime settings report detected Deno, Node, and QuickJS versions

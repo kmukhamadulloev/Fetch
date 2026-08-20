@@ -122,6 +122,7 @@ pub struct RuntimeManager {
 impl RuntimeManager {
     pub fn new(paths: RuntimePaths) -> Result<Self, FetchError> {
         let client = reqwest::Client::builder()
+            .no_proxy()
             .user_agent(concat!("Fetch/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(RUNTIME_CONNECT_TIMEOUT)
             .read_timeout(RUNTIME_READ_TIMEOUT)
