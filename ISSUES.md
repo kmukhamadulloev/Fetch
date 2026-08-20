@@ -12,9 +12,9 @@ Phases 01 through 09 were audited against their acceptance criteria. No known
 release-blocking implementation defect remains. The authoritative evidence
 matrix is `docs/ACCEPTANCE.md`.
 
-Fetch 0.1.4 implementation is active. Telegram hardening, browser coverage,
-native archive verification, and interactive release gates remain before this
-section can return to COMPLETE.
+Fetch 0.1.4 implementation and the complete local Rust/frontend/browser gate
+are green. Cross-platform native archive verification and interactive
+tray/startup gates remain before this section can return to COMPLETE.
 
 ## Non-blocking distribution follow-up
 
