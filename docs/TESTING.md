@@ -112,15 +112,17 @@ Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using
 an existing Chrome/Chromium installation.
 
-## Planned 0.1.4 Telegram coverage
+## 0.1.4 Telegram coverage
 
-Normal tests use a fake local Bot API transport and synthetic updates. Cover
-authorization before parsing, private-chat enforcement, update deduplication,
-single-use callback expiry, playlist confirmation, job ownership, bounded
-notifications, secret storage/redaction, token source precedence, timeout and
-rate-limit backoff, poller replacement, and graceful cancellation. Frontend and
-Playwright coverage verifies host/remote settings, blank-after-save token UI,
-connection states, validation, and mobile containment.
+Normal tests use a fake local Bot API transport and synthetic updates. Current
+coverage includes typed Bot API parsing, private-chat authorization, command
+and callback parsing, update deduplication and restart recovery, atomic
+single-use callback consumption, playlist request expansion, job ownership,
+secret redaction, rate-limit classification, cancellation, and host-only API
+responses. Frontend and Playwright coverage verifies host/remote settings,
+blank-after-save token UI, validation, and mobile containment. Poller lifecycle,
+playlist callback, Stop, and terminal-notification integration cases remain
+explicit 0.1.4 release-gate work.
 
 A real Telegram bot is never required for ordinary CI. Any live smoke is
 manual or explicitly selected, reads its token from a CI secret/environment,

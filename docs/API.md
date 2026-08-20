@@ -103,6 +103,21 @@ require a host client; remote allowed clients receive `LOCAL_CLIENT_REQUIRED`.
 Saving hot-applies to analysis and queued/new yt-dlp processes without
 interrupting an active download.
 
+## Telegram integration
+
+- `GET /api/telegram`
+- `PUT /api/telegram/settings`
+- `PUT|DELETE /api/telegram/token`
+- `POST /api/telegram/test`
+
+Every Telegram endpoint is host-device only. The integration response contains
+typed non-secret settings plus connection state, token presence/source, bot
+username, last success, and a redacted actionable error. It never returns the
+token. The token PUT body is write-only `{"token":"..."}` and saves to the
+native credential store; DELETE does not alter an active
+`FETCH_TELEGRAM_BOT_TOKEN` environment override. Saving settings and replacing
+or removing a token hot-reconfigures the single outbound poller.
+
 ## Runtime and diagnostics
 
 - `GET /api/runtime`

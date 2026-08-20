@@ -129,11 +129,12 @@ QuickJS, and Disabled modes, plus detected/not-found state and versions for the
 host executables. Missing explicit selections are called out inline. Saving
 applies to analysis and queued/new downloads without interrupting active work.
 
-The planned 0.1.4 Integrations section contains the optional Telegram bot card
+The 0.1.4 Integrations section contains the optional Telegram bot card
 defined in `TELEGRAM.md`. Configuration is host-only; remote LAN browsers see
 an explanation rather than requesting integration state. The token is
 write-only, connection testing has independent progress/error feedback, and
-the card remains contained in the mobile settings layout.
+the card remains contained in the mobile settings layout. While visible, it
+refreshes live connection state without replacing unsaved form edits.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.

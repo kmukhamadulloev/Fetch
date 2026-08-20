@@ -1,6 +1,6 @@
 # Telegram Bot Integration
 
-Status: implementation in progress for Fetch 0.1.4.
+Status: core implementation complete; 0.1.4 release hardening in progress.
 
 ## Purpose
 
