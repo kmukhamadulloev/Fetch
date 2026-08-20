@@ -10,6 +10,10 @@ developer-visible behavior, compatibility, and release operations.
 - Hot-applied JavaScript-runtime changes to analysis and queued/new downloads.
 - Established typed Telegram integration, authorization, pending-action,
   notification, repository, secret-store, and host-service contracts.
+- Added an optional allowlisted private-chat Telegram bot with URL analysis,
+  video/audio and playlist confirmation, owned-job Stop, and bounded notices.
+- Added native credential storage, a headless token override, hot polling
+  lifecycle, redacted diagnostics, and host-only responsive setup controls.
 
 ## 0.1.3 — 2026-08-18
 

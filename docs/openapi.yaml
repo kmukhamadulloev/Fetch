@@ -217,6 +217,72 @@ paths:
               schema: {$ref: '#/components/schemas/ProxySettings'}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
+  /api/telegram:
+    get:
+      description: Read non-secret Telegram settings and live status from the Fetch host
+      responses:
+        '200':
+          description: Telegram integration state; never includes the bot token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/telegram/settings:
+    put:
+      description: Validate, persist, and hot-apply Telegram settings on the Fetch host
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TelegramSettings'}
+      responses:
+        '200':
+          description: Saved integration state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/telegram/token:
+    put:
+      description: Store a bot token in the host native credential store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, writeOnly: true, maxLength: 512}
+      responses:
+        '200':
+          description: Integration state without the token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '403': {$ref: '#/components/responses/Error'}
+    delete:
+      description: Remove the host-native token; an environment override is unaffected
+      responses:
+        '200':
+          description: Integration state without the token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/telegram/test:
+    post:
+      description: Test the effective bot token from the Fetch host
+      responses:
+        '200':
+          description: Updated Telegram integration state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
   /api/logs:
     get:
       responses:
@@ -481,6 +547,41 @@ components:
           anyOf:
             - {type: string, format: uri, maxLength: 2048}
             - {type: 'null'}
+    TelegramSettings:
+      type: object
+      additionalProperties: false
+      required: [enabled, allowed_user_ids, notify_queued, notify_completed, notify_failed, privacy_acknowledged]
+      properties:
+        enabled: {type: boolean, default: false}
+        allowed_user_ids:
+          type: array
+          maxItems: 64
+          uniqueItems: true
+          items: {type: integer, minimum: 1}
+        notify_queued: {type: boolean, default: true}
+        notify_completed: {type: boolean, default: true}
+        notify_failed: {type: boolean, default: true}
+        privacy_acknowledged: {type: boolean, default: false}
+    TelegramStatus:
+      type: object
+      required: [state, token_configured, token_source, bot_username, last_success_at, error]
+      properties:
+        state: {type: string, enum: [disabled, connecting, connected, backing_off, error]}
+        token_configured: {type: boolean}
+        token_source: {type: string, enum: [native, environment, missing]}
+        bot_username:
+          anyOf: [{type: string}, {type: 'null'}]
+        last_success_at:
+          anyOf: [{type: string, format: date-time}, {type: 'null'}]
+        error:
+          anyOf: [{type: string}, {type: 'null'}]
+    TelegramIntegration:
+      type: object
+      additionalProperties: false
+      required: [settings, status]
+      properties:
+        settings: {$ref: '#/components/schemas/TelegramSettings'}
+        status: {$ref: '#/components/schemas/TelegramStatus'}
     RuntimeComponent:
       type: object
       required: [name, status]

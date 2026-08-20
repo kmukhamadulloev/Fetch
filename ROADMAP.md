@@ -115,36 +115,36 @@ turning Fetch into a hosted service.
 - [x] Add a Rust-only `fetch-telegram` adapter with typed Bot API requests,
   outbound long polling, bounded timeouts, cancellation, rate-limit handling,
   redaction, and exponential backoff with jitter.
-- [ ] Start, stop, and hot-reconfigure one bot manager from `app/fetch`; bot
+- [x] Start, stop, and hot-reconfigure one bot manager from `app/fetch`; bot
   failure must not affect the HTTP server, downloads, tray, or shutdown.
 
 ### Telegram command flow
 
-- [ ] Restrict 0.1.4 to allowlisted Telegram user IDs in private chats; ignore
+- [x] Restrict 0.1.4 to allowlisted Telegram user IDs in private chats; ignore
   unauthorized updates without revealing application state.
-- [ ] Support `/start`, `/help`, `/status`, and `/downloads` with concise,
+- [x] Support `/start`, `/help`, `/status`, and `/downloads` with concise,
   rate-limited responses.
-- [ ] Treat a plain URL message as an analysis request, then present expiring,
+- [x] Treat a plain URL message as an analysis request, then present expiring,
   single-use **Download video**, **Download audio**, and **Cancel** actions.
-- [ ] Require an explicit second confirmation before queueing every item in a
+- [x] Require an explicit second confirmation before queueing every item in a
   playlist and show the item count before acceptance.
-- [ ] Reuse DownloadManager defaults and expose Stop actions for jobs owned by
+- [x] Reuse DownloadManager defaults and expose Stop actions for jobs owned by
   the requesting Telegram user; never accept arbitrary yt-dlp arguments.
-- [ ] Send queued, completed, failed, and stopped notifications without noisy
+- [x] Send queued, completed, failed, and stopped notifications without noisy
   per-progress-message updates or uploading completed media to Telegram.
-- [ ] Persist update offsets and command/job correlations so polling retries or
+- [x] Persist update offsets and command/job correlations so polling retries or
   process restarts cannot create duplicate downloads.
 
 ### Telegram settings and observability
 
-- [ ] Add a host-only Integrations settings section for enable/disable, a
+- [x] Add a host-only Integrations settings section for enable/disable, a
   write-only token, allowed user IDs, notification preferences, Test
   connection, bot identity, polling state, last success, and actionable error.
-- [ ] Keep LAN clients from reading or changing integration configuration;
+- [x] Keep LAN clients from reading or changing integration configuration;
   display only a host-only explanation to remote browsers.
-- [ ] Retain redacted lifecycle and command-result diagnostics without message
+- [x] Retain redacted lifecycle and command-result diagnostics without message
   bodies, submitted URLs, tokens, or full Telegram identifiers.
-- [ ] Document data sent to Telegram and require explicit host acknowledgement
+- [x] Document data sent to Telegram and require explicit host acknowledgement
   before the integration can be enabled.
 
 ### 0.1.4 verification and release gates

@@ -50,6 +50,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
 - Bind locally or to a trusted LAN with a CIDR allow-list.
 - Route yt-dlp analysis and downloads through a host-managed HTTP, HTTPS,
   SOCKS4, or SOCKS5 proxy without exposing its endpoint to LAN clients.
+- Optionally queue and stop downloads from allowlisted private Telegram chats
+  through outbound-only long polling, without uploading completed media.
 - Inspect retained process logs and database, runtime, and output diagnostics.
 
 ## How it works
@@ -167,6 +169,13 @@ installations. Selecting Node explicitly is useful when it is already available
 on the host. Changes apply to analysis and queued or new downloads without
 restarting Fetch.
 
+The optional Telegram integration is configured from the host-only
+Integrations settings section. Tokens entered there use the operating system's
+native credential store rather than SQLite. Headless installations can set
+`FETCH_TELEGRAM_BOT_TOKEN`; the environment value takes precedence and is never
+returned by the API. See [Telegram integration](docs/TELEGRAM.md) for the
+privacy boundary and supported command flow.
+
 Appearance remains a browser-local preference so desktop and mobile clients
 can independently use Dark, Light, or Use system.
 
@@ -184,7 +193,7 @@ See [Security](docs/SECURITY.md) before enabling LAN access.
 - [API and SSE events](docs/API.md)
 - [Download engine](docs/DOWNLOAD_ENGINE.md)
 - [Runtime management](docs/RUNTIME.md)
-- [Telegram 0.1.4 development plan](docs/TELEGRAM.md)
+- [Telegram integration](docs/TELEGRAM.md)
 - [Testing](docs/TESTING.md)
 - [Roadmap](ROADMAP.md)
 - [Release history](RELEASE.md)

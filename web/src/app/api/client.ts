@@ -135,6 +135,26 @@ export interface ProxySettings {
   mode: ProxyMode
   url: string | null
 }
+export interface TelegramSettings {
+  enabled: boolean
+  allowed_user_ids: number[]
+  notify_queued: boolean
+  notify_completed: boolean
+  notify_failed: boolean
+  privacy_acknowledged: boolean
+}
+export interface TelegramStatus {
+  state: 'disabled' | 'connecting' | 'connected' | 'backing_off' | 'error'
+  token_configured: boolean
+  token_source: 'native' | 'environment' | 'missing'
+  bot_username: string | null
+  last_success_at: string | null
+  error: string | null
+}
+export interface TelegramIntegration {
+  settings: TelegramSettings
+  status: TelegramStatus
+}
 export type SettingsSaveResponse = ApplicationSettings & { listener_changed: boolean }
 export interface DiagnosticLogEntry {
   id: number
@@ -265,6 +285,19 @@ export function getNetworkInfo(): Promise<NetworkInfo> { return jsonRequest('/ap
 export function getProxySettings(): Promise<ProxySettings> { return jsonRequest('/api/proxy') }
 export function putProxySettings(settings: ProxySettings): Promise<ProxySettings> {
   return jsonRequest('/api/proxy', { method: 'PUT', body: JSON.stringify(settings) })
+}
+export function getTelegramIntegration(): Promise<TelegramIntegration> { return jsonRequest('/api/telegram') }
+export function putTelegramSettings(settings: TelegramSettings): Promise<TelegramIntegration> {
+  return jsonRequest('/api/telegram/settings', { method: 'PUT', body: JSON.stringify(settings) })
+}
+export function putTelegramToken(token: string): Promise<TelegramIntegration> {
+  return jsonRequest('/api/telegram/token', { method: 'PUT', body: JSON.stringify({ token }) })
+}
+export function deleteTelegramToken(): Promise<TelegramIntegration> {
+  return jsonRequest('/api/telegram/token', { method: 'DELETE' })
+}
+export function testTelegramConnection(): Promise<TelegramIntegration> {
+  return jsonRequest('/api/telegram/test', { method: 'POST' })
 }
 export function getLogs(): Promise<DiagnosticLogEntry[]> { return jsonRequest('/api/logs') }
 export function getDiagnostics(): Promise<DiagnosticsReport> { return jsonRequest('/api/diagnostics') }

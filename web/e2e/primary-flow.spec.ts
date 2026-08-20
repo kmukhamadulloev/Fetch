@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import type { CompletedFile, ProxySettings } from '../src/app/api/client'
+import type { CompletedFile, ProxySettings, TelegramIntegration } from '../src/app/api/client'
 
 const readyRuntime = [
   { name: 'yt-dlp', version: '2026.08.09', status: 'ready', progress_percent: null, error: null },
@@ -26,6 +26,10 @@ async function mockApi(
   let jobs: unknown[] = []
   let completed = [...completedFixture]
   let proxy: ProxySettings = { mode: 'system', url: null }
+  let telegram: TelegramIntegration = {
+    settings: { enabled: false, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
+    status: { state: 'disabled', token_configured: false, token_source: 'missing', bot_username: null, last_success_at: null, error: null },
+  }
   await page.route('**/*', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -73,6 +77,19 @@ async function mockApi(
         proxy = next
       }
       return route.fulfill({ json: proxy })
+    }
+    if (path.startsWith('/api/telegram')) {
+      if (!network.local_client) return route.fulfill({ status: 403, json: { error: { code: 'LOCAL_CLIENT_REQUIRED', message: 'Host only' } } })
+      if (path === '/api/telegram/token' && request.method() === 'PUT') {
+        telegram = { ...telegram, status: { ...telegram.status, token_configured: true, token_source: 'native' } }
+      } else if (path === '/api/telegram/token' && request.method() === 'DELETE') {
+        telegram = { ...telegram, status: { ...telegram.status, token_configured: false, token_source: 'missing' } }
+      } else if (path === '/api/telegram/settings' && request.method() === 'PUT') {
+        telegram = { ...telegram, settings: request.postDataJSON(), status: { ...telegram.status, state: request.postDataJSON().enabled ? 'connecting' : 'disabled' } }
+      } else if (path === '/api/telegram/test' && request.method() === 'POST') {
+        telegram = { ...telegram, status: { ...telegram.status, bot_username: 'fetch_fixture_bot', last_success_at: '2026-08-20T00:00:00Z' } }
+      }
+      return route.fulfill({ json: telegram })
     }
     if (path === '/api/diagnostics') return route.fulfill({ json: { checks: [] } })
     return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: 'Not found' } } })
@@ -175,6 +192,42 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
   await expect(page.getByText('Proxy configuration is private to the host.')).toBeVisible()
   await expect(page.getByLabel('Download proxy mode')).toHaveCount(0)
   expect(proxyRequests).toBe(0)
+})
+
+test('host can configure Telegram without the token appearing in responses or the input', async ({ page }) => {
+  await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
+  await page.goto('/settings#integrations')
+  await expect(page.getByRole('heading', { name: 'Telegram bot' })).toBeVisible()
+  const tokenInput = page.getByPlaceholder('Paste a BotFather token')
+  await tokenInput.fill('123456:fixture-secret')
+  const tokenSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/token' && request.method() === 'PUT')
+  await page.getByRole('button', { name: 'Save token' }).click()
+  expect((await tokenSave).postDataJSON()).toEqual({ token: '123456:fixture-secret' })
+  await expect(tokenInput).toHaveValue('')
+  await expect(page.getByText('Configured via native')).toBeVisible()
+
+  await page.getByLabel('Allowed Telegram user IDs, one per line').fill('123456789')
+  await page.getByText('I understand that submitted URLs').click()
+  await page.getByLabel('Enable Telegram bot').check()
+  const settingsSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/settings' && request.method() === 'PUT')
+  await page.getByRole('button', { name: 'Save Telegram settings' }).click()
+  expect((await settingsSave).postDataJSON().allowed_user_ids).toEqual([123456789])
+  await expect(page.getByText('Telegram updated')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => document.documentElement.clientWidth),
+  )
+})
+
+test('LAN clients cannot request Telegram configuration', async ({ page }) => {
+  let telegramRequests = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/telegram')) telegramRequests += 1
+  })
+  await mockApi(page, readyRuntime, { urls: ['http://192.168.1.25:8080'], local_client: false })
+  await page.goto('/settings#integrations')
+  await expect(page.getByText('Telegram configuration is private to the host.')).toBeVisible()
+  await expect(page.getByPlaceholder('Paste a BotFather token')).toHaveCount(0)
+  expect(telegramRequests).toBe(0)
 })
 
 test('logs expose detailed severity filters on desktop and mobile', async ({ page }, testInfo) => {

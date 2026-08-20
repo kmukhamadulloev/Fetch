@@ -2,19 +2,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Check, CheckCircle2, Clipboard, Cpu, Download, ExternalLink, FileClock, Film,
-  Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, TriangleAlert, Waypoints, Wrench,
+  Bot, Check, CheckCircle2, Clipboard, Cpu, Download, ExternalLink, FileClock, Film,
+  KeyRound, Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, Trash2, TriangleAlert, Waypoints, Wrench,
 } from '@lucide/vue'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useSettingsStore } from '@/stores/settings'
 import { useProxyStore } from '@/stores/proxy'
+import { useTelegramStore } from '@/stores/telegram'
 import { useAppearance, type ThemePreference } from '@/stores/appearance'
-import type { ApplicationSettings, ProxyMode, ProxySettings, RuntimeComponent } from '@/app/api/client'
+import type { ApplicationSettings, ProxyMode, ProxySettings, RuntimeComponent, TelegramSettings } from '@/app/api/client'
 
 const tabs = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
   { id: 'downloads', label: 'Downloads', icon: Download },
   { id: 'network', label: 'Network', icon: Network },
+  { id: 'integrations', label: 'Integrations', icon: Bot },
   { id: 'runtime', label: 'Runtime', icon: Cpu },
   { id: 'advanced', label: 'Advanced', icon: Wrench },
 ] as const
@@ -25,12 +27,16 @@ const router = useRouter()
 const settings = useSettingsStore()
 const runtime = useRuntimeStore()
 const proxy = useProxyStore()
+const telegram = useTelegramStore()
 const appearance = useAppearance()
 const active = ref<TabId>('general')
 const form = ref<ApplicationSettings | null>(null)
 const networks = ref('')
 const copiedUrl = ref<string | null>(null)
 const proxyForm = ref<ProxySettings | null>(null)
+const telegramForm = ref<TelegramSettings | null>(null)
+const telegramUsers = ref('')
+const telegramToken = ref('')
 
 function tabFromHash(hash: string): TabId {
   const candidate = hash.replace('#', '') as TabId
@@ -48,6 +54,11 @@ watch(() => settings.value, (value) => {
 }, { immediate: true })
 watch(() => proxy.value, (value) => {
   proxyForm.value = value ? { ...value } : null
+}, { immediate: true })
+watch(() => telegram.value, (value) => {
+  if (!value) return
+  telegramForm.value = { ...value.settings, allowed_user_ids: [...value.settings.allowed_user_ids] }
+  telegramUsers.value = value.settings.allowed_user_ids.join('\n')
 }, { immediate: true })
 
 const runtimeReady = computed(() => runtime.components.filter((item) => item.status === 'ready').length)
@@ -68,7 +79,7 @@ function javascriptRuntimeLabel(name: 'deno' | 'node' | 'quickjs') {
 
 onMounted(async () => {
   await Promise.all([settings.refresh(), runtime.refresh()])
-  if (isHost.value) await proxy.refresh()
+  if (isHost.value) await Promise.all([proxy.refresh(), telegram.refresh()])
 })
 
 function save() {
@@ -103,6 +114,25 @@ async function copyUrl(url: string) {
     settings.error = 'The browser did not allow clipboard access. Select and copy the URL manually.'
   }
 }
+
+function parsedTelegramUsers() {
+  return telegramUsers.value.split(/\s+/).filter(Boolean).map((value) => Number(value))
+}
+
+async function saveTelegramSettings() {
+  if (!telegramForm.value || !isHost.value) return
+  const users = parsedTelegramUsers()
+  if (users.some((value) => !Number.isSafeInteger(value) || value <= 0)) {
+    telegram.error = 'Telegram user IDs must be positive whole numbers.'
+    return
+  }
+  await telegram.saveSettings({ ...telegramForm.value, allowed_user_ids: users })
+}
+
+async function saveTelegramToken() {
+  if (!telegramToken.value.trim() || !isHost.value) return
+  if (await telegram.saveToken(telegramToken.value)) telegramToken.value = ''
+}
 </script>
 
 <template>
@@ -110,7 +140,7 @@ async function copyUrl(url: string) {
     <p class="eyebrow">Configuration</p>
     <h2 class="mt-2 text-2xl font-semibold">Settings</h2>
     <p class="mt-1 text-sm text-muted">Application, network, download, and runtime preferences.</p>
-    <p v-if="settings.error || runtime.error || proxy.error" class="error-panel mt-5" role="alert">{{ settings.error ?? runtime.error ?? proxy.error }}</p>
+    <p v-if="settings.error || runtime.error || proxy.error || telegram.error" class="error-panel mt-5" role="alert">{{ settings.error ?? runtime.error ?? proxy.error ?? telegram.error }}</p>
 
     <div class="settings-layout mt-6">
       <nav class="settings-nav card" aria-label="Settings sections">
@@ -210,6 +240,55 @@ async function copyUrl(url: string) {
           <div class="warning-panel"><TriangleAlert class="shrink-0 text-amber-500" :size="20" /><div><div class="text-xs font-medium">Network access has no application login</div><p class="mt-1 text-xs leading-5 opacity-70">Every allowed client can control downloads and access completed files. Fetch never opens router ports or public tunnels.</p></div></div>
         </section>
 
+        <section v-else-if="active === 'integrations'" class="space-y-5" aria-labelledby="settings-integrations">
+          <div class="card p-5 sm:p-6">
+            <div class="flex items-start gap-3 sm:gap-4">
+              <div class="empty-icon shrink-0"><Bot :size="18" /></div>
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h3 id="settings-integrations" class="text-sm font-semibold">Telegram bot</h3>
+                  <span v-if="telegram.value" class="badge" :class="{ muted: telegram.value.status.state !== 'connected' }">{{ telegram.value.status.state.replace('_', ' ') }}</span>
+                </div>
+                <p class="mt-1 text-xs leading-5 text-muted">Submit and control downloads from allowlisted private Telegram chats. Fetch uses outbound long polling and never opens a public port.</p>
+              </div>
+            </div>
+            <div v-if="!isHost" class="info-panel mt-5"><Network :size="18" class="shrink-0" /><span>Telegram configuration is private to the host. Open this page on the device running Fetch.</span></div>
+            <div v-else-if="telegram.loading" class="mt-5 min-h-36 animate-pulse rounded-xl bg-[var(--app-surface-2)]" aria-label="Loading Telegram settings"></div>
+            <div v-else-if="telegramForm && telegram.value" class="mt-6 space-y-5">
+              <div class="rounded-xl bg-[var(--app-surface-2)] p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div><div class="text-xs font-medium">Bot token</div><p class="mt-1 text-[11px] text-muted">{{ telegram.value.status.token_configured ? `Configured via ${telegram.value.status.token_source}` : 'Not configured' }}<template v-if="telegram.value.status.bot_username"> · @{{ telegram.value.status.bot_username }}</template><template v-if="telegram.value.status.last_success_at"> · Last contact {{ new Date(telegram.value.status.last_success_at).toLocaleString() }}</template></p></div>
+                  <button v-if="telegram.value.status.token_configured && telegram.value.status.token_source === 'native'" class="icon-btn" type="button" aria-label="Remove Telegram token" :disabled="telegram.saving" @click="telegram.removeToken"><Trash2 :size="15" /></button>
+                </div>
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <label class="field min-w-0 flex-1"><span class="sr-only">New bot token</span><input v-model="telegramToken" class="input font-mono text-xs" type="password" autocomplete="new-password" placeholder="Paste a BotFather token" :disabled="telegram.value.status.token_source === 'environment'" /></label>
+                  <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegramToken.trim() || telegram.value.status.token_source === 'environment'" @click="saveTelegramToken"><KeyRound :size="14" />Save token</button>
+                  <button class="secondary-btn justify-center" type="button" :disabled="telegram.saving || !telegram.value.status.token_configured" @click="telegram.test">Test connection</button>
+                </div>
+                <p v-if="telegram.value.status.token_source === 'environment'" class="mt-2 text-[11px] leading-5 text-muted">The environment token overrides the native credential store and must be changed outside this page.</p>
+              </div>
+              <div class="info-panel"><Bot :size="18" class="shrink-0" /><span>Create a bot with Telegram's <a class="underline" href="https://t.me/BotFather" target="_blank" rel="noreferrer">@BotFather</a>, save its token here, and enter the numeric IDs of the private accounts you trust. Telegram usernames are not accepted because they can change.</span></div>
+              <label class="setting-row">
+                <span><span class="setting-title">Enable Telegram bot</span><span class="setting-help">Starts one outbound poller immediately after settings are saved.</span></span>
+                <input v-model="telegramForm.enabled" type="checkbox" />
+              </label>
+              <label class="field"><span>Allowed Telegram user IDs, one per line</span><textarea v-model="telegramUsers" class="input min-h-28 resize-y font-mono text-xs" inputmode="numeric" spellcheck="false" placeholder="123456789"></textarea><small>Only matching private chats are accepted. Group chats and every other user are silently ignored.</small></label>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Queued</span><input v-model="telegramForm.notify_queued" type="checkbox" /></label>
+                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Completed</span><input v-model="telegramForm.notify_completed" type="checkbox" /></label>
+                <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Failed / stopped</span><input v-model="telegramForm.notify_failed" type="checkbox" /></label>
+              </div>
+              <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>I understand that submitted URLs, titles, commands, Telegram identifiers, and status messages pass through Telegram's service. Fetch does not upload downloaded media.</span></label>
+              <div v-if="telegram.value.status.error" class="warning-panel"><TriangleAlert :size="18" class="shrink-0" /><span>{{ telegram.value.status.error }}</span></div>
+              <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
+                <span class="text-xs" aria-live="polite"><span v-if="telegram.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Telegram updated</span></span>
+                <button class="primary-btn" type="button" :disabled="telegram.saving" @click="saveTelegramSettings">{{ telegram.saving ? 'Saving…' : 'Save Telegram settings' }}</button>
+              </div>
+            </div>
+          </div>
+          <div class="info-panel"><Bot :size="18" class="shrink-0" /><span>Commands: /start, /help, /status, /downloads. Send a URL to choose Video or Audio; playlists require a second confirmation.</span></div>
+        </section>
+
         <section v-else-if="active === 'runtime'" class="space-y-4" aria-labelledby="settings-runtime">
           <div class="flex items-end justify-between gap-4"><div><h3 id="settings-runtime" class="text-sm font-semibold">Managed runtime</h3><p class="mt-1 text-xs text-muted">{{ runtimeReady }} of {{ runtime.components.length }} components healthy.</p></div><button class="secondary-btn" type="button" :disabled="runtime.loading" @click="runtime.refresh"><RefreshCw :class="{ 'animate-spin': runtime.loading }" :size="14" />Refresh</button></div>
           <div class="runtime-card">
@@ -258,7 +337,7 @@ async function copyUrl(url: string) {
           <div class="info-panel mt-5"><Wrench :size="18" class="shrink-0" /><span>Fetch intentionally does not accept arbitrary yt-dlp arguments here. Validated download options keep jobs reproducible and safe for every LAN client.</span></div>
         </section>
 
-        <div v-if="active !== 'advanced'" class="settings-savebar">
+        <div v-if="active !== 'advanced' && active !== 'integrations'" class="settings-savebar">
           <span class="min-h-5 text-xs" aria-live="polite"><span v-if="settings.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />Saved</span></span>
           <button class="primary-btn" type="button" :disabled="settings.saving" @click="save">{{ settings.saving ? 'Saving…' : 'Save settings' }}</button>
         </div>

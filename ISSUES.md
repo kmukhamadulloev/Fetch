@@ -6,11 +6,15 @@ subsystem, expected behavior, actual behavior, and notes.
 
 ## Release verification
 
-Status: COMPLETE
+Status: IN PROGRESS FOR 0.1.4
 
 Phases 01 through 09 were audited against their acceptance criteria. No known
 release-blocking implementation defect remains. The authoritative evidence
 matrix is `docs/ACCEPTANCE.md`.
+
+Fetch 0.1.4 implementation is active. Telegram hardening, browser coverage,
+native archive verification, and interactive release gates remain before this
+section can return to COMPLETE.
 
 ## Non-blocking distribution follow-up
 
