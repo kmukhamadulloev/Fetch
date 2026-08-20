@@ -1,4 +1,9 @@
-use std::{collections::{HashMap, VecDeque}, env, sync::Arc, time::{Duration, Instant}};
+use std::{
+    collections::{HashMap, VecDeque},
+    env,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use chrono::Utc;
 use fetch_core::{
@@ -353,7 +358,14 @@ impl TelegramOperations for TelegramBotManager {
                 return Err(FetchError::InvalidSettings(error.to_string()));
             }
         }
-        if self.inner.storage.load_telegram_settings().await.map_err(storage_error)?.enabled {
+        if self
+            .inner
+            .storage
+            .load_telegram_settings()
+            .await
+            .map_err(storage_error)?
+            .enabled
+        {
             self.restart_poller().await;
         }
         self.get_integration().await
@@ -443,7 +455,7 @@ async fn run_poller(
                     }
                     if let Err(error) = inner
                         .storage
-                        .advance_telegram_polling_offset(next_offset)
+                        .complete_telegram_update(next_offset.saturating_sub(1), next_offset)
                         .await
                     {
                         tracing::error!(subsystem = "telegram", %error, "could not persist Telegram polling offset");
@@ -571,7 +583,10 @@ async fn rate_limit_allows(inner: &ManagerInner, user_id: i64) -> bool {
     let now = Instant::now();
     let mut windows = inner.command_windows.lock().await;
     let actions = windows.entry(user_id).or_default();
-    while actions.front().is_some_and(|at| now.duration_since(*at) >= WINDOW) {
+    while actions
+        .front()
+        .is_some_and(|at| now.duration_since(*at) >= WINDOW)
+    {
         actions.pop_front();
     }
     if actions.len() >= MAX_ACTIONS {

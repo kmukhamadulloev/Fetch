@@ -75,8 +75,8 @@ impl TelegramRepository for Storage {
             .map_err(fetch_error)
     }
 
-    async fn advance_polling_offset(&self, next_offset: i64) -> Result<(), FetchError> {
-        self.advance_telegram_polling_offset(next_offset)
+    async fn complete_update(&self, update_id: i64, next_offset: i64) -> Result<(), FetchError> {
+        self.complete_telegram_update(update_id, next_offset)
             .await
             .map_err(fetch_error)
     }
@@ -145,6 +145,11 @@ impl Storage {
             .connect_with(options)
             .await?;
         sqlx::migrate!().run(&pool).await?;
+        // A claim without completion means the previous process stopped before
+        // acknowledging the update. It must be retried after restart.
+        sqlx::query("DELETE FROM telegram_updates WHERE completed_at IS NULL")
+            .execute(&pool)
+            .await?;
         Ok(Self { pool })
     }
 
@@ -414,19 +419,40 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn advance_telegram_polling_offset(
+    pub async fn complete_telegram_update(
         &self,
+        update_id: i64,
         next_offset: i64,
     ) -> Result<(), StorageError> {
-        if next_offset < 0 {
+        if update_id < 0 || next_offset <= update_id {
             return Err(StorageError::Data(
-                "Telegram polling offset must not be negative".into(),
+                "Telegram completion requires a valid increasing offset".into(),
             ));
+        }
+        let mut transaction = self.pool.begin().await?;
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        let result =
+            sqlx::query("UPDATE telegram_updates SET completed_at = ? WHERE update_id = ?")
+                .bind(&completed_at)
+                .bind(update_id)
+                .execute(&mut *transaction)
+                .await?;
+        if result.rows_affected() == 0 {
+            return Err(StorageError::Data(format!(
+                "Telegram update {update_id} was not claimed"
+            )));
         }
         sqlx::query("UPDATE telegram_state SET polling_offset = MAX(polling_offset, ?), updated_at = CURRENT_TIMESTAMP WHERE singleton = 1")
             .bind(next_offset)
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await?;
+        sqlx::query(
+            "DELETE FROM telegram_updates WHERE completed_at IS NOT NULL AND update_id < ?",
+        )
+        .bind(next_offset.saturating_sub(10_000))
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -659,7 +685,7 @@ mod tests {
             .fetch_one(storage.pool())
             .await
             .unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         assert_eq!(
             storage.load_proxy_settings().await.unwrap(),
             ProxySettings::default()
@@ -776,9 +802,29 @@ mod tests {
         assert!(!storage.claim_telegram_update(100).await.unwrap());
         storage.release_telegram_update_claim(100).await.unwrap();
         assert!(storage.claim_telegram_update(100).await.unwrap());
-        storage.advance_telegram_polling_offset(101).await.unwrap();
-        storage.advance_telegram_polling_offset(50).await.unwrap();
+        storage.complete_telegram_update(100, 101).await.unwrap();
+        assert!(!storage.claim_telegram_update(100).await.unwrap());
+        storage.claim_telegram_update(200).await.unwrap();
+        assert!(storage.complete_telegram_update(200, 200).await.is_err());
         assert_eq!(storage.telegram_polling_offset().await.unwrap(), 101);
+    }
+
+    #[tokio::test]
+    async fn retries_incomplete_telegram_claims_after_process_restart() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fetch.sqlite3");
+        let storage = Storage::open(&path).await.unwrap();
+        assert!(storage.claim_telegram_update(42).await.unwrap());
+        storage.pool.close().await;
+
+        let storage = Storage::open(&path).await.unwrap();
+        assert!(storage.claim_telegram_update(42).await.unwrap());
+        storage.complete_telegram_update(42, 43).await.unwrap();
+        storage.pool.close().await;
+
+        let storage = Storage::open(&path).await.unwrap();
+        assert!(!storage.claim_telegram_update(42).await.unwrap());
+        assert_eq!(storage.telegram_polling_offset().await.unwrap(), 43);
     }
 
     #[tokio::test]
