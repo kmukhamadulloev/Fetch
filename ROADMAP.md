@@ -134,7 +134,10 @@ turning Fetch into a hosted service.
 - [x] Reuse DownloadManager defaults and expose Stop actions for jobs owned by
   the requesting Telegram user; never accept arbitrary yt-dlp arguments.
 - [x] Send queued, completed, failed, and stopped notifications without noisy
-  per-progress-message updates or uploading completed media to Telegram.
+  per-progress-message updates.
+- [x] Optionally stream completed Telegram-owned media back to its private chat,
+  enforcing a configurable 1–50 MB ceiling with a safe 50 MB default and a
+  text-only fallback for oversized, missing, or failed attachments.
 - [x] Persist update offsets and command/job correlations so polling retries or
   process restarts cannot create duplicate downloads.
 
@@ -153,6 +156,8 @@ turning Fetch into a hosted service.
   before the integration can be enabled.
 - [x] Gate Telegram fields behind the enable control, summarize missing setup
   requirements, and provide a reveal control for only the unsaved token input.
+- [x] Add enable-gated completed-media delivery controls with clear bandwidth,
+  privacy, hosted-limit, and oversized-file guidance on desktop and mobile.
 
 ### 0.1.4 verification and release gates
 

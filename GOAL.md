@@ -17,8 +17,10 @@ Develop Fetch 0.1.4 as described in `ROADMAP.md` and `docs/TELEGRAM.md`:
   state, bounded retries, persistence, tests, and documentation;
 - optionally route Telegram Bot API traffic through the shared host-managed
   outbound proxy policy, default to direct, and hot-reconnect when enabled;
+- optionally stream completed Telegram-owned downloads back to their private
+  chat with a configurable 1–50 MB ceiling that defaults to 50 MB;
 - preserve Fetch's local-first operation when Telegram is disabled or
   unavailable.
 
-Do not upload completed media to Telegram in 0.1.4, introduce user accounts, or
-regress the mandatory architecture.
+Do not upload files from web-created jobs or unrelated library entries,
+introduce user accounts, or regress the mandatory architecture.

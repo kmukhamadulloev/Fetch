@@ -554,10 +554,12 @@ components:
     TelegramSettings:
       type: object
       additionalProperties: false
-      required: [enabled, use_proxy, allowed_user_ids, notify_queued, notify_completed, notify_failed, privacy_acknowledged]
+      required: [enabled, use_proxy, send_completed_media, upload_limit_mb, allowed_user_ids, notify_queued, notify_completed, notify_failed, privacy_acknowledged]
       properties:
         enabled: {type: boolean, default: false}
         use_proxy: {type: boolean, default: false}
+        send_completed_media: {type: boolean, default: false}
+        upload_limit_mb: {type: integer, minimum: 1, maximum: 50, default: 50}
         allowed_user_ids:
           type: array
           maxItems: 64

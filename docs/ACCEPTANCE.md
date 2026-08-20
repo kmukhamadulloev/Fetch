@@ -103,6 +103,9 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — host and LAN-disabled proxy UI states pass desktop and mobile browser tests.
 - [x] PASS — Telegram is direct by default, can opt into the selected proxy
   route, hot-reconnects on changes, and retains mode-only diagnostics.
+- [x] PASS — Telegram completed-media delivery is disabled by default, streams
+  only owned completed files, enforces a persisted 1–50 MB ceiling with a 50 MB
+  default, and uses text-only fallbacks without exposing local paths.
 - [x] PASS — JavaScript-runtime selection persists and hot-applies to analysis
   and queued/new downloads while active processes remain unchanged.
 - [x] PASS — Runtime settings report detected Deno, Node, and QuickJS versions

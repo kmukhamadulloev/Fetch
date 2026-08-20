@@ -786,6 +786,8 @@ mod tests {
         let settings = TelegramSettings {
             enabled: true,
             use_proxy: true,
+            send_completed_media: true,
+            upload_limit_mb: 25,
             allowed_user_ids: vec![42],
             privacy_acknowledged: true,
             ..TelegramSettings::default()

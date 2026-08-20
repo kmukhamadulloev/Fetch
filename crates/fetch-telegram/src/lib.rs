@@ -1,16 +1,17 @@
 //! Typed Telegram Bot API transport for Fetch.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{fmt, path::Path, sync::Arc, time::Duration};
 
 use fetch_core::{ProxyMode, ProxySettings, TelegramToken};
 use rand::Rng;
-use reqwest::StatusCode;
+use reqwest::{StatusCode, multipart};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
-use tokio_util::sync::CancellationToken;
+use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
 const DEFAULT_API_ROOT: &str = "https://api.telegram.org";
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+pub const HOSTED_BOT_API_UPLOAD_LIMIT_BYTES: u64 = 50 * 1024 * 1024;
 
 #[async_trait::async_trait]
 pub trait TelegramApi: Send + Sync {
@@ -22,6 +23,11 @@ pub trait TelegramApi: Send + Sync {
         cancellation: &CancellationToken,
     ) -> Result<Vec<Update>, TelegramError>;
     async fn send_message(&self, request: SendMessage<'_>) -> Result<Message, TelegramError>;
+    async fn send_file(
+        &self,
+        request: SendFile<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Message, TelegramError>;
     async fn answer_callback_query(&self, callback_query_id: &str) -> Result<(), TelegramError>;
 }
 
@@ -112,6 +118,13 @@ impl BotApiClient {
             .send()
             .await
             .map_err(classify_request_error)?;
+        self.parse_response(response).await
+    }
+
+    async fn parse_response<T>(&self, response: reqwest::Response) -> Result<T, TelegramError>
+    where
+        T: DeserializeOwned,
+    {
         let status = response.status();
         let bytes = response.bytes().await.map_err(|_| TelegramError::Network)?;
         if bytes.len() > MAX_RESPONSE_BYTES {
@@ -168,6 +181,49 @@ impl TelegramApi for BotApiClient {
             .await
     }
 
+    async fn send_file(
+        &self,
+        request: SendFile<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<Message, TelegramError> {
+        let metadata = tokio::fs::symlink_metadata(request.path)
+            .await
+            .map_err(|_| TelegramError::FileUnavailable)?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(TelegramError::FileUnavailable);
+        }
+        if metadata.len() > request.max_bytes || metadata.len() > HOSTED_BOT_API_UPLOAD_LIMIT_BYTES
+        {
+            return Err(TelegramError::FileTooLarge);
+        }
+        let file = tokio::fs::File::open(request.path)
+            .await
+            .map_err(|_| TelegramError::FileUnavailable)?;
+        let stream = ReaderStream::new(file);
+        let part =
+            multipart::Part::stream_with_length(reqwest::Body::wrap_stream(stream), metadata.len())
+                .file_name(request.file_name.to_owned())
+                .mime_str(request.mime_type)
+                .map_err(|_| TelegramError::ClientConfiguration)?;
+        let (method, field) = match request.kind {
+            SendFileKind::Video => ("sendVideo", "video"),
+            SendFileKind::Document => ("sendDocument", "document"),
+        };
+        let form = multipart::Form::new()
+            .text("chat_id", request.chat_id.to_string())
+            .text("caption", request.caption.to_owned())
+            .part(field, part);
+        let response = tokio::select! {
+            _ = cancellation.cancelled() => return Err(TelegramError::Cancelled),
+            response = self.client
+                .post(self.endpoint(method))
+                .timeout(Duration::from_secs(10 * 60))
+                .multipart(form)
+                .send() => response.map_err(classify_request_error)?,
+        };
+        self.parse_response(response).await
+    }
+
     async fn answer_callback_query(&self, callback_query_id: &str) -> Result<(), TelegramError> {
         let _: bool = self
             .post(
@@ -202,6 +258,10 @@ pub enum TelegramError {
     MalformedResponse,
     #[error("Telegram response exceeded the safety limit")]
     ResponseTooLarge,
+    #[error("the completed media file is unavailable")]
+    FileUnavailable,
+    #[error("the completed media file exceeds Telegram's 50 MB hosted API limit")]
+    FileTooLarge,
     #[error("Telegram API error {code}")]
     Api { code: i64 },
 }
@@ -312,6 +372,23 @@ pub struct SendMessage<'a> {
     pub text: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_markup: Option<&'a InlineKeyboardMarkup>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendFileKind {
+    Video,
+    Document,
+}
+
+#[derive(Clone, Copy)]
+pub struct SendFile<'a> {
+    pub chat_id: i64,
+    pub path: &'a Path,
+    pub file_name: &'a str,
+    pub mime_type: &'a str,
+    pub caption: &'a str,
+    pub kind: SendFileKind,
+    pub max_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -455,11 +532,13 @@ impl CallbackAction {
 mod tests {
     use std::sync::Arc;
 
-    use axum::{Json, Router, extract::State, routing::post};
+    use axum::{Json, Router, body::Bytes, extract::State, http::HeaderMap, routing::post};
     use serde_json::{Value, json};
     use tokio::sync::Mutex;
 
     use super::*;
+
+    type CapturedUpload = Arc<Mutex<Option<(String, Vec<u8>)>>>;
 
     #[tokio::test]
     async fn parses_updates_and_sends_typed_requests_without_exposing_token_in_debug() {
@@ -526,6 +605,105 @@ mod tests {
             Some("fetch_bot")
         );
         assert!(requests.lock().await[0].contains("telegram.invalid/botfixture/getMe"));
+    }
+
+    #[tokio::test]
+    async fn streams_a_typed_multipart_video_upload() {
+        let request = Arc::new(Mutex::new(None));
+        let app = Router::new()
+            .route(
+                "/botfixture/sendVideo",
+                post(
+                    |State(request): State<CapturedUpload>,
+                     headers: HeaderMap,
+                     body: Bytes| async move {
+                        *request.lock().await = Some((
+                            headers
+                                .get("content-type")
+                                .unwrap()
+                                .to_str()
+                                .unwrap()
+                                .to_owned(),
+                            body.to_vec(),
+                        ));
+                        Json(json!({
+                            "ok": true,
+                            "result": {"message_id": 7, "chat": {"id": 42, "type": "private"}}
+                        }))
+                    },
+                ),
+            )
+            .with_state(request.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fixture.mp4");
+        tokio::fs::write(&path, b"video-bytes").await.unwrap();
+        let client = BotApiClient::with_api_root(
+            TelegramToken::try_from("fixture".to_owned()).unwrap(),
+            format!("http://{address}"),
+        )
+        .unwrap();
+
+        let message = client
+            .send_file(
+                SendFile {
+                    chat_id: 42,
+                    path: &path,
+                    file_name: "fixture.mp4",
+                    mime_type: "video/mp4",
+                    caption: "Completed: fixture",
+                    kind: SendFileKind::Video,
+                    max_bytes: HOSTED_BOT_API_UPLOAD_LIMIT_BYTES,
+                },
+                &CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(message.message_id, 7);
+        let (content_type, body) = request.lock().await.take().unwrap();
+        assert!(content_type.starts_with("multipart/form-data; boundary="));
+        let body = String::from_utf8(body).unwrap();
+        assert!(body.contains("name=\"video\""));
+        assert!(body.contains("filename=\"fixture.mp4\""));
+        assert!(body.contains("Completed: fixture"));
+        assert!(body.contains("video-bytes"));
+    }
+
+    #[tokio::test]
+    async fn rejects_files_above_the_hosted_limit_before_network_access() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("oversized.mp4");
+        let file = tokio::fs::File::create(&path).await.unwrap();
+        file.set_len(HOSTED_BOT_API_UPLOAD_LIMIT_BYTES + 1)
+            .await
+            .unwrap();
+        let client = BotApiClient::with_api_root(
+            TelegramToken::try_from("fixture".to_owned()).unwrap(),
+            "http://127.0.0.1:1",
+        )
+        .unwrap();
+
+        assert_eq!(
+            client
+                .send_file(
+                    SendFile {
+                        chat_id: 42,
+                        path: &path,
+                        file_name: "oversized.mp4",
+                        mime_type: "video/mp4",
+                        caption: "Completed",
+                        kind: SendFileKind::Video,
+                        max_bytes: HOSTED_BOT_API_UPLOAD_LIMIT_BYTES,
+                    },
+                    &CancellationToken::new(),
+                )
+                .await
+                .unwrap_err(),
+            TelegramError::FileTooLarge
+        );
     }
 
     async fn record_updates(

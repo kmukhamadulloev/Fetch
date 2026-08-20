@@ -119,6 +119,10 @@ token. The token PUT body is write-only `{"token":"..."}` and saves to the
 native credential store; DELETE does not alter an active
 `FETCH_TELEGRAM_BOT_TOKEN` environment override. Saving settings and replacing
 or removing a token hot-reconfigures the single outbound poller.
+`send_completed_media` opts completed Telegram-owned jobs into attachment
+delivery, while `upload_limit_mb` is an integer from 1 through 50 and defaults
+to 50 for older stored settings. Files above the limit remain local and produce
+a normal completion message without an attachment.
 
 ## Runtime and diagnostics
 

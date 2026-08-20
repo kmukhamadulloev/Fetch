@@ -51,7 +51,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
 - Route yt-dlp and optionally Telegram Bot API traffic through a host-managed
   HTTP, HTTPS, SOCKS4, or SOCKS5 proxy without exposing its endpoint to LAN clients.
 - Optionally queue and stop downloads from allowlisted private Telegram chats
-  through outbound-only long polling, without uploading completed media.
+  through outbound-only long polling, and optionally return completed media up
+  to a host-configured 50 MB ceiling.
 - Inspect retained process logs and database, runtime, and output diagnostics.
 
 ## How it works

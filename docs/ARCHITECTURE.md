@@ -70,9 +70,9 @@ Owns:
 ### fetch-telegram
 
 Owns the optional Telegram Bot API transport, typed update/message/callback
-serialization, long polling, timeout/rate-limit mapping, and token redaction.
-It does not depend on Axum, SQLite, yt-dlp, or Vue and contains no download
-policy.
+serialization, streamed multipart file upload, long polling, timeout/rate-limit
+mapping, and token redaction. It does not depend on Axum, SQLite, yt-dlp, or Vue
+and contains no download policy.
 
 ### fetch-server
 Owns:
@@ -194,7 +194,10 @@ service. See `PROXY.md`.
 Telegram configuration, polling offset, pending confirmations, and job
 correlations are stored separately from LAN-readable application settings. The
 bot token is held by a secret-store adapter or a headless environment override,
-never SQLite. Telegram settings application services are host-authorized.
+never SQLite. Telegram settings application services are host-authorized. The
+manager resolves a completed file only through its persisted Telegram job
+correlation and applies the configured size policy before the adapter streams
+the file.
 
 ## Process ownership
 

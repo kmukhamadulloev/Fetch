@@ -42,6 +42,8 @@ const fixtureTelegram: TelegramIntegration = {
   settings: {
     enabled: true,
     use_proxy: true,
+    send_completed_media: true,
+    upload_limit_mb: 25,
     allowed_user_ids: [123],
     notify_queued: false,
     notify_completed: true,

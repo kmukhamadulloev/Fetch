@@ -16,6 +16,29 @@ Fetch 0.1.4 implementation and the complete local Rust/frontend/browser gate
 are green. Cross-platform native archive verification and interactive
 tray/startup gates remain before this section can return to COMPLETE.
 
+## UX-025 — Telegram cannot return completed media
+
+Status: RESOLVED
+
+Affected:
+- fetch-core
+- fetch-telegram
+- app/fetch
+- web
+
+Expected: The host can explicitly allow completed downloads created by a
+Telegram user to be returned to that user's private chat under a configurable
+size limit, without making media delivery the default.
+
+Actual: Telegram sent only a text completion notice even when the completed
+file was small enough for the hosted Bot API.
+
+Resolution: Added off-by-default completed-media delivery with a persisted
+1–50 MB ceiling and 50 MB default. Fetch resolves files through Telegram job
+ownership, streams multipart uploads from disk, sends MP4 as video and other
+formats as documents, rechecks size before transport, and falls back to a
+redacted text notice for oversized, unavailable, or failed attachments.
+
 ## Non-blocking distribution follow-up
 
 Status: DOCUMENTED

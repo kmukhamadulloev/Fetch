@@ -139,6 +139,10 @@ Connection testing has independent progress/error feedback, and the card
 remains contained in the mobile settings layout. While visible, it
 receives live connection state through the shared host-only SSE stream without
 polling the settings endpoint or replacing unsaved form edits.
+The same enabled fieldset contains an off-by-default **Send completed media**
+control and an integer 1–50 MB limit. The limit defaults to 50 MB, is editable
+only while delivery is selected, and explains that larger files remain local
+and receive a text-only completion notice.
 
 Theme supports Dark, Light, and Use system. The preference is local to each
 browser so LAN clients can independently follow their device appearance.

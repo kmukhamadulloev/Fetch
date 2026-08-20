@@ -112,8 +112,10 @@ Fetch 0.1.4 may use Telegram's Bot API as an explicitly configured outbound
 remote-control integration. It remains disabled by default, uses long polling
 instead of a webhook, accepts commands only from allowlisted users in private
 chats, and reuses core analysis/download services. It must not expose the Fetch
-listener, upload completed media, accept arbitrary yt-dlp arguments, or make
-local operation depend on Telegram. See `TELEGRAM.md`.
+listener, upload unrelated or web-created completed media, accept arbitrary
+yt-dlp arguments, or make local operation depend on Telegram. Explicitly
+enabled delivery may stream a Telegram-owned completed file back to its private
+chat within a host-configured 1–50 MB ceiling. See `TELEGRAM.md`.
 
 ## Logs
 - application logs;

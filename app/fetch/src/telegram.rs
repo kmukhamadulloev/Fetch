@@ -16,7 +16,7 @@ use fetch_core::{
 use fetch_storage::Storage;
 use fetch_telegram::{
     Backoff, BotApiClient, CallbackAction, IncomingMessage, InlineKeyboardButton,
-    InlineKeyboardMarkup, SendMessage, TelegramApi, TelegramError, Update,
+    InlineKeyboardMarkup, SendFile, SendFileKind, SendMessage, TelegramApi, TelegramError, Update,
 };
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -1202,7 +1202,7 @@ async fn run_notifications(inner: Arc<ManagerInner>, cancellation: CancellationT
                 continue;
             }
         };
-        if let Err(error) = deliver_notification(&inner, &client, &event).await {
+        if let Err(error) = deliver_notification(&inner, &client, &event, &cancellation).await {
             tracing::warn!(subsystem = "telegram", error = %error.public_message(), "could not send Telegram terminal notification");
             let _ = inner
                 .storage
@@ -1243,6 +1243,7 @@ async fn deliver_notification(
     inner: &ManagerInner,
     client: &dyn TelegramApi,
     event: &ApplicationEvent,
+    cancellation: &CancellationToken,
 ) -> Result<(), FetchError> {
     let (job, completed) = match event {
         ApplicationEvent::DownloadCompleted(job) => (job, true),
@@ -1282,7 +1283,188 @@ async fn deliver_notification(
         "{state}: {}",
         job.request.title.as_deref().unwrap_or("Untitled download")
     );
+    if completed && settings.send_completed_media {
+        let file = inner
+            .storage
+            .get_completed_file_for_job(job.id)
+            .await
+            .map_err(storage_error)?;
+        let Some(file) = file else {
+            let _ = inner
+                .storage
+                .append_log(
+                    "warn",
+                    "telegram",
+                    "Completed media attachment is unavailable",
+                    Some(&format!("job_id: {}", job.id)),
+                )
+                .await;
+            return send_text(
+                client,
+                owner.chat_id,
+                &format!("{text}\nAttachment unavailable on the Fetch host."),
+                None,
+            )
+            .await;
+        };
+        let metadata = tokio::fs::symlink_metadata(&file.path).await;
+        let actual_size = match metadata {
+            Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
+                metadata.len()
+            }
+            _ => {
+                tracing::warn!(
+                    subsystem = "telegram",
+                    job_id = %job.id,
+                    file_id = %file.id,
+                    "Telegram attachment is unavailable"
+                );
+                let _ = inner
+                    .storage
+                    .append_log(
+                        "warn",
+                        "telegram",
+                        "Completed media attachment is unavailable",
+                        Some(&format!("job_id: {}\nfile_id: {}", job.id, file.id)),
+                    )
+                    .await;
+                return send_text(
+                    client,
+                    owner.chat_id,
+                    &format!("{text}\nAttachment unavailable on the Fetch host."),
+                    None,
+                )
+                .await;
+            }
+        };
+        let limit_bytes = u64::from(settings.upload_limit_mb) * 1024 * 1024;
+        if actual_size > limit_bytes {
+            tracing::info!(
+                subsystem = "telegram",
+                job_id = %job.id,
+                file_id = %file.id,
+                size_bytes = actual_size,
+                limit_bytes,
+                "Telegram attachment skipped because it exceeds the configured limit"
+            );
+            let _ = inner
+                .storage
+                .append_log(
+                    "info",
+                    "telegram",
+                    "Completed media exceeds the Telegram upload limit",
+                    Some(&format!(
+                        "job_id: {}\nfile_id: {}\nsize_bytes: {actual_size}\nlimit_bytes: {limit_bytes}",
+                        job.id, file.id
+                    )),
+                )
+                .await;
+            return send_text(
+                client,
+                owner.chat_id,
+                &format!(
+                    "{text}\nAttachment skipped: {} MB exceeds your {} MB limit.",
+                    display_megabytes(actual_size),
+                    settings.upload_limit_mb
+                ),
+                None,
+            )
+            .await;
+        }
+        let kind = telegram_file_kind(&file.mime_type);
+        tracing::info!(
+            subsystem = "telegram",
+            job_id = %job.id,
+            file_id = %file.id,
+            size_bytes = actual_size,
+            "uploading completed media to Telegram"
+        );
+        match client
+            .send_file(
+                SendFile {
+                    chat_id: owner.chat_id,
+                    path: &file.path,
+                    file_name: &file.filename,
+                    mime_type: &file.mime_type,
+                    caption: &text,
+                    kind,
+                    max_bytes: limit_bytes,
+                },
+                cancellation,
+            )
+            .await
+        {
+            Ok(_) => {
+                tracing::info!(
+                    subsystem = "telegram",
+                    job_id = %job.id,
+                    file_id = %file.id,
+                    size_bytes = actual_size,
+                    "completed media uploaded to Telegram"
+                );
+                let _ = inner
+                    .storage
+                    .append_log(
+                        "info",
+                        "telegram",
+                        "Completed media uploaded to Telegram",
+                        Some(&format!(
+                            "job_id: {}\nfile_id: {}\nsize_bytes: {actual_size}",
+                            job.id, file.id
+                        )),
+                    )
+                    .await;
+                return Ok(());
+            }
+            Err(TelegramError::Cancelled) => {
+                return Err(FetchError::Internal(
+                    "Telegram request was cancelled".into(),
+                ));
+            }
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "telegram",
+                    job_id = %job.id,
+                    file_id = %file.id,
+                    size_bytes = actual_size,
+                    error = %error,
+                    "completed media upload failed"
+                );
+                let _ = inner
+                    .storage
+                    .append_log(
+                        "warn",
+                        "telegram",
+                        "Completed media upload failed",
+                        Some(&format!(
+                            "job_id: {}\nfile_id: {}\nsize_bytes: {actual_size}\ncause: {error}",
+                            job.id, file.id
+                        )),
+                    )
+                    .await;
+                return send_text(
+                    client,
+                    owner.chat_id,
+                    &format!("{text}\nAttachment upload failed: {error}"),
+                    None,
+                )
+                .await;
+            }
+        }
+    }
     send_text(client, owner.chat_id, &text, None).await
+}
+
+fn display_megabytes(bytes: u64) -> String {
+    format!("{:.1}", bytes as f64 / (1024.0 * 1024.0))
+}
+
+fn telegram_file_kind(mime_type: &str) -> SendFileKind {
+    if mime_type == "video/mp4" {
+        SendFileKind::Video
+    } else {
+        SendFileKind::Document
+    }
 }
 
 async fn effective_token_for(
@@ -1390,7 +1572,7 @@ fn credential_error(operation: &str, error: keyring::Error) -> FetchError {
 mod tests {
     use std::path::PathBuf;
 
-    use fetch_core::{DownloadJob, MediaInfo, PlaylistEntry};
+    use fetch_core::{CompletedFile, DownloadJob, MediaInfo, PlaylistEntry};
     use fetch_telegram::{BotUser, Chat, Message, User};
     use tokio::sync::Mutex;
 
@@ -1410,9 +1592,20 @@ mod tests {
         keyboard: Option<InlineKeyboardMarkup>,
     }
 
+    #[derive(Clone)]
+    struct SentFile {
+        chat_id: i64,
+        file_name: String,
+        mime_type: String,
+        caption: String,
+        kind: SendFileKind,
+    }
+
     #[derive(Default)]
     struct FakeTelegramApi {
         messages: Mutex<Vec<SentMessage>>,
+        files: Mutex<Vec<SentFile>>,
+        file_error: Mutex<Option<TelegramError>>,
     }
 
     #[async_trait::async_trait]
@@ -1503,6 +1696,31 @@ mod tests {
                     kind: "private".into(),
                 },
                 text: Some(request.text.into()),
+            })
+        }
+        async fn send_file(
+            &self,
+            request: SendFile<'_>,
+            _cancellation: &CancellationToken,
+        ) -> Result<Message, TelegramError> {
+            if let Some(error) = self.file_error.lock().await.take() {
+                return Err(error);
+            }
+            self.files.lock().await.push(SentFile {
+                chat_id: request.chat_id,
+                file_name: request.file_name.into(),
+                mime_type: request.mime_type.into(),
+                caption: request.caption.into(),
+                kind: request.kind,
+            });
+            Ok(Message {
+                message_id: 2,
+                from: None,
+                chat: Chat {
+                    id: request.chat_id,
+                    kind: "private".into(),
+                },
+                text: None,
             })
         }
         async fn answer_callback_query(
@@ -1794,14 +2012,161 @@ mod tests {
             .unwrap();
         job.status = DownloadStatus::Completed;
 
-        deliver_notification(&inner, &client, &ApplicationEvent::DownloadCompleted(job))
-            .await
-            .unwrap();
+        deliver_notification(
+            &inner,
+            &client,
+            &ApplicationEvent::DownloadCompleted(job.clone()),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
         let messages = client.messages.lock().await;
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "Completed: Safe title");
         assert!(!messages[0].text.contains("secret.example"));
         assert!(!messages[0].text.contains("/private"));
+    }
+
+    #[tokio::test]
+    async fn completed_media_uploads_only_within_the_configured_limit() {
+        let (inner, downloads) = test_inner().await;
+        let client = FakeTelegramApi::default();
+        inner
+            .storage
+            .save_telegram_settings(&TelegramSettings {
+                enabled: true,
+                allowed_user_ids: vec![42],
+                notify_completed: true,
+                send_completed_media: true,
+                upload_limit_mb: 1,
+                privacy_acknowledged: true,
+                ..TelegramSettings::default()
+            })
+            .await
+            .unwrap();
+        let mut job = downloads
+            .create(DownloadRequest {
+                url: "https://example.test/media".into(),
+                title: Some("Fixture video".into()),
+                duration_seconds: None,
+                mode: DownloadMode::Video,
+                format_id: None,
+                quality: None,
+                container: None,
+                video_codec: None,
+                audio_codec: None,
+                embed_metadata: false,
+                embed_thumbnail: false,
+                subtitles: false,
+                playlist: None,
+                output_directory: None,
+            })
+            .await
+            .unwrap();
+        inner
+            .storage
+            .associate_telegram_job(&TelegramJobOwner {
+                job_id: job.id,
+                user_id: 42,
+                chat_id: 42,
+            })
+            .await
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fixture.mp4");
+        tokio::fs::write(&path, b"video-bytes").await.unwrap();
+        inner
+            .storage
+            .insert_completed_file(&CompletedFile {
+                id: Uuid::new_v4(),
+                job_id: job.id,
+                playlist: None,
+                filename: "fixture.mp4".into(),
+                path,
+                thumbnail_path: None,
+                thumbnail_available: false,
+                size_bytes: 11,
+                mime_type: "video/mp4".into(),
+                title: Some("Fixture video".into()),
+                browser_playable: true,
+                playback: None,
+                created_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+        job.status = DownloadStatus::Completed;
+
+        deliver_notification(
+            &inner,
+            &client,
+            &ApplicationEvent::DownloadCompleted(job.clone()),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let files = client.files.lock().await;
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].chat_id, 42);
+        assert_eq!(files[0].file_name, "fixture.mp4");
+        assert_eq!(files[0].mime_type, "video/mp4");
+        assert_eq!(files[0].caption, "Completed: Fixture video");
+        assert_eq!(files[0].kind, SendFileKind::Video);
+        drop(files);
+
+        let completed = inner
+            .storage
+            .get_completed_file_for_job(job.id)
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::fs::File::create(&completed.path)
+            .await
+            .unwrap()
+            .set_len(1024 * 1024 + 1)
+            .await
+            .unwrap();
+        deliver_notification(
+            &inner,
+            &client,
+            &ApplicationEvent::DownloadCompleted(job.clone()),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(client.files.lock().await.len(), 1);
+        assert!(
+            client
+                .messages
+                .lock()
+                .await
+                .last()
+                .unwrap()
+                .text
+                .contains("exceeds your 1 MB limit")
+        );
+
+        tokio::fs::write(&completed.path, b"video-bytes")
+            .await
+            .unwrap();
+        *client.file_error.lock().await = Some(TelegramError::Network);
+        deliver_notification(
+            &inner,
+            &client,
+            &ApplicationEvent::DownloadCompleted(job),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+        let fallback = client.messages.lock().await.last().unwrap().text.clone();
+        assert!(fallback.contains("Attachment upload failed: Telegram is unreachable"));
+        assert!(!fallback.contains(completed.path.to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn telegram_uses_video_for_mp4_and_documents_for_other_formats() {
+        assert_eq!(telegram_file_kind("video/mp4"), SendFileKind::Video);
+        assert_eq!(telegram_file_kind("video/webm"), SendFileKind::Document);
+        assert_eq!(telegram_file_kind("audio/mpeg"), SendFileKind::Document);
     }
 
     #[tokio::test]

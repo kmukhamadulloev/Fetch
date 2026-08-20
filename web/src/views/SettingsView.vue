@@ -79,11 +79,17 @@ const telegramUserIdsValid = computed(() => telegramUserValues.value.length > 0
   && telegramUserValues.value.length <= 64
   && new Set(telegramParsedUserIds.value).size === telegramParsedUserIds.value.length
   && telegramParsedUserIds.value.every((value) => Number.isSafeInteger(value) && value > 0))
+const telegramUploadLimitValid = computed(() => !telegramForm.value?.send_completed_media
+  || (Number.isInteger(telegramForm.value.upload_limit_mb)
+    && telegramForm.value.upload_limit_mb >= 1
+    && telegramForm.value.upload_limit_mb <= 50))
 const telegramSetupIssues = computed(() => {
   if (!telegramForm.value?.enabled || !telegram.value) return []
   const issues: string[] = []
   if (!telegram.value.status.token_configured) issues.push('Save a bot token before enabling Telegram.')
   if (!telegramUserIdsValid.value) issues.push('Add at least one valid numeric Telegram user ID.')
+  if (!telegramUploadLimitValid.value) issues.push('Set the media upload limit between 1 and 50 MB.')
+  if (telegramForm.value.send_completed_media && !telegramForm.value.notify_completed) issues.push('Enable Completed notifications to send completed media.')
   if (!telegramForm.value.privacy_acknowledged) issues.push('Accept the Telegram privacy notice.')
   return issues
 })
@@ -331,7 +337,21 @@ async function saveTelegramToken() {
                     <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3"><span class="setting-title">Failed / stopped</span><input v-model="telegramForm.notify_failed" type="checkbox" /></label>
                   </div>
                 </div>
-                <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>I understand that submitted URLs, titles, commands, Telegram identifiers, and status messages pass through Telegram's service. Fetch does not upload downloaded media.</span></label>
+                <div class="rounded-xl bg-[var(--app-surface-2)] p-4">
+                  <label class="setting-row">
+                    <span><span class="setting-title">Send completed media</span><span class="setting-help">Upload Telegram-owned completed downloads back to that private chat.</span></span>
+                    <input v-model="telegramForm.send_completed_media" type="checkbox" aria-label="Send completed media" />
+                  </label>
+                  <label class="field mt-4 max-w-64" :class="{ 'opacity-50': !telegramForm.send_completed_media }">
+                    <span>Maximum attachment size</span>
+                    <span class="relative block">
+                      <input v-model.number="telegramForm.upload_limit_mb" class="input pr-12" type="number" inputmode="numeric" min="1" max="50" step="1" :disabled="!telegramForm.send_completed_media" aria-label="Maximum attachment size" />
+                      <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-muted">MB</span>
+                    </span>
+                    <small>1–50 MB. The default 50 MB matches Telegram's hosted Bot API limit. Larger files stay available in Fetch and receive a completion notice without an attachment.</small>
+                  </label>
+                </div>
+                <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>I understand that submitted URLs, titles, commands, Telegram identifiers, and status messages pass through Telegram's service. When completed-media delivery is enabled, those media files are also uploaded to Telegram.</span></label>
               </fieldset>
               <div v-if="telegram.value.status.error" class="warning-panel"><TriangleAlert :size="18" class="shrink-0" /><span>{{ telegram.value.status.error }}</span></div>
               <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">

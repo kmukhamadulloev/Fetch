@@ -20,6 +20,8 @@ developer-visible behavior, compatibility, and release operations.
   behavior, live reconnects, bounded tests, and redacted diagnostics.
 - Reworked Telegram setup with enable-gated fields, readiness warnings, and a
   safe show/hide control for newly entered tokens.
+- Added opt-in streamed delivery of completed Telegram-owned media with a
+  configurable 1–50 MB limit, 50 MB default, and text-only failure fallback.
 
 ## 0.1.3 — 2026-08-18
 

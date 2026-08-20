@@ -46,9 +46,13 @@ host browser may configure or test the integration.
 Bot commands are accepted only from explicitly allowlisted Telegram users in
 private chats. Authorization precedes parsing or retaining message content.
 Opaque expiring single-use callbacks and persisted update deduplication prevent
-replay and duplicate downloads. Fetch sends status metadata to Telegram but
-does not upload completed media, raw diagnostics, filesystem paths, or LAN
-URLs. See `TELEGRAM.md` for the complete privacy and threat boundary.
+replay and duplicate downloads. Completed-media delivery is separately disabled
+by default and can upload only a completed file correlated to that Telegram
+user's job. Fetch rechecks the live file size against the configured 1–50 MB
+ceiling before streaming it from disk and rejects symbolic links or non-regular
+files; it never places filesystem paths, raw diagnostics, or LAN URLs in
+Telegram messages or retained Telegram logs. See `TELEGRAM.md` for the complete
+privacy and threat boundary.
 
 ## Filesystem
 File and thumbnail endpoints use opaque stored IDs, not arbitrary paths.

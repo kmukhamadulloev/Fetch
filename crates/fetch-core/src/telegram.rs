@@ -6,6 +6,8 @@ use crate::{DownloadMode, FetchError, MediaInfo};
 
 const MAX_ALLOWED_USERS: usize = 64;
 const MAX_TOKEN_LENGTH: usize = 512;
+pub const DEFAULT_TELEGRAM_UPLOAD_LIMIT_MB: u8 = 50;
+pub const MAX_TELEGRAM_UPLOAD_LIMIT_MB: u8 = 50;
 
 #[async_trait::async_trait]
 pub trait TelegramOperations: Send + Sync {
@@ -53,6 +55,10 @@ pub struct TelegramSettings {
     #[serde(default)]
     pub use_proxy: bool,
     #[serde(default)]
+    pub send_completed_media: bool,
+    #[serde(default = "default_telegram_upload_limit_mb")]
+    pub upload_limit_mb: u8,
+    #[serde(default)]
     pub allowed_user_ids: Vec<i64>,
     #[serde(default = "default_true")]
     pub notify_queued: bool,
@@ -69,6 +75,8 @@ impl Default for TelegramSettings {
         Self {
             enabled: false,
             use_proxy: false,
+            send_completed_media: false,
+            upload_limit_mb: DEFAULT_TELEGRAM_UPLOAD_LIMIT_MB,
             allowed_user_ids: Vec::new(),
             notify_queued: true,
             notify_completed: true,
@@ -80,6 +88,11 @@ impl Default for TelegramSettings {
 
 impl TelegramSettings {
     pub fn validate(&self) -> Result<(), FetchError> {
+        if !(1..=MAX_TELEGRAM_UPLOAD_LIMIT_MB).contains(&self.upload_limit_mb) {
+            return Err(FetchError::InvalidSettings(format!(
+                "Telegram upload limit must be between 1 and {MAX_TELEGRAM_UPLOAD_LIMIT_MB} MB"
+            )));
+        }
         if self.allowed_user_ids.len() > MAX_ALLOWED_USERS {
             return Err(FetchError::InvalidSettings(format!(
                 "Telegram allows at most {MAX_ALLOWED_USERS} user IDs"
@@ -108,6 +121,11 @@ impl TelegramSettings {
                 "Telegram privacy acknowledgement is required before enabling the bot".into(),
             ));
         }
+        if self.enabled && self.send_completed_media && !self.notify_completed {
+            return Err(FetchError::InvalidSettings(
+                "completed notifications must be enabled to send completed media".into(),
+            ));
+        }
         Ok(())
     }
 
@@ -126,6 +144,10 @@ impl TelegramSettings {
             && identity.user_id == identity.chat_id
             && self.allowed_user_ids.contains(&identity.user_id)
     }
+}
+
+const fn default_telegram_upload_limit_mb() -> u8 {
+    DEFAULT_TELEGRAM_UPLOAD_LIMIT_MB
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -274,6 +296,8 @@ mod tests {
         )
         .unwrap();
         assert!(!previous.use_proxy);
+        assert!(!previous.send_completed_media);
+        assert_eq!(previous.upload_limit_mb, DEFAULT_TELEGRAM_UPLOAD_LIMIT_MB);
     }
 
     #[test]
@@ -306,6 +330,34 @@ mod tests {
 
         assert!(settings.validate_activation(false).is_err());
         settings.validate_activation(true).unwrap();
+    }
+
+    #[test]
+    fn upload_limit_stays_within_the_hosted_bot_api_boundary() {
+        for upload_limit_mb in [0, MAX_TELEGRAM_UPLOAD_LIMIT_MB + 1] {
+            let settings = TelegramSettings {
+                upload_limit_mb,
+                ..TelegramSettings::default()
+            };
+            assert!(settings.validate().is_err());
+        }
+        TelegramSettings {
+            send_completed_media: true,
+            upload_limit_mb: MAX_TELEGRAM_UPLOAD_LIMIT_MB,
+            ..TelegramSettings::default()
+        }
+        .validate()
+        .unwrap();
+
+        let media_without_completed_notifications = TelegramSettings {
+            enabled: true,
+            send_completed_media: true,
+            notify_completed: false,
+            allowed_user_ids: vec![42],
+            privacy_acknowledged: true,
+            ..TelegramSettings::default()
+        };
+        assert!(media_without_completed_notifications.validate().is_err());
     }
 
     #[test]

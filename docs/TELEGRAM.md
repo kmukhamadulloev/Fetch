@@ -24,11 +24,14 @@ Telegram is disabled or unreachable.
 - a separate confirmation before a complete playlist is queued;
 - Stop actions for active jobs created by that Telegram user;
 - queued, completed, failed, and stopped notifications;
+- optional delivery of completed Telegram-owned media within a host-configured
+  size ceiling;
 - host-only configuration and connection diagnostics.
 
 0.1.4 does not support:
 
-- uploading completed media, thumbnails, or cached files to Telegram;
+- uploading web-created jobs, unrelated library entries, thumbnails, or cached
+  application artifacts to Telegram;
 - browsing or deleting the Completed library;
 - arbitrary yt-dlp arguments or format IDs;
 - accepting commands in groups, channels, or non-allowlisted private chats;
@@ -81,6 +84,8 @@ settings:
 ```text
 enabled: boolean
 use_proxy: boolean
+send_completed_media: boolean
+upload_limit_mb: integer (1..50, default 50)
 allowed_user_ids: integer[]
 notify_queued: boolean
 notify_completed: boolean
@@ -129,8 +134,9 @@ The integration is disabled by default. Enabling requires:
 - a configured token;
 - at least one allowed numeric user ID;
 - successful `getMe` validation;
-- explicit acknowledgement that submitted URLs, returned titles/status, and
-  Telegram account metadata pass through Telegram's service.
+- explicit acknowledgement that submitted URLs, returned titles/status,
+  Telegram account metadata, and opted-in completed media pass through
+  Telegram's service.
 
 Every update is authorized before its text, URL, callback, or command is
 processed. Only private chats where `from.id == chat.id` and the user ID is
@@ -172,8 +178,27 @@ buttons. A Stop callback can affect only a correlated job owned by that user.
 Send one queued notice and one terminal completed, failed, or stopped notice
 according to saved notification preferences. Do not send a message for every
 progress event. Failures use the public error summary and never raw yt-dlp
-diagnostics. Completed notices contain title and local completion state, not a
-media attachment or a public Fetch URL.
+diagnostics. Completed notices contain title and local completion state and
+never contain a public Fetch URL.
+
+Completed-media delivery is disabled by default. When enabled, Fetch looks up
+the completed file through the persisted Telegram job ownership record and
+streams only that file back to the owner's private chat. MP4 files use
+`sendVideo`; other completed formats use `sendDocument`. Playlist children are
+handled independently under the same ownership and size rules. Fetch does not
+upload thumbnails, arbitrary filesystem paths, web-created downloads, or
+unrelated Completed-library entries.
+
+`upload_limit_mb` defaults to 50 and accepts integers from 1 through 50. Fetch
+checks the live filesystem size before opening the upload and the transport
+checks it again before sending. Non-regular files and symbolic links are
+rejected. Files above the configured limit remain local and receive a text-only
+completion notice. Missing files and upload failures also fall back to a concise
+completion message without paths or raw transport details. The hosted Bot API
+currently documents a 50 MB multipart upload limit;
+Fetch does not support a separately hosted local Bot API in this scope. See
+Telegram's [Sending files](https://core.telegram.org/bots/api#sending-files)
+contract for the upstream boundary.
 
 ## Polling, reliability, and shutdown
 
@@ -182,6 +207,8 @@ media attachment or a public Fetch URL.
 - Deduplicate update IDs before any side effect.
 - Persist pending actions and job correlations before acknowledging an update.
 - Use bounded connect, request, and long-poll durations.
+- Stream attachments from disk with a bounded upload duration; never buffer an
+  entire media file in memory.
 - Honor Telegram retry-after responses and use capped exponential backoff with
   jitter for transient failures.
 - Treat invalid/revoked token, conflicting poller, forbidden bot, and malformed
@@ -202,6 +229,7 @@ density and mobile settings navigation. The Telegram card includes:
 - environment-managed token explanation when applicable;
 - one numeric allowed user ID per line;
 - queued/completed/failed notification toggles;
+- off-by-default completed-media delivery and an integer 1–50 MB limit;
 - privacy acknowledgement;
 - Test connection and Save controls with independent progress/errors;
 - setup instructions for creating a bot and obtaining the caller's numeric ID.
@@ -224,6 +252,9 @@ rate limiting, and invalid allow-list values without exposing secrets.
    status refresh/events, validation, and setup guidance.
 6. **Hardening and release** — complete deterministic integration/browser
    tests, opt-in live smoke, security review, docs, packaging, and release gates.
+7. **Bounded media delivery** — add opt-in persisted controls, streamed
+   multipart transport, ownership/size enforcement, fallback notices, redacted
+   diagnostics, responsive UI, and deterministic tests.
 
 Each checkpoint is committed only after its focused tests pass. No checkpoint
 may put a real bot token, chat transcript, external URL, database, or generated
@@ -241,8 +272,12 @@ test artifact into Git.
 - [x] URL analysis and download creation reuse core services without HTTP or
   direct process execution.
 - [x] Playlist downloads require a count-bearing second confirmation.
-- [x] Notifications are bounded, preference-aware, and contain no media files,
-  raw diagnostics, filesystem paths, or Fetch LAN URLs.
+- [x] Notifications are bounded and preference-aware; media delivery is
+  separately opt-in and restricted to completed jobs owned by that Telegram
+  user, while raw diagnostics, paths, and Fetch LAN URLs are never sent.
+- [x] Media uploads are streamed rather than buffered, enforce both the saved
+  1–50 MB limit and hosted 50 MB ceiling, and fall back to a text notice when
+  skipped, unavailable, or rejected.
 - [x] Host-only settings are usable on desktop and mobile; LAN browsers cannot
   request integration secrets or configuration.
 - [x] Timeouts, rate limits, invalid tokens, poller conflicts, network loss, and
@@ -259,7 +294,7 @@ test artifact into Git.
 
 - group/channel operation;
 - multiple bot profiles;
-- uploading or streaming completed files through Telegram;
+- local Bot API server support and uploads above the hosted 50 MB ceiling;
 - browsing/deleting the Completed library;
 - per-user formats, output roots, history, quotas, or recommendations;
 - webhook deployment or a hosted Fetch relay.

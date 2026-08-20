@@ -119,10 +119,12 @@ coverage includes typed Bot API parsing, private-chat authorization, command
 and callback parsing, update deduplication and restart recovery, atomic
 single-use callback consumption, playlist request expansion, job ownership,
 secret redaction, rate-limit classification, cancellation, and host-only API
-responses. Frontend and Playwright coverage verifies host/remote settings,
-blank-after-save token UI, validation, and mobile containment. Poller lifecycle,
-playlist callback, Stop, and terminal-notification integration cases remain
-explicit 0.1.4 release-gate work.
+responses. Multipart transport tests verify streamed video fields and preflight
+hosted-size rejection; manager tests cover owned-file lookup, configured-size
+skips, upload failure fallback, and redacted output. Frontend and Playwright
+coverage verifies host/remote settings, blank-after-save token UI, validation,
+completed-media controls, and mobile containment. Poller lifecycle, playlist
+callback, Stop, and terminal notifications are covered by deterministic tests.
 
 A real Telegram bot is never required for ordinary CI. Any live smoke is
 manual or explicitly selected, reads its token from a CI secret/environment,

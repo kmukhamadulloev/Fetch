@@ -27,7 +27,7 @@ async function mockApi(
   let completed = [...completedFixture]
   let proxy: ProxySettings = { mode: 'system', url: null }
   let telegram: TelegramIntegration = {
-    settings: { enabled: false, use_proxy: false, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
+    settings: { enabled: false, use_proxy: false, send_completed_media: false, upload_limit_mb: 50, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
     status: { state: 'disabled', token_configured: false, token_source: 'missing', bot_username: null, last_success_at: null, error: null },
   }
   await page.route('**/*', async (route) => {
@@ -217,12 +217,18 @@ test('host can configure Telegram without the token appearing in responses or th
 
   await page.getByLabel('Allowed Telegram user IDs, one per line').fill('123456789')
   await page.getByLabel('Use Fetch proxy').check()
+  await page.getByLabel('Send completed media').check()
+  await expect(page.getByLabel('Maximum attachment size')).toHaveValue('50')
+  await page.getByLabel('Maximum attachment size').fill('0')
+  await expect(page.getByText('Set the media upload limit between 1 and 50 MB.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeDisabled()
+  await page.getByLabel('Maximum attachment size').fill('25')
   await page.getByText('I understand that submitted URLs').click()
   await expect(page.getByText('Ready to save')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeEnabled()
   const settingsSave = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/settings' && request.method() === 'PUT')
   await page.getByRole('button', { name: 'Save Telegram settings' }).click()
-  expect((await settingsSave).postDataJSON()).toMatchObject({ enabled: true, use_proxy: true, allowed_user_ids: [123456789] })
+  expect((await settingsSave).postDataJSON()).toMatchObject({ enabled: true, use_proxy: true, send_completed_media: true, upload_limit_mb: 25, allowed_user_ids: [123456789] })
   await expect(page.getByText('Telegram updated')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientWidth),
