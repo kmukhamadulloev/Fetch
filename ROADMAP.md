@@ -100,12 +100,12 @@ turning Fetch into a hosted service.
   version information in responsive Runtime settings.
 - [x] Cover argument construction, persistence, discovery, API behavior, and
   desktop/mobile controls with automated tests and documentation.
-- [ ] Align 0.1.4 package metadata and release notes after the 0.1.3 release
-  baseline is finalized.
+- [x] Align workspace, frontend, lockfile, and OpenAPI version metadata to
+  0.1.4; add release notes only after behavior is verified.
 
 ### Telegram bot foundation
 
-- [ ] Add typed Telegram settings, status, authorization, pending-action, and
+- [x] Add typed Telegram settings, status, authorization, pending-action, and
   job-notification domain models without coupling `fetch-core` to HTTP.
 - [ ] Add SQLite migrations for non-secret integration settings, polling
   offset, expiring analysis confirmations, and job notification ownership.

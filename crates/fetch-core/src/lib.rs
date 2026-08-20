@@ -9,6 +9,7 @@ mod proxy;
 mod runtime;
 mod settings;
 mod status;
+mod telegram;
 
 pub use diagnostics::*;
 pub use downloads::*;
@@ -19,3 +20,4 @@ pub use proxy::*;
 pub use runtime::*;
 pub use settings::*;
 pub use status::*;
+pub use telegram::*;

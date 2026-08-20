@@ -3,6 +3,14 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
+## 0.1.4 — In development
+
+- Added automatic and explicit yt-dlp JavaScript-runtime controls.
+- Added Deno, Node, and QuickJS host discovery with version/status feedback.
+- Hot-applied JavaScript-runtime changes to analysis and queued/new downloads.
+- Established typed Telegram integration, authorization, pending-action,
+  notification, repository, secret-store, and host-service contracts.
+
 ## 0.1.3 — 2026-08-18
 
 - Added host-managed system-default, forced-direct, and custom proxy modes.

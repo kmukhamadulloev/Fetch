@@ -1,6 +1,6 @@
 # Telegram Bot Integration
 
-Status: approved plan for Fetch 0.1.4.
+Status: implementation in progress for Fetch 0.1.4.
 
 ## Purpose
 
