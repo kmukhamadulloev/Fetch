@@ -20,7 +20,8 @@ use fetch_core::{
     ApplicationEvent, ApplicationSettings, CompletedOperations, DiagnosticOperations,
     DownloadOperations, DownloadRequest, DownloadStatus, ErrorCode, ErrorResponse, EventBus,
     FetchError, ListenerOperations, MediaAnalysis, PlaybackProgressUpdate, ProxyOperations,
-    ProxySettings, RuntimeStatus, SettingsOperations, StatusService,
+    ProxySettings, RuntimeStatus, SettingsOperations, StatusService, TelegramIntegration,
+    TelegramOperations, TelegramSettings, TelegramToken,
 };
 use fetch_runtime::RuntimeManager;
 use rust_embed::Embed;
@@ -41,6 +42,7 @@ pub struct ServerServices {
     pub listener: Arc<dyn ListenerOperations>,
     pub network_policy: NetworkPolicy,
     pub diagnostics: Arc<dyn DiagnosticOperations>,
+    pub telegram: Arc<dyn TelegramOperations>,
     pub shutdown: CancellationToken,
 }
 
@@ -131,6 +133,13 @@ pub fn router(services: ServerServices) -> Router {
         )
         .route("/api/settings", get(get_settings).put(put_settings))
         .route("/api/proxy", get(get_proxy).put(put_proxy))
+        .route("/api/telegram", get(get_telegram))
+        .route("/api/telegram/settings", put(put_telegram_settings))
+        .route(
+            "/api/telegram/token",
+            put(put_telegram_token).delete(delete_telegram_token),
+        )
+        .route("/api/telegram/test", post(test_telegram))
         .route("/api/network", get(network_info))
         .route("/api/logs", get(logs).delete(clear_logs))
         .route("/api/diagnostics", get(diagnostics))
@@ -503,6 +512,55 @@ async fn put_proxy(
 ) -> Result<impl IntoResponse, ApiError> {
     require_host_client(connection)?;
     Ok(Json(state.services.proxy.put_proxy(settings).await?))
+}
+
+async fn get_telegram(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.telegram.get_integration().await?))
+}
+
+async fn put_telegram_settings(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+    Json(settings): Json<TelegramSettings>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.telegram.put_settings(settings).await?))
+}
+
+#[derive(Deserialize)]
+struct TelegramTokenRequest {
+    token: TelegramToken,
+}
+
+async fn put_telegram_token(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+    Json(request): Json<TelegramTokenRequest>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(
+        state.services.telegram.put_token(request.token).await?,
+    ))
+}
+
+async fn delete_telegram_token(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.telegram.delete_token().await?))
+}
+
+async fn test_telegram(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.telegram.test_connection().await?))
 }
 
 async fn put_settings(
@@ -945,6 +1003,7 @@ mod tests {
     struct TestProxy;
     struct TestListener;
     struct TestDiagnostics;
+    struct TestTelegram;
 
     #[async_trait::async_trait]
     impl MediaAnalysis for TestMedia {
@@ -1109,6 +1168,42 @@ mod tests {
     }
 
     #[async_trait::async_trait]
+    impl TelegramOperations for TestTelegram {
+        async fn get_integration(&self) -> Result<TelegramIntegration, FetchError> {
+            Ok(TelegramIntegration {
+                settings: TelegramSettings::default(),
+                status: fetch_core::TelegramStatus::default(),
+            })
+        }
+
+        async fn put_settings(
+            &self,
+            settings: TelegramSettings,
+        ) -> Result<TelegramIntegration, FetchError> {
+            settings.validate()?;
+            Ok(TelegramIntegration {
+                settings,
+                status: fetch_core::TelegramStatus::default(),
+            })
+        }
+
+        async fn put_token(
+            &self,
+            _token: TelegramToken,
+        ) -> Result<TelegramIntegration, FetchError> {
+            self.get_integration().await
+        }
+
+        async fn delete_token(&self) -> Result<TelegramIntegration, FetchError> {
+            self.get_integration().await
+        }
+
+        async fn test_connection(&self) -> Result<TelegramIntegration, FetchError> {
+            self.get_integration().await
+        }
+    }
+
+    #[async_trait::async_trait]
     impl ListenerOperations for TestListener {
         async fn rebind(&self, _address: SocketAddr) -> Result<bool, FetchError> {
             Ok(false)
@@ -1162,6 +1257,7 @@ mod tests {
             listener: Arc::new(TestListener),
             network_policy: NetworkPolicy::new(&["192.168.0.0/16".into()]).unwrap(),
             diagnostics: Arc::new(TestDiagnostics),
+            telegram: Arc::new(TestTelegram),
             shutdown,
         })
     }
@@ -1345,6 +1441,27 @@ mod tests {
             .await;
             assert_eq!(remote.status(), StatusCode::FORBIDDEN);
         }
+    }
+
+    #[tokio::test]
+    async fn telegram_configuration_is_host_only_and_never_returns_a_token() {
+        let local =
+            request_from(app(), "/api/telegram", "GET", ([127, 0, 0, 1], 4000).into()).await;
+        assert_eq!(local.status(), StatusCode::OK);
+        let body = to_bytes(local.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.get("settings").is_some());
+        assert!(json.get("status").is_some());
+        assert!(!String::from_utf8_lossy(&body).contains("bot-token"));
+
+        let remote = request_from(
+            app(),
+            "/api/telegram",
+            "GET",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        assert_eq!(remote.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

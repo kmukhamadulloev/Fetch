@@ -10,6 +10,7 @@ fetch-ytdlp = { path = "../../crates/fetch-ytdlp" }
 fetch-runtime = { path = "../../crates/fetch-runtime" }
 fetch-storage = { path = "../../crates/fetch-storage" }
 fetch-server = { path = "../../crates/fetch-server" }
+fetch-telegram = { path = "../../crates/fetch-telegram" }
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

@@ -348,6 +348,78 @@ fn classify_api_error<T>(status: StatusCode, response: ApiResponse<T>) -> Telegr
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IncomingMessage {
+    Start,
+    Help,
+    Status,
+    Downloads,
+    SourceUrl(String),
+    Unsupported,
+}
+
+impl IncomingMessage {
+    pub fn parse(text: &str) -> Self {
+        let text = text.trim();
+        if let Some(command) = text.strip_prefix('/') {
+            let command = command
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .split('@')
+                .next()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            return match command.as_str() {
+                "start" => Self::Start,
+                "help" => Self::Help,
+                "status" => Self::Status,
+                "downloads" => Self::Downloads,
+                _ => Self::Unsupported,
+            };
+        }
+        match url::Url::parse(text) {
+            Ok(url) if matches!(url.scheme(), "http" | "https") => Self::SourceUrl(text.to_owned()),
+            _ => Self::Unsupported,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallbackAction {
+    Video(uuid::Uuid),
+    Audio(uuid::Uuid),
+    ConfirmPlaylist(uuid::Uuid),
+    Cancel(uuid::Uuid),
+    Stop(uuid::Uuid),
+}
+
+impl CallbackAction {
+    pub fn encode(self) -> String {
+        let (verb, id) = match self {
+            Self::Video(id) => ("v", id),
+            Self::Audio(id) => ("a", id),
+            Self::ConfirmPlaylist(id) => ("p", id),
+            Self::Cancel(id) => ("c", id),
+            Self::Stop(id) => ("s", id),
+        };
+        format!("{verb}:{id}")
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        let (verb, id) = value.split_once(':')?;
+        let id = id.parse().ok()?;
+        match verb {
+            "v" => Some(Self::Video(id)),
+            "a" => Some(Self::Audio(id)),
+            "p" => Some(Self::ConfirmPlaylist(id)),
+            "c" => Some(Self::Cancel(id)),
+            "s" => Some(Self::Stop(id)),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -448,5 +520,42 @@ mod tests {
                 .unwrap_err(),
             TelegramError::Cancelled
         );
+    }
+
+    #[test]
+    fn parses_only_supported_commands_and_http_source_urls() {
+        assert_eq!(
+            IncomingMessage::parse(" /STATUS@FetchBot "),
+            IncomingMessage::Status
+        );
+        assert_eq!(
+            IncomingMessage::parse("https://example.test/watch?v=1"),
+            IncomingMessage::SourceUrl("https://example.test/watch?v=1".into())
+        );
+        assert_eq!(
+            IncomingMessage::parse("file:///tmp/video"),
+            IncomingMessage::Unsupported
+        );
+        assert_eq!(
+            IncomingMessage::parse("/unknown"),
+            IncomingMessage::Unsupported
+        );
+    }
+
+    #[test]
+    fn callback_payloads_are_opaque_bounded_and_round_trip() {
+        let id = uuid::Uuid::new_v4();
+        for action in [
+            CallbackAction::Video(id),
+            CallbackAction::Audio(id),
+            CallbackAction::ConfirmPlaylist(id),
+            CallbackAction::Cancel(id),
+            CallbackAction::Stop(id),
+        ] {
+            let encoded = action.encode();
+            assert!(encoded.len() <= 64);
+            assert_eq!(CallbackAction::parse(&encoded), Some(action));
+        }
+        assert_eq!(CallbackAction::parse("v:not-a-uuid"), None);
     }
 }

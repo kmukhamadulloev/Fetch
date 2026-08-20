@@ -903,6 +903,7 @@ dependencies = [
  "fetch-runtime",
  "fetch-server",
  "fetch-storage",
+ "fetch-telegram",
  "fetch-ytdlp",
  "image",
  "keyring",
@@ -1015,6 +1016,8 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-util",
+ "url",
+ "uuid",
 ]
 
 [[package]]

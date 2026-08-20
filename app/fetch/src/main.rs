@@ -120,6 +120,14 @@ async fn run_fetch(
         proxy: proxy_policy.clone(),
         js_runtime: js_runtime_policy,
     });
+    let telegram = Arc::new(telegram::TelegramBotManager::new(
+        storage.clone(),
+        media.clone(),
+        downloads.clone(),
+        events.clone(),
+        status.clone(),
+    ));
+    telegram.start().await;
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;
     let shutdown = CancellationToken::new();
     let address = SocketAddr::new(settings.bind_address, settings.port);
@@ -163,6 +171,7 @@ async fn run_fetch(
         listener: listener_control,
         network_policy,
         diagnostics: Arc::new(DiagnosticsService::new(storage.clone(), runtime.clone())),
+        telegram: telegram.clone(),
         shutdown: shutdown.clone(),
     });
     start_runtime_bootstrap(runtime, status, storage, settings.clone());
@@ -217,6 +226,7 @@ async fn run_fetch(
     shutdown.cancel();
     let active_tasks = std::mem::take(&mut *tasks.lock().await);
     if tokio::time::timeout(GRACEFUL_SHUTDOWN_TIMEOUT, async {
+        telegram.shutdown().await;
         downloads.shutdown().await;
         for task in active_tasks {
             let _ = task.await;

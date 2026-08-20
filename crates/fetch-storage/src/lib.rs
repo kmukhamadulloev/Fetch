@@ -69,6 +69,12 @@ impl TelegramRepository for Storage {
             .map_err(fetch_error)
     }
 
+    async fn release_update_claim(&self, update_id: i64) -> Result<(), FetchError> {
+        self.release_telegram_update_claim(update_id)
+            .await
+            .map_err(fetch_error)
+    }
+
     async fn advance_polling_offset(&self, next_offset: i64) -> Result<(), FetchError> {
         self.advance_telegram_polling_offset(next_offset)
             .await
@@ -398,6 +404,14 @@ impl Storage {
         .execute(&self.pool)
         .await?;
         Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn release_telegram_update_claim(&self, update_id: i64) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM telegram_updates WHERE update_id = ?")
+            .bind(update_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub async fn advance_telegram_polling_offset(
@@ -760,6 +774,8 @@ mod tests {
 
         assert!(storage.claim_telegram_update(100).await.unwrap());
         assert!(!storage.claim_telegram_update(100).await.unwrap());
+        storage.release_telegram_update_claim(100).await.unwrap();
+        assert!(storage.claim_telegram_update(100).await.unwrap());
         storage.advance_telegram_polling_offset(101).await.unwrap();
         storage.advance_telegram_polling_offset(50).await.unwrap();
         assert_eq!(storage.telegram_polling_offset().await.unwrap(), 101);

@@ -32,6 +32,7 @@ pub trait TelegramRepository: Send + Sync {
     async fn save_settings(&self, settings: &TelegramSettings) -> Result<(), FetchError>;
     async fn polling_offset(&self) -> Result<i64, FetchError>;
     async fn claim_update(&self, update_id: i64) -> Result<bool, FetchError>;
+    async fn release_update_claim(&self, update_id: i64) -> Result<(), FetchError>;
     async fn advance_polling_offset(&self, next_offset: i64) -> Result<(), FetchError>;
     async fn save_pending_action(&self, action: &TelegramPendingAction) -> Result<(), FetchError>;
     async fn consume_pending_action(
