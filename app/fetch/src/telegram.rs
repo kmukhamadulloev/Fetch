@@ -962,25 +962,12 @@ async fn run_notifications(inner: Arc<ManagerInner>, cancellation: CancellationT
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
             }
         };
-        let (job, completed) = match &event {
-            ApplicationEvent::DownloadCompleted(job) => (job, true),
-            ApplicationEvent::DownloadFailed(job) | ApplicationEvent::DownloadStopped(job) => {
-                (job, false)
-            }
-            _ => continue,
-        };
-        let Ok(Some(owner)) = inner.storage.telegram_job_owner(job.id).await else {
-            continue;
-        };
-        let Ok(settings) = inner.storage.load_telegram_settings().await else {
-            continue;
-        };
-        let notifications_enabled = if completed {
-            settings.notify_completed
-        } else {
-            settings.notify_failed
-        };
-        if !settings.enabled || !notifications_enabled {
+        if !matches!(
+            &event,
+            ApplicationEvent::DownloadCompleted(_)
+                | ApplicationEvent::DownloadFailed(_)
+                | ApplicationEvent::DownloadStopped(_)
+        ) {
             continue;
         }
         let Ok((Some(token), _)) = effective_token_for(&inner.secrets).await else {
@@ -989,20 +976,56 @@ async fn run_notifications(inner: Arc<ManagerInner>, cancellation: CancellationT
         let Ok(client) = BotApiClient::new(token) else {
             continue;
         };
-        let state = match job.status {
-            DownloadStatus::Completed => "Completed",
-            DownloadStatus::Failed => "Failed",
-            DownloadStatus::Stopped => "Stopped",
-            _ => continue,
-        };
-        let text = format!(
-            "{state}: {}",
-            job.request.title.as_deref().unwrap_or("Untitled download")
-        );
-        if let Err(error) = send_text(&client, owner.chat_id, &text, None).await {
+        if let Err(error) = deliver_notification(&inner, &client, &event).await {
             tracing::warn!(subsystem = "telegram", error = %error.public_message(), "could not send Telegram terminal notification");
         }
     }
+}
+
+async fn deliver_notification(
+    inner: &ManagerInner,
+    client: &dyn TelegramApi,
+    event: &ApplicationEvent,
+) -> Result<(), FetchError> {
+    let (job, completed) = match event {
+        ApplicationEvent::DownloadCompleted(job) => (job, true),
+        ApplicationEvent::DownloadFailed(job) | ApplicationEvent::DownloadStopped(job) => {
+            (job, false)
+        }
+        _ => return Ok(()),
+    };
+    let Some(owner) = inner
+        .storage
+        .telegram_job_owner(job.id)
+        .await
+        .map_err(storage_error)?
+    else {
+        return Ok(());
+    };
+    let settings = inner
+        .storage
+        .load_telegram_settings()
+        .await
+        .map_err(storage_error)?;
+    let notifications_enabled = if completed {
+        settings.notify_completed
+    } else {
+        settings.notify_failed
+    };
+    if !settings.enabled || !notifications_enabled {
+        return Ok(());
+    }
+    let state = match job.status {
+        DownloadStatus::Completed => "Completed",
+        DownloadStatus::Failed => "Failed",
+        DownloadStatus::Stopped => "Stopped",
+        _ => return Ok(()),
+    };
+    let text = format!(
+        "{state}: {}",
+        job.request.title.as_deref().unwrap_or("Untitled download")
+    );
+    send_text(client, owner.chat_id, &text, None).await
 }
 
 async fn effective_token_for(
@@ -1389,6 +1412,77 @@ mod tests {
                 .text
                 .contains("already used")
         );
+    }
+
+    #[tokio::test]
+    async fn terminal_notifications_are_owned_preference_aware_and_redacted() {
+        let (inner, downloads) = test_inner().await;
+        let client = FakeTelegramApi::default();
+        inner
+            .storage
+            .save_telegram_settings(&TelegramSettings {
+                enabled: true,
+                allowed_user_ids: vec![42],
+                notify_completed: true,
+                privacy_acknowledged: true,
+                ..TelegramSettings::default()
+            })
+            .await
+            .unwrap();
+        let mut job = downloads
+            .create(DownloadRequest {
+                url: "https://secret.example.test/watch?id=private".into(),
+                title: Some("Safe title".into()),
+                duration_seconds: None,
+                mode: DownloadMode::Video,
+                format_id: None,
+                quality: None,
+                container: None,
+                video_codec: None,
+                audio_codec: None,
+                embed_metadata: false,
+                embed_thumbnail: false,
+                subtitles: false,
+                playlist: None,
+                output_directory: Some(PathBuf::from("/private/download/path")),
+            })
+            .await
+            .unwrap();
+        inner
+            .storage
+            .associate_telegram_job(&TelegramJobOwner {
+                job_id: job.id,
+                user_id: 42,
+                chat_id: 42,
+            })
+            .await
+            .unwrap();
+        job.status = DownloadStatus::Completed;
+
+        deliver_notification(&inner, &client, &ApplicationEvent::DownloadCompleted(job))
+            .await
+            .unwrap();
+        let messages = client.messages.lock().await;
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].text, "Completed: Safe title");
+        assert!(!messages[0].text.contains("secret.example"));
+        assert!(!messages[0].text.contains("/private"));
+    }
+
+    #[tokio::test]
+    async fn managed_tasks_cancel_and_join_before_replacement() {
+        let cancellation = CancellationToken::new();
+        let observed = cancellation.clone();
+        let task_cancellation = cancellation.clone();
+        let handle = tokio::spawn(async move { task_cancellation.cancelled().await });
+        let slot = tokio::sync::Mutex::new(Some(RunningTask {
+            cancellation,
+            handle,
+        }));
+
+        stop_task(&slot).await;
+        assert!(observed.is_cancelled());
+        assert!(slot.lock().await.is_none());
     }
 
     #[test]
