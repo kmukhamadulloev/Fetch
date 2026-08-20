@@ -4,6 +4,7 @@ mod downloads;
 mod library;
 mod proxy;
 mod startup;
+pub mod telegram;
 mod tray;
 
 use std::{net::SocketAddr, sync::Arc};

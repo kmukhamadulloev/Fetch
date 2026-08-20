@@ -107,9 +107,9 @@ turning Fetch into a hosted service.
 
 - [x] Add typed Telegram settings, status, authorization, pending-action, and
   job-notification domain models without coupling `fetch-core` to HTTP.
-- [ ] Add SQLite migrations for non-secret integration settings, polling
+- [x] Add SQLite migrations for non-secret integration settings, polling
   offset, expiring analysis confirmations, and job notification ownership.
-- [ ] Add a secret-store abstraction: native OS credential storage for
+- [x] Add a secret-store abstraction: native OS credential storage for
   host-entered tokens and a `FETCH_TELEGRAM_BOT_TOKEN` override for headless
   operation. Never store tokens in SQLite or return them through the API.
 - [ ] Add a Rust-only `fetch-telegram` adapter with typed Bot API requests,
