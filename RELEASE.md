@@ -11,6 +11,8 @@ developer-visible behavior, compatibility, and release operations.
   statuses, frontend errors, and accessibility labels.
 - Added locale-aware dates, numbers, byte sizes, plural counts, catalog-parity
   tests, and desktop/mobile language persistence coverage.
+- Kept every Settings section, including Integrations, visibly reachable in a
+  responsive tab grid instead of hiding later sections in an unmarked scroller.
 
 ## 0.1.4 — 2026-08-20
 

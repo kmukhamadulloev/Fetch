@@ -113,6 +113,10 @@ Sections:
 - Integrations (0.1.4)
 - Advanced
 
+All six sections remain visible without relying on a hidden horizontal scroll:
+the selector uses two columns on narrow phones, three columns on intermediate
+screens, and the established vertical rail on desktop.
+
 Network includes bind address, port, allowed networks, current URLs and no-auth warning.
 On the Fetch host it also provides System default, Direct connection, and
 Custom proxy modes for outbound yt-dlp traffic and opt-in Telegram traffic.

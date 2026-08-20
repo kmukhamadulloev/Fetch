@@ -196,7 +196,11 @@ test('LAN clients cannot read or change the host proxy endpoint', async ({ page 
 
 test('host can configure Telegram without the token appearing in responses or the input', async ({ page }) => {
   await mockApi(page, readyRuntime, { urls: ['http://127.0.0.1:8080'], local_client: true })
-  await page.goto('/settings#integrations')
+  await page.goto('/settings#general')
+  const integrationsTab = page.getByRole('button', { name: 'Integrations' })
+  await expect(integrationsTab).toBeInViewport()
+  await integrationsTab.click()
+  await expect(page).toHaveURL(/#integrations$/)
   await expect(page.getByRole('heading', { name: 'Telegram bot' })).toBeVisible()
   const tokenInput = page.getByLabel('New bot token')
   await expect(tokenInput).toBeDisabled()

@@ -18,6 +18,25 @@ without evidence. Fetch 0.1.5 multilingual implementation and its complete
 local Rust/frontend/browser verification are complete; native release gates
 remain for publication.
 
+## BUG-028 — Integrations is hidden in compact Settings navigation
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Every Settings section, including Integrations, is visibly reachable
+on desktop, tablet, and mobile without discovering an invisible scroll gesture.
+
+Actual: Below the desktop breakpoint, the six Settings tabs occupied one
+scrolling row while the scrollbar was hidden. Later sections could start
+outside the viewport, making the Telegram integration appear to be missing.
+
+Resolution: Compact Settings navigation now lays out all six sections in a
+two-column phone or three-column tablet grid and keeps the vertical desktop
+rail. Browser coverage starts from General, verifies Integrations is in the
+viewport, opens it through the visible tab, and runs in both viewport projects.
+
 ## UX-027 — Web interface is English-only
 
 Status: RESOLVED

@@ -146,7 +146,8 @@ responses. Multipart transport tests verify streamed video fields and preflight
 hosted-size rejection; manager tests cover owned-file lookup, configured-size
 skips, upload failure fallback, and redacted output. Frontend and Playwright
 coverage verifies host/remote settings, blank-after-save token UI, validation,
-completed-media controls, and mobile containment. Poller lifecycle, playlist
+completed-media controls, visible navigation into Integrations, and mobile
+containment. Poller lifecycle, playlist
 callback, Stop, and terminal notifications are covered by deterministic tests.
 
 A real Telegram bot is never required for ordinary CI. Any live smoke is
