@@ -12,6 +12,7 @@ pub trait StartupRegistration: Send + Sync {
 #[cfg(target_os = "linux")]
 pub struct SystemStartupRegistration {
     desktop_file: std::path::PathBuf,
+    icon_file: std::path::PathBuf,
     executable: std::path::PathBuf,
 }
 
@@ -31,13 +32,18 @@ impl SystemStartupRegistration {
     pub fn new() -> Result<Self, String> {
         let executable = std::env::current_exe()
             .map_err(|error| format!("could not locate the Fetch executable: {error}"))?;
-        let config = directories::BaseDirs::new()
-            .ok_or_else(|| "could not locate the user configuration directory".to_owned())?
+        let base_dirs = directories::BaseDirs::new()
+            .ok_or_else(|| "could not locate the user configuration directory".to_owned())?;
+        let config = base_dirs
             .config_dir()
             .join("autostart")
             .join("fetch.desktop");
+        let icon_file = base_dirs
+            .data_dir()
+            .join("icons/hicolor/256x256/apps/fetch.png");
         Ok(Self {
             desktop_file: config,
+            icon_file,
             executable,
         })
     }
@@ -73,14 +79,22 @@ impl StartupRegistration for SystemStartupRegistration {
                 .parent()
                 .ok_or_else(|| "the XDG autostart path has no parent".to_owned())?;
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            let icon_parent = self
+                .icon_file
+                .parent()
+                .ok_or_else(|| "the XDG icon path has no parent".to_owned())?;
+            std::fs::create_dir_all(icon_parent).map_err(|error| error.to_string())?;
+            std::fs::write(&self.icon_file, include_bytes!("../assets/fetch.png"))
+                .map_err(|error| error.to_string())?;
             let entry = linux_desktop_entry(&self.executable)?;
-            std::fs::write(&self.desktop_file, entry).map_err(|error| error.to_string())
-        } else {
-            match std::fs::remove_file(&self.desktop_file) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error.to_string()),
+            if let Err(error) = std::fs::write(&self.desktop_file, entry) {
+                let _ = std::fs::remove_file(&self.icon_file);
+                return Err(error.to_string());
             }
+            Ok(())
+        } else {
+            remove_if_present(&self.desktop_file)?;
+            remove_if_present(&self.icon_file)
         }
     }
 
@@ -137,8 +151,17 @@ fn linux_desktop_entry(executable: &std::path::Path) -> Result<String, String> {
         .replace('`', "\\`")
         .replace('$', "\\$");
     Ok(format!(
-        "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Fetch\nComment=Local media downloader\nExec=\"{escaped}\" --background\nTerminal=false\nStartupNotify=false\n"
+        "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Fetch\nComment=Local media downloader\nExec=\"{escaped}\" --background\nIcon=fetch\nTerminal=false\nStartupNotify=false\n"
     ))
+}
+
+#[cfg(target_os = "linux")]
+fn remove_if_present(path: &std::path::Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -288,6 +311,7 @@ mod tests {
         let entry =
             linux_desktop_entry(std::path::Path::new("/home/Fetch App/fetch\"preview")).unwrap();
         assert!(entry.contains("Exec=\"/home/Fetch App/fetch\\\"preview\" --background"));
+        assert!(entry.contains("Icon=fetch"));
         assert!(entry.contains("Terminal=false"));
     }
 
@@ -296,16 +320,26 @@ mod tests {
     fn linux_registration_enables_and_disables_an_isolated_entry() {
         let directory = tempfile::tempdir().unwrap();
         let desktop_file = directory.path().join("autostart/fetch.desktop");
+        let icon_file = directory
+            .path()
+            .join("icons/hicolor/256x256/apps/fetch.png");
         let registration = SystemStartupRegistration {
             desktop_file: desktop_file.clone(),
+            icon_file: icon_file.clone(),
             executable: std::path::PathBuf::from("/opt/Fetch App/fetch"),
         };
 
         registration.set_enabled(true).unwrap();
         let entry = std::fs::read_to_string(&desktop_file).unwrap();
         assert!(entry.contains("Exec=\"/opt/Fetch App/fetch\" --background"));
+        assert!(entry.contains("Icon=fetch"));
+        assert_eq!(
+            std::fs::read(&icon_file).unwrap(),
+            include_bytes!("../assets/fetch.png")
+        );
         registration.set_enabled(false).unwrap();
         assert!(!desktop_file.exists());
+        assert!(!icon_file.exists());
     }
 
     #[test]
@@ -318,5 +352,20 @@ mod tests {
             macos_launch_agent(std::path::Path::new("/Applications/Fetch & Go/fetch")).unwrap();
         assert!(plist.contains("/Applications/Fetch &amp; Go/fetch"));
         assert!(plist.contains("<string>--background</string>"));
+    }
+
+    #[test]
+    fn native_application_assets_are_well_formed() {
+        let png = image::load_from_memory(include_bytes!("../assets/fetch.png")).unwrap();
+        assert_eq!((png.width(), png.height()), (256, 256));
+
+        let ico = include_bytes!("../assets/fetch.ico");
+        assert_eq!(&ico[0..4], &[0, 0, 1, 0]);
+        assert_eq!(u16::from_le_bytes([ico[4], ico[5]]), 7);
+
+        let plist = include_str!("../assets/macos/Info.plist.in");
+        assert!(plist.contains("<string>Fetch.icns</string>"));
+        assert!(plist.contains("<string>io.fetch.downloader</string>"));
+        assert_eq!(plist.matches("@VERSION@").count(), 2);
     }
 }

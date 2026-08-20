@@ -45,6 +45,8 @@ Network:
 Desktop lifecycle:
 - tray URL follows wildcard, IPv4, IPv6, and live listener changes;
 - startup registration follows persisted settings and rolls back on save failure;
+- native icon assets have valid PNG, ICO, and macOS bundle metadata, and Linux
+  startup registration installs and removes its hicolor icon;
 - remote clients cannot modify host startup registration;
 - graceful shutdown cancels queued/active downloads and owned child processes;
 - packaged startup smoke uses `--no-tray` for deterministic headless execution.

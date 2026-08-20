@@ -22,6 +22,8 @@ developer-visible behavior, compatibility, and release operations.
   safe show/hide control for newly entered tokens.
 - Added opt-in streamed delivery of completed Telegram-owned media with a
   configurable 1–50 MB limit, 50 MB default, and text-only failure fallback.
+- Branded Windows executables, macOS application bundles, Linux startup
+  entries, and installable browser metadata with the approved Fetch logo.
 
 ## 0.1.3 — 2026-08-18
 

@@ -16,6 +16,29 @@ Fetch 0.1.4 implementation and the complete local Rust/frontend/browser gate
 are green. Cross-platform native archive verification and interactive
 tray/startup gates remain before this section can return to COMPLETE.
 
+## UX-026 — Native packages use a generic executable icon
+
+Status: RESOLVED
+
+Affected:
+- app/fetch
+- release packaging
+- web
+
+Expected: Fetch uses the approved product logo anywhere the operating system or
+browser exposes application identity.
+
+Actual: The browser and tray were branded, but Windows showed a generic
+executable icon, macOS shipped a bare binary rather than an application bundle,
+Linux startup metadata had no icon, and the web app had no install manifest.
+
+Resolution: Windows now embeds a multi-resolution ICO and product metadata;
+macOS packaging creates a `Fetch.app` bundle with an ICNS resource; Linux XDG
+startup registration installs and references a hicolor PNG; and the frontend
+ships branded installable web metadata. A raw Linux ELF may still use the file
+manager's generic executable icon because that format has no standard embedded
+desktop icon.
+
 ## UX-025 — Telegram cannot return completed media
 
 Status: RESOLVED

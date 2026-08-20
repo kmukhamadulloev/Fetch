@@ -159,6 +159,12 @@ turning Fetch into a hosted service.
 - [x] Add enable-gated completed-media delivery controls with clear bandwidth,
   privacy, hosted-limit, and oversized-file guidance on desktop and mobile.
 
+### Application identity
+
+- [x] Apply the approved Fetch artwork to Windows executable resources, macOS
+  application bundles, Linux startup registration, and installable browser
+  metadata.
+
 ### 0.1.4 verification and release gates
 
 - [x] Cover Bot API parsing, authorization, replay/idempotency, persistence,

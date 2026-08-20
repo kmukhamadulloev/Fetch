@@ -145,6 +145,8 @@ commands and live-smoke observations are recorded in the completion report.
 - [x] PASS — no production mock, stub, TODO route, or fake state remains.
 - [x] PASS — architecture audit found no forbidden application component.
 - [x] PASS — release executable embeds the UI and requires no Node.js.
+- [x] PASS — Windows resources, the macOS application bundle, Linux startup
+  registration, and installed web identity use the approved Fetch artwork.
 - [x] PASS — explicit headless startup and tray-failure fallback preserve server operation.
 - [ ] PENDING RELEASE GATE — interactive tray creation, actions, and graceful Quit pass on every native release target.
 - [x] PASS — clean-data managed runtime preparation is scripted and live-tested.

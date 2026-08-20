@@ -6,10 +6,14 @@
 - Linux x86_64 and aarch64 (`.tar.gz`)
 - macOS arm64 and x86_64 (`.tar.gz`)
 
-Every archive contains the single Fetch executable, README, MIT license, and
-third-party notices. Every archive has a `.sha256` sidecar. yt-dlp, FFmpeg, and
-FFprobe are not bundled; the checked runtime manager downloads platform assets
-on first use.
+Windows archives contain `fetch.exe` with a multi-resolution embedded icon.
+Linux archives contain the `fetch` executable; the tray and managed XDG startup
+entry use the Fetch logo, while a raw ELF file may retain the desktop's generic
+executable icon. macOS archives contain a standard `Fetch.app` bundle with an
+ICNS application icon. Every archive also contains README, MIT license, and
+third-party notices and has a `.sha256` sidecar. yt-dlp, FFmpeg, and FFprobe are
+not bundled; the checked runtime manager downloads platform assets on first
+use.
 
 ## Build and publish sequence
 
@@ -41,6 +45,9 @@ distribution.
 Native builds include a system tray. Linux uses the session's freedesktop
 StatusNotifierItem implementation and requires no GTK application runtime; some
 desktop environments require their usual AppIndicator/StatusNotifier extension.
+The Linux startup registration installs the branded icon into the current
+user's hicolor icon theme. Windows resource compilation and macOS ICNS bundle
+creation happen on their native release runners.
 Package smoke tests pass `--no-tray` because CI runners are headless. Windows and
 macOS release runs must additionally verify tray creation and graceful Quit on
 their native interactive desktops before publication.

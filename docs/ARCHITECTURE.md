@@ -110,6 +110,12 @@ token as Ctrl+C and waits for owned download processes and HTTP connections.
 Tray initialization failures are logged and leave browser/terminal operation
 available. `--no-tray` provides an explicit headless path.
 
+`docs/assets/logo.png` is the source artwork for native application identity.
+The Windows build embeds a generated multi-resolution ICO in the executable;
+macOS packaging produces a standard `Fetch.app` bundle and ICNS resource; Linux
+installs a 256 px hicolor icon with the managed XDG startup entry. The embedded
+frontend exposes the same artwork through its favicon and web manifest.
+
 Per-user startup registration is owned by a settings application service:
 Windows uses the current-user Run entry, macOS a LaunchAgent, and Linux XDG
 Autostart. Registered launches pass `--background`, which suppresses automatic

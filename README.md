@@ -45,6 +45,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   with visible ownership, takeover, automatic failover, and retry handling.
 - Keep Fetch available in the native system tray with Open Fetch, Open
   downloads folder, and graceful Quit controls.
+- Use the Fetch logo for the Windows executable, macOS application bundle,
+  Linux startup entry, system tray, browser tab, and installable web identity.
 - Optionally start Fetch in the tray when the current operating-system user
   signs in, without forcing a browser window open.
 - Bind locally or to a trusted LAN with a CIDR allow-list.
@@ -90,9 +92,10 @@ artifacts separately:
 
 ## Run a release archive
 
-Extract the archive for your platform and run `fetch` (`fetch.exe` on Windows).
-Fetch opens <http://127.0.0.1:8080/> by default and prepares missing managed
-runtime components inside the operating system's application-data directory.
+Extract the archive for your platform. Run `fetch.exe` on Windows, `fetch` on
+Linux, or open `Fetch.app` on macOS. Fetch opens <http://127.0.0.1:8080/> by
+default and prepares missing managed runtime components inside the operating
+system's application-data directory.
 
 The default bind is localhost-only. When LAN access is enabled, every client in
 an allowed CIDR can control downloads and access completed files because Fetch
