@@ -3,7 +3,7 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## 0.1.5 — In development
+## 0.1.5 — 2026-08-21
 
 - Added browser-local English, Russian, and Tajik language selection with
   deterministic English defaults, live switching, and English fallback.
