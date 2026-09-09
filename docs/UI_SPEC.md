@@ -24,6 +24,19 @@ Left sidebar:
 - Settings
 - Logs
 
+The sidebar runtime summary is a compact System checks list with icon, label,
+text state, and colored bulb. Backend uses the live SSE connection (including
+the relayed connection in secondary tabs); connecting/reconnecting is amber,
+connected green, and offline red. Runtime health follows managed-component
+updates. When backend updates are unavailable, dependent health is Unknown.
+On the host, enabled Telegram shows its lifecycle state and Custom proxy shows
+a blue Configured indicator, with a tooltip clarifying that reachability is
+not checked. Direct/System proxy modes are omitted because they do not prove
+a proxy is in use. Host integration settings are loaded once at summary mount;
+Telegram lifecycle SSE and local settings saves update existing stores. LAN
+clients never request host-only integration configuration. No proxy URL or bot
+credential is displayed.
+
 Topbar:
 - current screen;
 - server/realtime status with primary, shared, reconnecting, and offline states;
@@ -72,12 +85,34 @@ or transferred bytes, percent, speed, ETA, and Stop/Resume/Retry controls where
 appropriate. Queued, downloading, FFmpeg finalization, completed, stopped, and
 failed states must explain what Fetch is currently doing.
 
+Downloads offers All (default), Completed, In Progress, and Error filters.
+In Progress includes created, analyzing, ready, queued, downloading, and
+postprocessing jobs; Error includes failed jobs. Stopped jobs remain under All.
+
 ## Completed
 Show cached thumbnail/type, title, MIME type, file size, Watch/Play when
 browser-compatible, and a guarded permanent-delete action. On the Fetch host,
 the primary file action opens the containing folder; on LAN clients it downloads
 the original. Playback uses the same host/remote distinction. Unsupported media
 can still open the original stream without attempting transcoding.
+
+The library offers All (default), Audio, Video, and Playlist filters. Audio
+and Video show matching MIME-type files, including playlist members; Playlist
+shows grouped collections. Sort by Name uses locale-aware natural ordering
+(A–Z); Date defaults to newest first and uses each collection's latest completed
+file. Reverse reverses the selected order. Filters and sorting update with
+realtime store changes and remain selected while opening and returning from a
+playlist; they reset when leaving the view. The focused playlist retains its
+original item order. Empty filtered results explain how to return to All.
+Icon filters form a connected segmented group. Controls sit to the right of
+the page title and description on desktop. Completed filters and a styled
+Sort by dropdown share one horizontal row.
+The dropdown contains Name/Date radio options and a Reverse checkbox, supports
+outside-click and Escape dismissal, and displays the current sort in its
+trigger; on narrow screens this row
+scrolls horizontally below the heading without wrapping its controls. All
+controls are translated in the supported languages.
+These are client-side view controls with no API or persistence changes.
 
 Playlist downloads appear in the same responsive grid as individual media. A
 subtle three-layer offset at the playlist card's top-left, collection icon, and

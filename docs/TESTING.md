@@ -123,6 +123,16 @@ Playwright runs the primary flow in desktop and mobile Chromium projects. CI
 installs Chromium; locally set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using
 an existing Chrome/Chromium installation.
 
+## 0.1.6 browsing and system-check coverage
+
+Playwright covers job status filters, media filters including playlist members,
+both sort keys, Reverse inside the custom dropdown, Escape dismissal, filtered
+empty-state reset, preserved playlist ordering/navigation, and desktop/mobile
+containment. RuntimeSummary component tests cover live backend/Telegram changes,
+runtime readiness, loss of trustworthy dependent health after disconnection,
+configured-only proxy labeling, endpoint omission, and no host-only requests
+from LAN clients. Existing catalog tests validate all new translations.
+
 ## 0.1.5 localization coverage
 
 Unit tests recursively compare every Russian and Tajik catalog leaf against the

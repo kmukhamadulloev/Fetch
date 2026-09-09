@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { QrCode, Radio, RefreshCw, Settings, X } from '@lucide/vue'
+import RuntimeSummary from '@/components/RuntimeSummary.vue'
 import AppLogo from '@/components/AppLogo.vue'
 import AppNavigation from '@/components/AppNavigation.vue'
 import NetworkQrDialog from '@/components/NetworkQrDialog.vue'
@@ -56,10 +57,7 @@ async function retryAll() {
       <div class="flex h-16 items-center gap-3 px-5"><AppLogo /></div>
       <AppNavigation variant="desktop" />
       <div class="border-t border-border p-3">
-        <div class="runtime-summary">
-          <div class="flex items-center justify-between text-xs font-medium"><span>{{ t('shell.runtime') }}</span><span class="status-dot" :class="{ muted: !status.value?.runtime_ready }">{{ status.value?.runtime_ready ? t('shell.ready') : t('shell.setupPending') }}</span></div>
-          <p class="mt-2 text-[11px] leading-5 text-muted">{{ t('shell.runtimeHelp') }}</p>
-        </div>
+        <RuntimeSummary />
       </div>
     </aside>
 

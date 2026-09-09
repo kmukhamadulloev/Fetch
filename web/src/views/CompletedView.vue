@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
+import { ArrowLeft, LayoutGrid, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
+import SortDropdown from '@/components/SortDropdown.vue'
 import CompletedMediaCard from '@/components/CompletedMediaCard.vue'
 import MediaPlayerDialog from '@/components/MediaPlayerDialog.vue'
 import { useLibraryStore, type CompletedPlaylistGroup } from '@/stores/library'
@@ -19,16 +20,35 @@ const settings = useSettingsStore()
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const mediaFilter = ref('all')
+const sortBy = ref('date')
+const reverse = ref(false)
+const filters = ['all', 'audio', 'video', 'playlist'] as const
+const filterIcons = { all: LayoutGrid, audio: Music2, video: FileVideo, playlist: ListVideo }
 const selected = ref<CompletedFile | null>(null)
 const pendingDelete = ref<CompletedFile | null>(null)
 const failedPlaylistThumbnails = ref(new Set<string>())
 
 const requestedPlaylistId = computed(() => typeof route.query.playlist === 'string' ? route.query.playlist : null)
 const activePlaylist = computed(() => requestedPlaylistId.value ? library.playlists.find((playlist) => playlist.id === requestedPlaylistId.value) ?? null : null)
-const libraryEntries = computed<LibraryEntry[]>(() => [
-  ...library.standalone.map((file) => ({ kind: 'file' as const, file, updated_at: file.created_at })),
-  ...library.playlists.map((playlist) => ({ kind: 'playlist' as const, playlist, updated_at: playlist.latest_created_at })),
-].sort((left, right) => right.updated_at.localeCompare(left.updated_at)))
+const libraryEntries = computed<LibraryEntry[]>(() => {
+  const files = mediaFilter.value === 'audio' || mediaFilter.value === 'video'
+    ? library.completed.filter((file) => file.mime_type.startsWith(`${mediaFilter.value}/`))
+    : library.standalone
+  const entries: LibraryEntry[] = [
+    ...(mediaFilter.value === 'playlist' ? [] : files.map((file) => ({ kind: 'file' as const, file, updated_at: file.created_at }))),
+    ...(['all', 'playlist'].includes(mediaFilter.value) ? library.playlists.map((playlist) => ({ kind: 'playlist' as const, playlist, updated_at: playlist.latest_created_at })) : []),
+  ]
+  const name = (entry: LibraryEntry) => entry.kind === 'file' ? entry.file.title ?? entry.file.filename : entry.playlist.title
+  const id = (entry: LibraryEntry) => entry.kind === 'file' ? entry.file.id : entry.playlist.id
+  const collator = new Intl.Collator(locale.value, { numeric: true, sensitivity: 'base' })
+  return entries.sort((left, right) => {
+    const order = sortBy.value === 'name'
+      ? collator.compare(name(left), name(right))
+      : Date.parse(right.updated_at) - Date.parse(left.updated_at)
+    return (order || id(left).localeCompare(id(right))) * (reverse.value ? -1 : 1)
+  })
+})
 
 onMounted(() => Promise.all([library.refresh(), settings.refresh()]))
 
@@ -67,9 +87,18 @@ async function confirmDelete() {
     </template>
 
     <template v-else-if="!requestedPlaylistId">
-      <div class="flex min-w-0 flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:items-end min-[360px]:justify-between">
-        <div class="min-w-0"><p class="eyebrow">{{ t('completedView.eyebrow') }}</p><h2 class="mt-2 text-2xl font-semibold">{{ t('completedView.title') }}</h2><p class="mt-1 text-sm text-muted">{{ t('completedView.description') }}</p></div>
-        <span v-if="library.completed.length" class="badge muted shrink-0 whitespace-nowrap">{{ t('completedView.fileCount', { count: library.completed.length }) }}</span>
+      <div class="browse-header">
+        <div class="browse-heading">
+          <p class="eyebrow">{{ t('completedView.eyebrow') }}</p>
+          <div class="mt-2 flex flex-wrap items-center gap-2"><h2 class="text-2xl font-semibold">{{ t('completedView.title') }}</h2><span v-if="library.completed.length" class="badge muted whitespace-nowrap">{{ t('completedView.fileCount', { count: library.completed.length }) }}</span></div>
+          <p class="mt-1 text-sm text-muted">{{ t('completedView.description') }}</p>
+        </div>
+        <div class="browse-controls">
+          <div class="browse-filters" role="group" :aria-label="t('browse.mediaFilter')">
+            <button v-for="filter in filters" :key="filter" class="browse-filter" :class="{ active: mediaFilter === filter }" type="button" :aria-pressed="mediaFilter === filter" @click="mediaFilter = filter"><component :is="filterIcons[filter]" :size="15" aria-hidden="true" /><span>{{ t(`browse.${filter}`) }}</span></button>
+          </div>
+          <SortDropdown v-model:sort-by="sortBy" v-model:reverse="reverse" />
+        </div>
       </div>
       <p v-if="library.error" class="error-panel mt-5" role="alert">{{ library.error }}</p>
 
@@ -94,7 +123,7 @@ async function confirmDelete() {
           </article>
         </template>
       </div>
-      <div v-else-if="!library.loading" class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><CircleCheck :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t('completedView.noFiles') }}</h3><p class="mt-2 text-xs text-muted">{{ t('completedView.noFilesHelp') }}</p></div>
+      <div v-else-if="!library.loading" class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><CircleCheck :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t(library.completed.length ? 'browse.noMatches' : 'completedView.noFiles') }}</h3><p class="mt-2 text-xs text-muted">{{ t(library.completed.length ? 'browse.resetHelp' : 'completedView.noFilesHelp') }}</p></div>
     </template>
 
     <div v-if="requestedPlaylistId && !activePlaylist && !library.loading" class="card mt-6 flex min-h-64 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><ListVideo :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t('completedView.unavailable') }}</h3><p class="mt-2 text-xs text-muted">{{ t('completedView.unavailableHelp') }}</p><button class="secondary-btn mt-5" type="button" @click="closePlaylist"><ArrowLeft :size="15" />{{ t('completedView.back') }}</button></div>

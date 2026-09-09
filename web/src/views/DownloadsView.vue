@@ -1,11 +1,21 @@
 <script setup lang="ts">
-import { Activity, Clock3, Gauge, HardDriveDownload, RotateCcw, Square, TimerReset } from '@lucide/vue'
+import { Activity, CircleCheck, LayoutGrid, TriangleAlert, Clock3, Gauge, HardDriveDownload, RotateCcw, Square, TimerReset } from '@lucide/vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useDownloadsStore } from '@/stores/downloads'
 import type { DownloadJob, DownloadStatus } from '@/app/api/client'
 import { formatBytes } from '@/i18n/format'
 
 const downloads = useDownloadsStore()
+const statusFilter = ref('all')
+const filters = ['all', 'completed', 'inProgress', 'error'] as const
+const filterIcons = { all: LayoutGrid, completed: CircleCheck, inProgress: Activity, error: TriangleAlert }
+const visibleJobs = computed(() => downloads.jobs.filter((job) => {
+  if (statusFilter.value === 'all') return true
+  if (statusFilter.value === 'completed') return job.status === 'completed'
+  if (statusFilter.value === 'error') return job.status === 'failed'
+  return !['completed', 'failed', 'stopped'].includes(job.status)
+}))
 const { t, locale } = useI18n()
 
 const statusCopy: Record<DownloadStatus, { label: string; detail: string }> = {
@@ -54,11 +64,16 @@ function showProgress(job: DownloadJob) {
 
 <template>
   <section>
-    <p class="eyebrow">{{ t('downloadsView.eyebrow') }}</p><h2 class="mt-2 text-2xl font-semibold">{{ t('downloadsView.title') }}</h2><p class="mt-1 text-sm text-muted">{{ t('downloadsView.description') }}</p>
+    <div class="browse-header">
+      <div class="browse-heading"><p class="eyebrow">{{ t('downloadsView.eyebrow') }}</p><h2 class="mt-2 text-2xl font-semibold">{{ t('downloadsView.title') }}</h2><p class="mt-1 text-sm text-muted">{{ t('downloadsView.description') }}</p></div>
+      <div class="browse-filters" role="group" :aria-label="t('browse.statusFilter')">
+        <button v-for="filter in filters" :key="filter" class="browse-filter" :class="{ active: statusFilter === filter }" type="button" :aria-pressed="statusFilter === filter" @click="statusFilter = filter"><component :is="filterIcons[filter]" :size="15" aria-hidden="true" /><span>{{ t(`browse.${filter}`) }}</span></button>
+      </div>
+    </div>
     <p v-if="downloads.error" class="error-panel mt-5">{{ downloads.error }}</p>
     <div v-if="downloads.loading" class="card mt-6 animate-pulse p-8"><div class="h-24 rounded-xl bg-zinc-800/60"></div></div>
-    <div v-else-if="downloads.jobs.length" class="mt-6 space-y-3">
-      <article v-for="job in downloads.jobs" :key="job.id" class="card p-4 sm:p-5">
+    <div v-else-if="visibleJobs.length" class="mt-6 space-y-3">
+      <article v-for="job in visibleJobs" :key="job.id" class="card p-4 sm:p-5">
         <div class="flex items-start gap-4">
           <div class="empty-icon"><Activity :size="19" /></div>
           <div class="min-w-0 flex-1">
@@ -85,6 +100,6 @@ function showProgress(job: DownloadJob) {
         <div v-if="['queued','downloading','postprocessing','failed','stopped'].includes(job.status)" class="mt-4 flex justify-end"><button class="secondary-btn" type="button" @click="downloads.act(job, action(job) as 'stop' | 'resume' | 'retry')"><Square v-if="action(job) === 'stop'" :size="14" /><RotateCcw v-else-if="action(job) === 'retry'" :size="14" /><TimerReset v-else :size="14" />{{ actionLabel(job) }}</button></div>
       </article>
     </div>
-    <div v-else class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><Activity :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t('downloadsView.noTitle') }}</h3><p class="mt-2 text-xs text-muted">{{ t('downloadsView.noDescription') }}</p></div>
+    <div v-else class="card mt-6 flex min-h-80 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><Activity :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t(downloads.jobs.length ? 'browse.noMatches' : 'downloadsView.noTitle') }}</h3><p class="mt-2 text-xs text-muted">{{ t(downloads.jobs.length ? 'browse.resetHelp' : 'downloadsView.noDescription') }}</p></div>
   </section>
 </template>

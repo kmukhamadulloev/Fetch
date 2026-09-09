@@ -18,6 +18,39 @@ without evidence. Fetch 0.1.5 multilingual implementation and its complete
 local Rust/frontend/browser verification are complete; native release gates
 remain for publication.
 
+## UX-031 — Sidebar runtime summary omits connection checks
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Show backend connectivity and conditional Telegram/proxy indicators.
+
+Resolution: Added localized icon-and-bulb checks using realtime connection,
+managed runtime, enabled Telegram lifecycle, and custom proxy configuration.
+Disconnected clients show unknown dependent health; proxy configuration is
+explicitly not a reachability check. Host-only data is neither requested nor
+shown on LAN clients. Component tests cover transitions and the host boundary.
+
+## UX-030 — Downloads and Completed lack browsing controls
+
+Status: RESOLVED
+
+Affected:
+- web
+
+Expected: Filter jobs by status and completed media by type or playlist, and
+sort completed entries by name/date with a reverse checkbox.
+
+Resolution: Added localized, responsive reactive filters with icons in connected
+button groups beside the page heading, with filters and sorting in one
+horizontal row (scrollable on phones). A styled Sort by dropdown contains the
+Name/Date options and Reverse checkbox. Added All/reset and
+filtered empty states. Completed sorting preserves playlist grouping and focused
+playlist order. Desktop/mobile browser coverage checks filtering, both sort keys,
+reverse, collection navigation, and narrow-layout containment.
+
 ## BUG-029 — Production Integrations route renders blank
 
 Status: RESOLVED

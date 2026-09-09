@@ -28,6 +28,10 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   directly inside the selected download directory.
 - Manage `yt-dlp`, FFmpeg, and FFprobe with checksum verification, health
   checks, atomic updates, rollback, and repair.
+- Filter Downloads by status and Completed by media type or playlist; sort
+  completed entries by name/date with a reversible order.
+- Check backend/runtime bulbs and, on the host, enabled Telegram status and
+  Custom proxy configuration from the sidebar.
 - Browse cached artwork and completed files without exposing filesystem paths
   to browser clients.
 - Browse completed playlists as stacked collection cards, then open an ordered
