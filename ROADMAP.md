@@ -183,7 +183,7 @@ turning Fetch into a hosted service.
 The approved behavior, architecture, privacy boundary, milestones, and
 acceptance criteria are in `docs/TELEGRAM.md`.
 
-## 0.1.5 — In development
+## 0.1.5 — Implementation complete
 
 Objective: make the complete Fetch web interface usable in English, Russian,
 and Tajik while preserving English as the deterministic default and fallback.
@@ -216,12 +216,31 @@ and Tajik while preserving English as the deterministic default and fallback.
 - [x] Pass the complete Rust/frontend/browser suite and synchronize README,
   UI, testing, acceptance, issue, roadmap, and release documentation.
 
+## 0.1.6 — Release candidate
+
+Objective: improve Downloads/Completed browsing and sidebar system visibility.
+
+- [x] Add Downloads All, Completed, In Progress, and Error filters.
+- [x] Add Completed All, Audio, Video, and Playlist filters.
+- [x] Add natural name/date sorting with Reverse inside a styled dropdown.
+- [x] Use connected icon groups and one-row controls beside desktop headings,
+  with horizontal scrolling on narrow screens.
+- [x] Preserve realtime updates, playlist navigation/order, and filtered empty states.
+- [x] Add truthful backend/runtime bulbs and conditional host-only Telegram and
+  Custom proxy indicators without claiming proxy reachability.
+- [x] Localize new controls and statuses in English, Russian, and Tajik.
+- [x] Cover browsing and status transitions with component and browser tests.
+- [x] Align release notes, workspace/frontend/OpenAPI metadata, and lockfiles.
+- [x] Pass all repository checks against the production frontend.
+- [ ] Pass native archive matrix and interactive tray/startup/visual acceptance.
+- [ ] Tag and publish approved release artifacts.
+
 ## Candidate ideas
 
 These are not commitments and must be promoted into a version before
 implementation:
 
-- Search, filter, and sort the Completed library.
+- Search the Completed library.
 - Guarded playlist-level bulk actions.
 - Authenticated proxy credentials using native operating-system secret storage.
 - Named proxy profiles and per-download proxy selection.

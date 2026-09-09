@@ -3,6 +3,44 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## 0.1.6 — Local verification (2026-09-09)
+
+- [x] PASS — Downloads filters cover completed, queued/active, failed, and All.
+- [x] PASS — Completed filters cover audio/video files and playlist collections.
+- [x] PASS — Name/date sorting, Reverse inside the custom dropdown, Escape
+  dismissal, grouped icon controls, and mobile containment pass browser coverage.
+- [x] PASS — Playlist navigation retains original item order and filter state.
+- [x] PASS — Backend/runtime bulbs and conditional Telegram/Custom proxy rows
+  reflect existing stores, mark stale dependent health Unknown, and protect
+  host-only data; proxy configuration is explicitly not a reachability check.
+- [x] PASS — English/Russian/Tajik catalog parity and compilation remain valid.
+- [x] PASS — Workspace, frontend, both lockfiles, and OpenAPI identify 0.1.6.
+- [x] PASS — Release notes include all browsing, layout, sort-menu, and status
+  summary changes, with no API or database migration.
+
+Exact local checks:
+
+- `./scripts/test-release-notes.sh` — passed.
+- `cd web && npm ci && npm run typecheck && npm run lint && npm test && npm run build`
+  — passed; 28 tests in 13 files.
+- `cargo fmt --all -- --check` — passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — passed
+  after replacing the existing tray pixel loop with typed four-byte chunks.
+- `cargo test --workspace` — 101 passed, 1 opt-in live Telegram test ignored.
+- `cargo build --workspace` — passed.
+- `FETCH_E2E_PRODUCTION=1 npm --prefix web run test:e2e` — 44 passed across
+  desktop/mobile Chromium against the built Vite preview.
+- `git diff --check` — passed.
+
+The initial `FETCH_RUN_E2E=1 ./scripts/check.sh` stopped at the Clippy warning;
+after the fix, format/Clippy/tests/build and production browser checks were run
+explicitly to complete every remaining script step.
+
+- [ ] PENDING — Native archive matrix and interactive tray/startup/visual review.
+- [ ] PENDING — Release tag and publication.
+- NOT APPLICABLE — New endpoints, persistence migrations, external service
+  health probes, or live download smoke for these frontend changes.
+
 ## Phase 01 — Foundation
 
 - [x] PASS — `cargo build` succeeds.

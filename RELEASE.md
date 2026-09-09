@@ -3,6 +3,27 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
+## 0.1.6 — 2026-09-09
+
+- Added Downloads filters for All, Completed, In Progress, and Error, with
+  queued and active stages grouped together and stopped jobs retained under All.
+- Added Completed filters for All, Audio, Video, and Playlist. Audio/Video
+  include matching playlist members; Playlist retains grouped collections.
+- Added locale-aware natural name sorting, newest-first date sorting, and
+  Reverse inside a styled Sort by dropdown with icons and keyboard dismissal.
+- Positioned connected icon filter groups and sorting in one row beside page
+  headings, with horizontal scrolling on phones and clear filtered empty states.
+- Upgraded the sidebar runtime summary to labeled system-check bulbs for backend
+  connectivity, runtime health, enabled Telegram, and configured Custom proxy.
+  Dependent health becomes Unknown when realtime disconnects; proxy configuration
+  is not presented as a successful reachability check.
+- Localized all new controls and indicators in English, Russian, and Tajik,
+  preserving host-only integration access and existing API/database compatibility.
+- Added filtering/sorting/playlist browser coverage and status-transition,
+  stale-health, and LAN-boundary component tests.
+- Updated Linux tray pixel iteration to satisfy current Clippy checks without
+  changing icon conversion.
+
 ## 0.1.5 — 2026-08-21
 
 - Added browser-local English, Russian, and Tajik language selection with

@@ -1,22 +1,20 @@
 # Active Goal
 
-Develop Fetch 0.1.5 as a complete multilingual frontend release:
+Prepare Fetch 0.1.6 with improved library browsing and system visibility:
 
-- use English as the deterministic first-run and fallback language;
-- support explicit English, Russian, and Tajik interface selections;
-- persist the selected language locally per browser/device without adding
-  accounts, server profiles, or a database migration;
-- apply language changes immediately without reloading Fetch;
-- translate all application-owned navigation, views, dialogs, settings,
-  validation feedback, empty states, actions, and accessibility labels;
-- localize application-owned dates, times, counts, and status labels while
-  leaving media metadata, URLs, filesystem values, retained logs, and external
-  process messages unchanged;
-- keep desktop and mobile layouts usable with longer translated labels;
-- update the document language and use English whenever a translation key or
-  saved locale is unavailable;
-- cover defaulting, persistence, switching, translation completeness, and
-  desktop/mobile flows with automated tests and synchronized documentation.
+- filter Downloads by All, Completed, In Progress, and Error;
+- filter Completed by All, Audio, Video, and Playlist;
+- sort completed entries by locale-aware name or date, with Reverse inside a
+  styled Sort by dropdown;
+- keep connected icon filters and sorting in a single row beside desktop page
+  headings, with a horizontally scrollable row on phones;
+- show truthful backend/runtime status bulbs and conditional host-only Telegram
+  and Custom proxy indicators without claiming unverified proxy reachability;
+- preserve live store updates, playlist navigation/order, English/Russian/Tajik
+  localization, the existing API/database, and the local-first architecture;
+- synchronize release history, version metadata, roadmap, and test evidence,
+  and create reviewed local commits.
 
-Do not add automatic browser-language detection, server-side user preferences,
-machine translation, user accounts, or regress the mandatory architecture.
+Implementation is complete. Local verification is recorded in
+`docs/ACCEPTANCE.md`. Native package matrix, interactive desktop acceptance,
+tagging, and publication remain separate release gates.

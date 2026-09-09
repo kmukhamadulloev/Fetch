@@ -6,7 +6,7 @@ subsystem, expected behavior, actual behavior, and notes.
 
 ## Release verification
 
-Status: IN PROGRESS FOR 0.1.5
+Status: LOCAL VERIFICATION COMPLETE FOR 0.1.6
 
 Phases 01 through 09 were audited against their acceptance criteria. No known
 release-blocking implementation defect remains. The authoritative evidence
@@ -14,9 +14,11 @@ matrix is `docs/ACCEPTANCE.md`.
 
 Fetch 0.1.4 is published. Its interactive tray/startup evidence remains marked
 as pending in `docs/ACCEPTANCE.md`; do not retroactively claim that manual gate
-without evidence. Fetch 0.1.5 multilingual implementation and its complete
-local Rust/frontend/browser verification are complete; native release gates
-remain for publication.
+without evidence. Fetch 0.1.6 browsing and system-check implementation passes
+local Rust/frontend/production-browser verification. Native archive and
+interactive acceptance gates remain for publication. The current Clippy
+fixed-size chunk warning in Linux tray pixel conversion was resolved using
+typed four-byte chunks without changing the conversion.
 
 ## UX-031 — Sidebar runtime summary omits connection checks
 

@@ -119,7 +119,7 @@ pub async fn start(context: TrayContext) {
             .resize_exact(64, 64, image::imageops::FilterType::Lanczos3);
             let (width, height) = image.dimensions();
             let mut data = image.into_rgba8().into_raw();
-            for pixel in data.chunks_exact_mut(4) {
+            for pixel in data.as_chunks_mut::<4>().0 {
                 pixel.rotate_right(1);
             }
             vec![ksni::Icon {
