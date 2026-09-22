@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, LayoutGrid, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
 import SortDropdown from '@/components/SortDropdown.vue'
 import CompletedMediaCard from '@/components/CompletedMediaCard.vue'
+import MetadataEditorDialog from '@/components/MetadataEditorDialog.vue'
 import MediaPlayerDialog from '@/components/MediaPlayerDialog.vue'
 import { useLibraryStore, type CompletedPlaylistGroup } from '@/stores/library'
 import { useSettingsStore } from '@/stores/settings'
@@ -26,8 +27,10 @@ const reverse = ref(false)
 const filters = ['all', 'audio', 'video', 'playlist'] as const
 const filterIcons = { all: LayoutGrid, audio: Music2, video: FileVideo, playlist: ListVideo }
 const selected = ref<CompletedFile | null>(null)
+const editing = ref<CompletedFile | null>(null)
 const pendingDelete = ref<CompletedFile | null>(null)
 const failedPlaylistThumbnails = ref(new Set<string>())
+watch(() => library.thumbnailVersions, () => { failedPlaylistThumbnails.value = new Set() }, { deep: true })
 
 const requestedPlaylistId = computed(() => typeof route.query.playlist === 'string' ? route.query.playlist : null)
 const activePlaylist = computed(() => requestedPlaylistId.value ? library.playlists.find((playlist) => playlist.id === requestedPlaylistId.value) ?? null : null)
@@ -82,7 +85,7 @@ async function confirmDelete() {
         <span class="badge muted shrink-0"><ListVideo :size="12" />{{ activePlaylist.files.length }}</span>
       </div>
       <div class="mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3" data-playlist-gallery>
-        <CompletedMediaCard v-for="file in activePlaylist.files" :key="file.id" :file="file" @play="selected = $event" @delete="pendingDelete = $event" />
+        <CompletedMediaCard v-for="file in activePlaylist.files" :key="file.id" :file="file" @edit="editing = $event" @play="selected = $event" @delete="pendingDelete = $event" />
       </div>
     </template>
 
@@ -105,11 +108,11 @@ async function confirmDelete() {
       <div v-if="library.loading && !library.completed.length" class="card mt-6 flex min-h-48 items-center justify-center gap-2 p-8 text-sm text-muted" role="status"><LoaderCircle class="animate-spin" :size="18" />{{ t('completedView.loading') }}</div>
       <div v-else-if="libraryEntries.length" class="completed-grid mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <template v-for="entry in libraryEntries" :key="entry.kind === 'file' ? entry.file.id : `playlist-${entry.playlist.id}`">
-          <CompletedMediaCard v-if="entry.kind === 'file'" :file="entry.file" @play="selected = $event" @delete="pendingDelete = $event" />
+          <CompletedMediaCard v-if="entry.kind === 'file'" :file="entry.file" @edit="editing = $event" @play="selected = $event" @delete="pendingDelete = $event" />
           <article v-else class="playlist-card-shell min-w-0 w-full max-w-full" :data-playlist-id="entry.playlist.id">
             <div class="playlist-media-card media-card card min-w-0 w-full max-w-full overflow-hidden">
               <div class="media-cover">
-                <img v-if="entry.playlist.files[0].thumbnail_available && !failedPlaylistThumbnails.has(entry.playlist.files[0].id)" class="size-full object-cover" :src="`/api/files/${entry.playlist.files[0].id}/thumbnail`" alt="" loading="lazy" @error="playlistThumbnailFailed(entry.playlist.files[0].id)" />
+                <img v-if="entry.playlist.files[0].thumbnail_available && !failedPlaylistThumbnails.has(entry.playlist.files[0].id)" class="size-full object-cover" :src="library.thumbnailUrl(entry.playlist.files[0])" alt="" loading="lazy" @error="playlistThumbnailFailed(entry.playlist.files[0].id)" />
                 <Music2 v-else-if="entry.playlist.files[0].mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
                 <span class="playlist-card-icon"><ListVideo :size="19" /></span>
                 <span class="playlist-card-count">{{ t('completedView.itemCount', { count: entry.playlist.files.length }) }}</span>
@@ -128,6 +131,7 @@ async function confirmDelete() {
 
     <div v-if="requestedPlaylistId && !activePlaylist && !library.loading" class="card mt-6 flex min-h-64 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><ListVideo :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t('completedView.unavailable') }}</h3><p class="mt-2 text-xs text-muted">{{ t('completedView.unavailableHelp') }}</p><button class="secondary-btn mt-5" type="button" @click="closePlaylist"><ArrowLeft :size="15" />{{ t('completedView.back') }}</button></div>
 
+    <MetadataEditorDialog v-if="editing" :file="editing" @close="editing = null" />
     <MediaPlayerDialog v-if="selected" :file="selected" :local-client="settings.network?.local_client ?? false" @close="selected = null" />
     <div v-if="pendingDelete" class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-file-title">
       <button class="modal-backdrop" type="button" :aria-label="t('completedView.cancelDeletion')" @click="pendingDelete = null"></button>

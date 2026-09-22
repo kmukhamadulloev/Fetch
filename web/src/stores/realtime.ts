@@ -27,7 +27,7 @@ const runtimeEvents = new Set([
   'runtime.failed',
   'runtime.missing',
 ])
-const libraryEvents = new Set(['library.completed', 'library.progress', 'library.progress-cleared'])
+const libraryEvents = new Set(['library.completed', 'library.progress', 'library.progress-cleared', 'library.metadata'])
 const telegramEvents = new Set(['telegram.status'])
 const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents, ...telegramEvents]
 
@@ -107,6 +107,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
         library.applyDownload(payload)
       }
       else if (runtimeEvents.has(name)) runtime.applyEvent(payload)
+      else if (name === 'library.metadata') library.applyMetadata(payload)
       else if (name === 'library.completed') library.applyCompleted(payload)
       else if (name === 'library.progress') library.applyPlayback(payload)
       else if (name === 'library.progress-cleared') library.clearPlayback(payload)

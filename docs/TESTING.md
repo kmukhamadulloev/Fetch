@@ -62,7 +62,7 @@ File serving:
 - correct 206 ranges;
 - invalid ranges;
 - opaque file-ID access.
-- opaque cached-thumbnail access and immutable response headers.
+- opaque cached-thumbnail access and revalidating response headers.
 - completed media/artwork deletion with retained job history;
 - host-only opaque file-manager reveal and remote denial.
 - opaque file-ID playback progress retrieval, validation, save, reset, and
@@ -186,3 +186,27 @@ FETCH_TELEGRAM_BOT_TOKEN='...' \
 - frontend typecheck/lint/build;
 - integration tests;
 - target packaging smoke tests.
+
+## Metadata editor
+
+Normal Rust tests cover typed field validation, opaque API IDs, 202 acceptance,
+409 conflicts, background failure status, original preservation, concurrent
+deletion exclusion, and restart recovery before/after the SQLite commit marker.
+Frontend component tests cover basic/advanced fields, dirty guards, patch-only
+requests, and operation-correlated SSE completion. Playwright covers desktop
+and mobile modal behavior, upload/removal, save failures, unsupported formats,
+focus return, and viewport/footer containment.
+
+Run the real managed-runtime acceptance separately:
+
+```bash
+cargo test -p fetch real_managed_metadata -- --ignored --nocapture
+```
+
+These tests install checksum-verified managed FFmpeg/FFprobe under
+`$TMPDIR/fetch-metadata-runtime` and `$TMPDIR/fetch-metadata-runtime-service`
+(or `FETCH_METADATA_RUNTIME`), synthesize local
+media without contacting media websites, and exercise MP3/M4A/FLAC/MP4/MKV tag
+and artwork read/write/clear. They compare encoded audio/video stream hashes,
+preserve MKV subtitle language/chapters, and exercise background save through
+SQLite/library/artwork updates and failure rollback. No fake executable ships.

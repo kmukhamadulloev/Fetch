@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Download, ExternalLink, FileVideo, FolderOpen, LoaderCircle, Music2, Play, Trash2 } from '@lucide/vue'
+import { Download, ExternalLink, FileVideo, FolderOpen, LoaderCircle, Music2, Pencil, Play, Trash2 } from '@lucide/vue'
 import { useLibraryStore } from '@/stores/library'
 import { useSettingsStore } from '@/stores/settings'
 import type { CompletedFile } from '@/app/api/client'
 import { formatBytes } from '@/i18n/format'
 
 const props = defineProps<{ file: CompletedFile }>()
-const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile] }>()
+const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile]; edit: [file: CompletedFile] }>()
 const library = useLibraryStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
 const thumbnailFailed = ref(false)
+watch(() => library.thumbnailVersions[props.file.id], () => { thumbnailFailed.value = false })
 
 function bytes(value: number) { return formatBytes(value, locale.value) }
 function progressPercent() {
@@ -29,16 +30,19 @@ function playLabel() {
 
 <template>
   <article class="media-card card min-w-0 w-full max-w-full overflow-hidden">
-    <button v-if="file.browser_playable" class="media-cover group w-full" type="button" :aria-label="t('mediaCard.playNamed', { name: file.title ?? file.filename })" @click="emit('play', file)">
-      <img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" loading="lazy" @error="thumbnailFailed = true" />
-      <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
-      <span class="play-button"><Play class="ml-0.5" fill="currentColor" :size="20" /></span>
-      <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
-    </button>
-    <div v-else class="media-cover">
-      <img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" loading="lazy" @error="thumbnailFailed = true" />
-      <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
-      <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
+    <div class="relative">
+      <button v-if="file.browser_playable" class="media-cover group w-full" type="button" :aria-label="t('mediaCard.playNamed', { name: file.title ?? file.filename })" @click="emit('play', file)">
+        <img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full object-cover" :src="library.thumbnailUrl(file)" alt="" loading="lazy" @error="thumbnailFailed = true" />
+        <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
+        <span class="play-button"><Play class="ml-0.5" fill="currentColor" :size="20" /></span>
+        <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
+      </button>
+      <div v-else class="media-cover">
+        <img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full object-cover" :src="library.thumbnailUrl(file)" alt="" loading="lazy" @error="thumbnailFailed = true" />
+        <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
+        <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
+      </div>
+      <button class="metadata-pencil" type="button" :aria-label="t('metadata.editNamed', { name: file.title ?? file.filename })" :title="t('metadata.edit')" @click.stop="emit('edit', file)"><Pencil :size="17" /></button>
     </div>
     <div class="p-4">
       <div class="flex items-start gap-3">

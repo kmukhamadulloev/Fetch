@@ -597,3 +597,109 @@ test('downloads status filters include queued jobs and reset empty results', asy
   await page.getByRole('group', { name: 'Media type filter' }).getByRole('button', { name: 'All', exact: true }).click()
   await expect(page.locator('.completed-grid h3')).toHaveText(['Fixture media'])
 })
+
+async function mockMetadata(page: Page, audio = false, editable = true, fail = false) {
+  const fields: Record<string, string> = audio
+    ? { title: 'Fixture media', artist: 'Artist', album: 'Album', album_artist: '', track: '1', track_total: '8', date: '', genre: '', copyright: '', comment: '', description: '', disc: '', disc_total: '', composer: '' }
+    : { title: 'Fixture media', artist: 'Creator', description: 'Description', date: '', genre: '', copyright: '', comment: '' }
+  let saved = false
+  await page.route('**/api/files/*/metadata**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/status')) return route.fulfill({ json: { file_id: completedFixture[0].id, operation_id: saved ? 'operation-1' : null, state: saved ? (fail ? 'failed' : 'completed') : 'idle', error: fail ? 'The original file was preserved.' : null } })
+    if (path.endsWith('/artwork')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="teal"/></svg>' })
+    if (route.request().method() === 'PUT') {
+      saved = true
+      return route.fulfill({ status: 202, json: { file_id: completedFixture[0].id, operation_id: 'operation-1', state: 'saving', error: null } })
+    }
+    return route.fulfill({ json: { revision: 'revision-1', editable, media_type: audio ? 'audio' : 'video', container: audio ? 'mp3' : 'mp4', fields, supported_fields: editable ? Object.keys(fields) : [], artwork_available: true, artwork_editable: editable, information: { filename: 'media.mp4', duration: '12', size: '100', bit_rate: '1000' } } })
+  })
+}
+
+test('metadata pencil opens modal, advanced fields and dirty guard without playback', async ({ page }) => {
+  await mockApi(page)
+  await mockMetadata(page)
+  await page.goto('/completed')
+  const pencil = page.getByRole('button', { name: 'Edit metadata for Fixture media' })
+  await pencil.click()
+  const dialog = page.getByRole('dialog', { name: 'Edit metadata', exact: true })
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Fixture media')
+  await expect(dialog.getByLabel('Creator', { exact: true })).toBeVisible()
+  await expect(dialog.getByLabel('Description', { exact: true })).toBeVisible()
+  await expect(dialog.getByLabel('Genre', { exact: true })).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Advanced', exact: true }).click()
+  await expect(dialog.getByLabel('Genre', { exact: true })).toBeVisible()
+  await dialog.getByLabel('Title', { exact: true }).fill('Edited title')
+  await page.keyboard.press('Escape')
+  await expect(dialog.getByText('Discard your unsaved changes?')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Keep editing' }).click()
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Edited title')
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(pencil).toBeFocused()
+  await expect(page.locator('video')).toHaveCount(0)
+})
+
+test('audio metadata saves changed tags and uploaded artwork with responsive footer', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await mockApi(page)
+  await mockMetadata(page, true)
+  await page.goto('/completed')
+  await page.getByRole('button', { name: 'Edit metadata for Fixture media' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit metadata', exact: true })
+  await expect(dialog.getByLabel('Album artist', { exact: true })).toBeVisible()
+  await dialog.getByLabel('Title', { exact: true }).fill('New audio title')
+  await dialog.getByLabel('Upload / replace', { exact: true }).setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64') })
+  await dialog.getByRole('button', { name: 'Advanced', exact: true }).click()
+  await dialog.getByLabel('Total tracks', { exact: true }).fill('10')
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeInViewport()
+  await page.screenshot({ path: test.info().outputPath('metadata-editor.png') })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  const request = page.waitForRequest((request) => request.method() === 'PUT' && request.url().endsWith('/metadata'))
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
+  const body = (await request).postDataJSON()
+  expect(body.fields).toEqual({ title: 'New audio title', track_total: '10' })
+  expect(body.artwork.action).toBe('replace')
+  expect(body.revision).toBe('revision-1')
+  await expect(dialog).toHaveCount(0)
+})
+
+test('metadata removal failures preserve form and unsupported files remain read-only', async ({ page }) => {
+  await mockApi(page)
+  await mockMetadata(page, false, true, true)
+  await page.goto('/completed')
+  await page.getByRole('button', { name: 'Edit metadata for Fixture media' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Edit metadata', exact: true })
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
+  const request = page.waitForRequest((request) => request.method() === 'PUT' && request.url().endsWith('/metadata'))
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
+  expect((await request).postDataJSON().artwork).toEqual({ action: 'remove' })
+  await expect(dialog.getByRole('alert')).toContainText('The original file was preserved.')
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await mockMetadata(page, false, false)
+  await page.getByRole('button', { name: 'Edit metadata for Fixture media' }).click()
+  await expect(dialog.getByText('Editing this file format is not supported.', { exact: false })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+})
+
+
+for (const [locale, edit, title, advanced, save] of [
+  ['ru', 'Изменить метаданные', 'Название', 'Дополнительно', 'Сохранить изменения'],
+  ['tg', 'Таҳрири метамаълумот', 'Ном', 'Иловагӣ', 'Сабти тағйирот'],
+]) {
+  test(`metadata modal is localized and contained in ${locale}`, async ({ page }) => {
+    await page.addInitScript((locale) => localStorage.setItem('fetch.locale', locale), locale)
+    await mockApi(page)
+    await mockMetadata(page, true)
+    await page.goto('/completed')
+    await page.locator('.metadata-pencil').click()
+    const dialog = page.getByRole('dialog', { name: edit, exact: true })
+    await expect(dialog.getByLabel(title, { exact: true })).toHaveValue('Fixture media')
+    await dialog.getByRole('button', { name: advanced, exact: true }).click()
+    await expect(dialog.getByRole('button', { name: save, exact: true })).toBeInViewport()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await expect(dialog).not.toContainText('metadata.')
+  })
+}

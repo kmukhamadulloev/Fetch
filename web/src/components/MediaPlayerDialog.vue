@@ -150,9 +150,9 @@ onBeforeUnmount(() => {
         </header>
 
         <div ref="stage" class="player-stage">
-          <video v-if="!mediaFailed && file.mime_type.startsWith('video/')" ref="media" class="player-video" controls autoplay playsinline preload="metadata" :poster="file.thumbnail_available && !thumbnailFailed ? `/api/files/${file.id}/thumbnail` : undefined" :src="`/api/files/${file.id}/stream`" @loadedmetadata="resumePlayback" @timeupdate="saveCurrent()" @pause="saveCurrent(true)" @seeked="saveCurrent(true)" @ended="saveCurrent(true)" @error="mediaFailed = true"></video>
+          <video v-if="!mediaFailed && file.mime_type.startsWith('video/')" ref="media" class="player-video" controls autoplay playsinline preload="metadata" :poster="file.thumbnail_available && !thumbnailFailed ? library.thumbnailUrl(file) : undefined" :src="`/api/files/${file.id}/stream`" @loadedmetadata="resumePlayback" @timeupdate="saveCurrent()" @pause="saveCurrent(true)" @seeked="saveCurrent(true)" @ended="saveCurrent(true)" @error="mediaFailed = true"></video>
           <div v-else class="player-audio-stage">
-            <div class="player-art"><img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full rounded-[inherit] object-cover" :src="`/api/files/${file.id}/thumbnail`" alt="" @error="thumbnailFailed = true" /><Music2 v-else-if="file.mime_type.startsWith('audio/')" :size="52" /><Film v-else :size="52" /></div>
+            <div class="player-art"><img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full rounded-[inherit] object-cover" :src="library.thumbnailUrl(file)" alt="" @error="thumbnailFailed = true" /><Music2 v-else-if="file.mime_type.startsWith('audio/')" :size="52" /><Film v-else :size="52" /></div>
             <audio v-if="!mediaFailed && file.mime_type.startsWith('audio/')" ref="media" class="w-full" controls autoplay preload="metadata" :src="`/api/files/${file.id}/stream`" @loadedmetadata="resumePlayback" @timeupdate="saveCurrent()" @pause="saveCurrent(true)" @seeked="saveCurrent(true)" @ended="saveCurrent(true)" @error="mediaFailed = true"></audio>
             <p v-if="mediaFailed" class="max-w-md text-center text-xs leading-5 text-muted">{{ t('player.playbackFailed') }}</p>
           </div>

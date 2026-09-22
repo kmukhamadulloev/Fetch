@@ -731,3 +731,18 @@ five percent as watched, and exposes Start over plus non-blocking save errors.
 Cards and playlist summaries render accent progress lines, while dedicated SSE
 events synchronize primary, secondary, and LAN views. Domain, storage, API,
 store, player, and desktop/mobile browser tests cover the behavior.
+
+## UX-032 — Completed media lacks a metadata/artwork editor
+
+Status: RESOLVED
+
+Affected: fetch-core, fetch-storage, fetch-server, app/fetch, web.
+
+Expected: A top-left card pencil opens a localized modal with basic/advanced
+metadata fields and required embedded artwork preview/replacement/removal.
+
+Implementation: Added managed-runtime inspection and stream-copy saves,
+format-aware fields, background status/SSE, SQLite recovery journaling,
+conflict handling, and the responsive modal. FLAC uses one Comment field;
+unsafe remuxes and multiple retained MKV covers are rejected rather than losing
+content. Exact acceptance evidence is maintained in `docs/ACCEPTANCE.md`.

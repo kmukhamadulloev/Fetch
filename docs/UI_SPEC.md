@@ -226,3 +226,16 @@ collapsed behind a right-aligned, keyboard-accessible per-entry accordion. On
 desktop, timestamp, fixed-width severity, subsystem, message, and action columns
 share one vertical center so different severity label lengths never shift the
 following content.
+
+## Metadata editor
+
+Individual completed-media cards have a permanently visible 44 px rounded pencil
+button inset at the top-left of the image or placeholder. It is a sibling of the
+play button, so editing cannot trigger playback. Playlist cards remain unchanged.
+The pencil opens a modal with the basic audio/video fields and required artwork
+controls specified in `METADATA.md`. Advanced starts collapsed. Read-only file
+information has a separate disclosure. Save/Cancel stay visible in the footer;
+the content scrolls within the viewport. Dirty dismissal requires confirmation,
+keyboard focus stays inside the modal and returns to the invoking pencil, and
+loading/saving/failure states are announced. All form labels and actions are
+translated in English, Russian, and Tajik. Unsupported formats are read-only.

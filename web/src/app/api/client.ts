@@ -310,3 +310,32 @@ export async function clearLogs(): Promise<void> {
   const response = await fetchApi('/api/logs', { method: 'DELETE' })
   if (!response.ok) throw new ApiError(response.status, i18n.global.t('errors.clearLogs', { status: response.status }))
 }
+
+export interface MediaMetadata {
+  revision: string
+  editable: boolean
+  media_type: 'audio' | 'video'
+  container: string
+  fields: Record<string, string>
+  supported_fields: string[]
+  artwork_available: boolean
+  artwork_editable: boolean
+  information: Record<string, string>
+}
+export type ArtworkUpdate = { action: 'keep' } | { action: 'remove' } | { action: 'replace'; data: string }
+export interface MetadataUpdate {
+  revision: string
+  fields: Record<string, string>
+  artwork: ArtworkUpdate
+}
+export interface MetadataSaveStatus {
+  file_id: string
+  operation_id: string | null
+  state: 'idle' | 'saving' | 'completed' | 'failed'
+  error: string | null
+}
+export function getMetadata(id: string): Promise<MediaMetadata> { return jsonRequest(`/api/files/${id}/metadata`) }
+export function saveMetadata(id: string, update: MetadataUpdate): Promise<MetadataSaveStatus> {
+  return jsonRequest(`/api/files/${id}/metadata`, { method: 'PUT', body: JSON.stringify(update) })
+}
+export function getMetadataStatus(id: string): Promise<MetadataSaveStatus> { return jsonRequest(`/api/files/${id}/metadata/status`) }

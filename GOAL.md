@@ -27,3 +27,7 @@ Implement the approved completed-media metadata editor for Fetch.
 
 Checkpoints and acceptance criteria are in `docs/METADATA.md` and `ROADMAP.md`.
 Release numbering, tagging, and publication are outside this implementation scope.
+
+Implementation and local verification are complete. Evidence is recorded in
+`docs/ACCEPTANCE.md`. Native Windows/macOS execution and release publication
+remain separate release gates.

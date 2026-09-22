@@ -3,6 +3,51 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Metadata editor — Local verification (2026-09-23)
+
+- [x] A1 PASS — Top-left rounded pencil opens the modal on individual cards,
+  restores keyboard focus, and does not trigger playback.
+- [x] A2 PASS — Basic/Advanced audio/video fields follow container capabilities;
+  FLAC exposes Comment without the aliased Description; file information is
+  read-only and unsupported formats cannot save.
+- [x] A3 PASS — Managed MP3/M4A/FLAC/MP4/MKV tag write/clear round trips pass.
+  Encoded audio/video stream hashes match. MKV subtitles, languages, and
+  chapters survive. Unsafe preservation is rejected before replacement.
+- [x] A4 PASS — Embedded artwork preview, replacement, retention, and removal
+  pass all five formats; real service tests confirm thumbnail synchronization.
+- [x] A5 PASS — Stale/concurrent operations are rejected; failure retains original
+  bytes; recovery restores uncommitted replacements and cleans committed ones.
+- [x] A6 PASS — Real service tests verify title/size/artwork persistence while IDs,
+  history linkage, and playback progress survive. SSE completion and library
+  refresh, including artwork URL invalidation, are covered by component tests.
+- [x] A7 PASS — Desktop/mobile browser checks cover footer containment, dirty
+  guarding, keyboard dismissal/focus return, and English/Russian/Tajik labels.
+  Screenshots were inspected at desktop and phone sizes.
+- [x] A8 PASS — Formatting, strict Clippy, Rust/frontend tests, lint/typecheck,
+  production build, browser coverage, and API/documentation alignment pass.
+
+Exact executed checks:
+
+- `FETCH_RUN_E2E=1 ./scripts/check.sh` — passed: release-note tests, `npm ci`,
+  frontend typecheck/lint/unit/build, Rust format/Clippy/tests/build, and
+  production-preview Playwright. Rust: 108 passed, 3 opt-in tests ignored;
+  frontend: 30 passed in 14 files; browsers: 54 passed across desktop/mobile.
+- `cargo test -p fetch real_managed_metadata -- --ignored --nocapture` — 2 passed
+  with actual checksum-verified managed FFmpeg/FFprobe and synthetic local media.
+  The two metadata tests are included among the normal suite's ignored tests;
+  the remaining ignored test is the unrelated live Telegram smoke.
+- `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings` — passed.
+- `cargo test --workspace` — passed independently after final backend review.
+- `cd web && npm run typecheck && npm run lint && npm test && npm run build && FETCH_E2E_PRODUCTION=1 npm run test:e2e`
+  — passed after thumbnail refresh integration; 30 unit and 54 browser tests.
+- OpenAPI YAML parsed successfully; `git diff --check` passed.
+
+Native Windows/macOS runtime execution, native package matrices, and publication
+remain release gates; they were not claimed by this Linux validation. The
+container restrictions and single-save concurrency model are documented in
+`METADATA.md`. No known local implementation blocker remains.
+
 ## 0.1.6 — Local verification (2026-09-09)
 
 - [x] PASS — Downloads filters cover completed, queued/active, failed, and All.

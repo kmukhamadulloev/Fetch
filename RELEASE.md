@@ -3,6 +3,20 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
+## Unreleased — Metadata editor
+
+- Added a rounded top-left card pencil opening a responsive audio/video metadata
+  modal, with basic fields, collapsed Advanced fields, file information, and
+  required cover preview/upload/replacement/removal.
+- Added managed FFprobe inspection and FFmpeg stream-copy saves for tested MP3,
+  M4A, FLAC, MP4, and MKV tag/artwork combinations without renaming media.
+- Added background operation status, conflict detection, recoverable file
+  replacement, SQLite library updates, and SSE/thumbnail refresh.
+- Localized controls in English, Russian, and Tajik, with keyboard focus and
+  unsaved-change guards. Added API, recovery, real-runtime, and browser coverage.
+- Added SQLite migration 0007 for metadata recovery journals. Existing files,
+  job history, playlist order, and playback progress retain their identifiers.
+
 ## 0.1.6 — 2026-09-09
 
 - Added Downloads filters for All, Completed, In Progress, and Error, with

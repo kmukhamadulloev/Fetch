@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { clearPlaybackProgress, deleteCompleted, getCompleted, getHistory, revealCompleted, savePlaybackProgress, type CompletedFile, type DownloadJob, type PlaybackProgress } from '@/app/api/client'
+import { clearPlaybackProgress, deleteCompleted, getCompleted, getHistory, revealCompleted, savePlaybackProgress, type CompletedFile, type DownloadJob, type PlaybackProgress, type MetadataSaveStatus } from '@/app/api/client'
 import { i18n } from '@/i18n'
 
 export interface CompletedPlaylistGroup {
@@ -14,6 +14,13 @@ export interface CompletedPlaylistGroup {
 }
 
 export const useLibraryStore = defineStore('library', () => {
+  const metadataStatuses = ref<Record<string, MetadataSaveStatus>>({})
+  const thumbnailVersions = ref<Record<string, number>>({})
+  function applyMetadata(payload: unknown) {
+    const status = payload as MetadataSaveStatus
+    metadataStatuses.value[status.file_id] = status
+  }
+  function thumbnailUrl(file: CompletedFile) { return `/api/files/${file.id}/thumbnail?v=${thumbnailVersions.value[file.id] ?? 0}` }
   const completed = ref<CompletedFile[]>([])
   const history = ref<DownloadJob[]>([])
   const loading = ref(false)
@@ -87,7 +94,7 @@ export const useLibraryStore = defineStore('library', () => {
     const file = payload as CompletedFile
     const index = completed.value.findIndex((item) => item.id === file.id)
     if (index === -1) completed.value.unshift(file)
-    else completed.value[index] = file
+    else { completed.value[index] = file; thumbnailVersions.value[file.id] = Date.now() }
   }
 
   function applyDownload(payload: unknown) {
@@ -130,5 +137,5 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  return { completed, standalone, playlists, history, loading, error, actingId, playbackError, refresh, reveal, remove, applyCompleted, applyDownload, applyPlayback, clearPlayback, saveProgress, resetProgress }
+  return { metadataStatuses, thumbnailVersions, applyMetadata, thumbnailUrl, completed, standalone, playlists, history, loading, error, actingId, playbackError, refresh, reveal, remove, applyCompleted, applyDownload, applyPlayback, clearPlayback, saveProgress, resetProgress }
 })

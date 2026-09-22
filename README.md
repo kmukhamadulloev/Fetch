@@ -32,6 +32,8 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   completed entries by name/date with a reversible order.
 - Check backend/runtime bulbs and, on the host, enabled Telegram status and
   Custom proxy configuration from the sidebar.
+- Edit completed audio/video tags and embedded cover artwork from a card modal,
+  with basic/advanced fields, safe background saves, and crash recovery.
 - Browse cached artwork and completed files without exposing filesystem paths
   to browser clients.
 - Browse completed playlists as stacked collection cards, then open an ordered

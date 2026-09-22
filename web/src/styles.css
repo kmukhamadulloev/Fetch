@@ -147,3 +147,10 @@ button { -webkit-tap-highlight-color: transparent; }
   .browse-filter { padding: .5rem; font-size: .68rem; }
   .browse-filter span { overflow-wrap: anywhere; }
 }
+
+.metadata-pencil { position: absolute; top: .65rem; left: .65rem; display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(10,14,20,.78); color: #fff; backdrop-filter: blur(8px); }
+.metadata-pencil:hover { background: rgba(10,14,20,.95); color: var(--app-accent); }
+.metadata-panel { display: flex; flex-direction: column; max-width: 42rem; max-height: calc(100dvh - 2rem); padding: 0; overflow: hidden; }
+@media (max-width: 480px) { .metadata-modal { padding: .5rem; } .metadata-panel { max-height: calc(100dvh - 1rem); } }
+
+.metadata-panel label.secondary-btn:focus-within { outline: 2px solid var(--app-accent); outline-offset: 2px; }
