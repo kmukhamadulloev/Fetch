@@ -235,6 +235,16 @@ Objective: improve Downloads/Completed browsing and sidebar system visibility.
 - [ ] Pass native archive matrix and interactive tray/startup/visual acceptance.
 - [ ] Tag and publish approved release artifacts.
 
+## Metadata editor — Active implementation (unversioned)
+
+Approved scope and acceptance criteria: `docs/METADATA.md`.
+
+- [x] Document the approved basic/advanced fields, required artwork, and modal.
+- [ ] Implement real metadata/artwork inspection and safe background saves.
+- [ ] Integrate the top-left card pencil and localized responsive modal.
+- [ ] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
+- [ ] Synchronize documentation and pass repository checks.
+
 ## Candidate ideas
 
 These are not commitments and must be promoted into a version before
