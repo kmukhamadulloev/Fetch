@@ -132,6 +132,60 @@ paths:
         '204': {description: Containing folder opened on the Fetch host}
         '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/metadata:
+    parameters:
+      - {$ref: '#/components/parameters/DownloadId'}
+    get:
+      summary: Inspect embedded tags and format capabilities through managed FFprobe
+      responses:
+        '200':
+          description: Metadata, editable fields, embedded artwork availability, and read-only file information
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MediaMetadata'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Start a recoverable background metadata save
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MetadataUpdate'}
+      responses:
+        '202':
+          description: Accepted operation; monitor status or library.metadata SSE
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MetadataSaveStatus'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '413':
+          description: Request exceeds 12 MiB
+  /api/files/{id}/metadata/status:
+    parameters:
+      - {$ref: '#/components/parameters/DownloadId'}
+    get:
+      responses:
+        '200':
+          description: Latest session operation for this file; idle after server restart
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MetadataSaveStatus'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/files/{id}/metadata/artwork:
+    parameters:
+      - {$ref: '#/components/parameters/DownloadId'}
+    get:
+      responses:
+        '200':
+          description: Embedded artwork preview as JPEG, no-store
+          content:
+            image/jpeg:
+              schema: {type: string, contentEncoding: binary}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
   /api/files/{id}/progress:
     put:
       parameters: [{$ref: '#/components/parameters/FileId'}]
@@ -375,6 +429,53 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/ErrorResponse'}
   schemas:
+    MediaMetadata:
+      type: object
+      required: [revision, editable, media_type, container, fields, supported_fields, artwork_available, artwork_editable, information]
+      properties:
+        revision: {type: string}
+        editable: {type: boolean}
+        media_type: {type: string, enum: [audio, video]}
+        container: {type: string}
+        fields: {type: object, additionalProperties: {type: string}}
+        supported_fields: {type: array, items: {type: string}}
+        artwork_available: {type: boolean}
+        artwork_editable: {type: boolean}
+        information: {type: object, additionalProperties: {type: string}}
+    MetadataUpdate:
+      type: object
+      additionalProperties: false
+      required: [revision, fields, artwork]
+      properties:
+        revision: {type: string, description: Opaque revision from the last inspection}
+        fields:
+          type: object
+          description: Omitted fields are preserved; empty strings clear tags. Each value is at most 16384 UTF-8 bytes. Track/disc values are positive integers up to 65535 expressed as strings.
+          propertyNames:
+            enum: [title, artist, album, album_artist, track, track_total, date, genre, copyright, comment, description, disc, disc_total, composer]
+          additionalProperties: {type: string}
+        artwork:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action: {type: string, enum: [keep, remove]}
+            - type: object
+              additionalProperties: false
+              required: [action, data]
+              properties:
+                action: {type: string, const: replace}
+                data: {type: string, contentEncoding: base64, description: JPEG or PNG bytes up to 8 MiB; dimensions at most 8192 pixels per side; decoded image at most 128 MiB. Normalized to JPEG up to 2048 pixels per side.}
+    MetadataSaveStatus:
+      type: object
+      required: [file_id, operation_id, state, error]
+      properties:
+        file_id: {type: string, format: uuid}
+        operation_id: {type: [string, 'null'], format: uuid}
+        state: {type: string, enum: [idle, saving, completed, failed]}
+        error: {type: [string, 'null']}
+
     AppStatus:
       type: object
       required: [version, server, runtime_ready, storage_ready]

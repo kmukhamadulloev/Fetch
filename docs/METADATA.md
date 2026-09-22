@@ -44,3 +44,58 @@ and MKV are the initial targets; unsupported files explain their limitation.
 
 Batch edits, arbitrary-file imports, filename templates, chapter editing,
 online tag lookup, transcoding, and new authentication are outside this scope.
+
+## Implemented design
+
+`CompletedLibrary` delegates to an application `MetadataService`; its managed
+process adapter owns FFprobe/FFmpeg invocation. HTTP accepts opaque file IDs and
+allowlisted field names, never paths or process arguments. Allowed LAN clients
+have the same editing access as existing completed-file deletion.
+
+One metadata operation runs at a time. Deletion and other metadata inspections
+receive a conflict while saving; existing file streams are not cancelled. A
+revision derived from file size and nanosecond modification time rejects stale
+edits before processing and immediately before replacement. This detects normal
+external modifications, not an adversarial rewrite preserving both attributes.
+
+The service persists a SQLite recovery journal before writing a sibling output.
+It validates tag round trips, stream signatures, artwork presence, unrelated
+container tags, and chapters before replacement. FFmpeg uses stream copy for
+all media streams. Original file permissions are retained. Outputs are flushed,
+the original is renamed to a unique backup, and the new file takes its place.
+SQLite updates the library and durable commit marker in one transaction.
+Recovery restores an uncommitted backup or cleans a committed operation; it runs
+before serving on startup. Directory changes are flushed on Unix. Windows
+open-file rename failures are surfaced and the journal retains recovery data.
+No filename, completed ID, job history, playlist context, or playback progress
+is changed. Save time and temporary space scale with file size.
+
+The adapter bounds subprocess duration and captured output, restricts input
+protocols to local files, and kills child processes on cancellation. Submitted
+artwork is limited to 8 MiB JPEG/PNG, 8192 pixels per side, and 128 MiB decoded
+allocation. It is normalized to an RGB JPEG up to 2048 pixels per side; those
+same bytes become the library thumbnail. Removing artwork clears both embedded
+artwork and the cached thumbnail. Keeping artwork preserves existing thumbnail
+behavior; when only a cached thumbnail exists the modal labels that distinction.
+New cover files use private `.fetch-<uuid>.jpg` sibling names managed by the
+completed-file lifecycle. HTTP thumbnail responses revalidate and library
+updates also change the thumbnail URL in mounted cards.
+
+MP3, M4A, FLAC, MP4, and MKV tags/artwork are tested with actual managed tools.
+FLAC exposes Comment only because its muxer aliases Description/Comment. MKV
+cover images must be extracted without re-encoding and reattached; otherwise
+FFmpeg can turn an attached image into a timed video stream. Files with multiple
+MKV covers are rejected when keeping covers. Unusual streams or tags that a
+muxer cannot preserve cause a save failure with the original retained.
+
+The form sends only changed tags. Track and disc totals are combined with their
+numbers for embedded tags; a total requires a number and cannot be smaller.
+Date is a text field so users may retain a year or fuller date. Technical
+information is read-only. The modal traps keyboard focus, restores focus to the
+pencil, locks background scrolling, guards route/tab dismissal, and keeps its
+footer visible on phones. Save status uses SSE plus a bounded REST polling
+fallback; no percentage is fabricated. Latest operation status is session-local
+(bounded to 256 entries); after restart clients reopen the recovered file.
+
+FFmpeg behavior references: [stream copy and metadata](https://ffmpeg.org/ffmpeg.html)
+and [container formats](https://ffmpeg.org/ffmpeg-formats.html).

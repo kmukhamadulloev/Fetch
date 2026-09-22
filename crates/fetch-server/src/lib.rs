@@ -126,6 +126,14 @@ pub fn router(services: ServerServices) -> Router {
         .route("/api/files/{id}/download", get(download_file))
         .route("/api/files/{id}/stream", get(stream_file))
         .route("/api/files/{id}/thumbnail", get(thumbnail_file))
+        .route(
+            "/api/files/{id}/metadata",
+            get(get_metadata)
+                .put(put_metadata)
+                .layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)),
+        )
+        .route("/api/files/{id}/metadata/status", get(metadata_status))
+        .route("/api/files/{id}/metadata/artwork", get(metadata_artwork))
         .route("/api/files/{id}/reveal", post(reveal_completed_file))
         .route(
             "/api/files/{id}/progress",
@@ -258,6 +266,60 @@ async fn list_completed(State(state): State<AppState>) -> Result<impl IntoRespon
     Ok(Json(state.services.completed.list_completed().await?))
 }
 
+async fn get_metadata(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(
+        state.services.completed.metadata(parse_uuid(&id)?).await?,
+    ))
+}
+async fn put_metadata(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(update): Json<fetch_core::MetadataUpdate>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(
+            state
+                .services
+                .completed
+                .update_metadata(parse_uuid(&id)?, update)
+                .await?,
+        ),
+    ))
+}
+async fn metadata_status(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok(Json(
+        state
+            .services
+            .completed
+            .metadata_status(parse_uuid(&id)?)
+            .await?,
+    ))
+}
+async fn metadata_artwork(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    let bytes = state
+        .services
+        .completed
+        .metadata_artwork(parse_uuid(&id)?)
+        .await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/jpeg"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        bytes,
+    ))
+}
+
 async fn delete_completed_file(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -381,7 +443,7 @@ async fn thumbnail_file(
                 .as_ref(),
         )
         .header(header::CONTENT_LENGTH, metadata.len())
-        .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+        .header(header::CACHE_CONTROL, "no-cache")
         .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
         .body(Body::from_stream(ReaderStream::new(file)))
         .expect("thumbnail response headers are valid"))
@@ -874,6 +936,8 @@ async fn events(
                             Event::default().event(application.event_name()).json_data(progress)
                         } else if let Some(id) = application.cleared_playback_file() {
                             Event::default().event(application.event_name()).json_data(id)
+                        } else if let ApplicationEvent::MetadataSaved(status) = &application {
+                            Event::default().event(application.event_name()).json_data(status)
                         } else if let Some(status) = application.telegram_status() {
                             if !host_client {
                                 continue;
@@ -934,6 +998,7 @@ impl IntoResponse for ApiError {
             FetchError::FileNotFound | FetchError::NotFound => StatusCode::NOT_FOUND,
             FetchError::NetworkDenied => StatusCode::FORBIDDEN,
             FetchError::LocalClientRequired => StatusCode::FORBIDDEN,
+            FetchError::Conflict(_) => StatusCode::CONFLICT,
             FetchError::InvalidTransition { .. } => StatusCode::CONFLICT,
             FetchError::ProcessFailed { .. } | FetchError::Internal(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -1101,6 +1166,50 @@ mod tests {
 
     #[async_trait::async_trait]
     impl CompletedOperations for TestCompletedFile {
+        async fn metadata(&self, id: uuid::Uuid) -> Result<fetch_core::MediaMetadata, FetchError> {
+            self.get_completed(id).await?;
+            Ok(fetch_core::MediaMetadata {
+                revision: "v1".into(),
+                editable: true,
+                media_type: "video".into(),
+                container: "mp4".into(),
+                fields: std::collections::BTreeMap::from([("title".into(), "Fixture".into())]),
+                supported_fields: vec!["title".into()],
+                artwork_available: false,
+                artwork_editable: true,
+                information: Default::default(),
+            })
+        }
+        async fn update_metadata(
+            &self,
+            id: uuid::Uuid,
+            update: fetch_core::MetadataUpdate,
+        ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
+            self.get_completed(id).await?;
+            update.validate()?;
+            if update.revision != "v1" {
+                return Err(FetchError::Conflict("File changed".into()));
+            }
+            Ok(fetch_core::MetadataSaveStatus {
+                file_id: id,
+                operation_id: Some(uuid::Uuid::new_v4()),
+                state: fetch_core::MetadataSaveState::Saving,
+                error: None,
+            })
+        }
+        async fn metadata_status(
+            &self,
+            id: uuid::Uuid,
+        ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
+            self.get_completed(id).await?;
+            Ok(fetch_core::MetadataSaveStatus {
+                file_id: id,
+                operation_id: None,
+                state: fetch_core::MetadataSaveState::Idle,
+                error: None,
+            })
+        }
+
         async fn list_completed(&self) -> Result<Vec<fetch_core::CompletedFile>, FetchError> {
             Ok(vec![self.0.clone()])
         }
@@ -1672,10 +1781,7 @@ mod tests {
         .await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
-        assert_eq!(
-            response.headers()[header::CACHE_CONTROL],
-            "public, max-age=31536000, immutable"
-        );
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-cache");
         assert_eq!(
             to_bytes(response.into_body(), usize::MAX).await.unwrap(),
             "jpeg-bytes"
@@ -1851,5 +1957,65 @@ mod tests {
         assert!(policy.allows("192.168.4.20".parse().unwrap()));
         assert!(!policy.allows("10.0.0.2".parse().unwrap()));
         assert!(NetworkPolicy::new(&["invalid".into()]).is_err());
+    }
+    #[tokio::test]
+    async fn metadata_api_resolves_opaque_ids_and_validates_background_requests() {
+        let file = fetch_core::CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: uuid::Uuid::new_v4(),
+            playlist: None,
+            filename: "fixture.mp4".into(),
+            path: "/private/fixture.mp4".into(),
+            thumbnail_path: None,
+            thumbnail_available: false,
+            size_bytes: 42,
+            mime_type: "video/mp4".into(),
+            title: Some("Fixture".into()),
+            browser_playable: true,
+            playback: None,
+            created_at: chrono::Utc::now(),
+        };
+        let path = format!("/api/files/{}/metadata", file.id);
+        let app = app_with_completed(Arc::new(TestCompletedFile(file)));
+        let response = request(app.clone(), &path, "GET", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert!(!String::from_utf8_lossy(&body).contains("/private"));
+        let valid = r#"{"revision":"v1","fields":{"title":"Changed"},"artwork":{"action":"keep"}}"#;
+        let response = request(app.clone(), &path, "PUT", Some(valid)).await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["state"], "saving");
+        assert!(body["operation_id"].is_string());
+        let response = request(
+            app.clone(),
+            &path,
+            "PUT",
+            Some(&valid.replace("v1", "stale")),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let response = request(
+            app.clone(),
+            &path,
+            "PUT",
+            Some(&valid.replace("title", "path")),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = request(app.clone(), "/api/files/not-a-uuid/metadata", "GET", None).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response = request(
+            app.clone(),
+            &format!("/api/files/{}/metadata", uuid::Uuid::new_v4()),
+            "GET",
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let response = request(app, &format!("{path}/status"), "GET", None).await;
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

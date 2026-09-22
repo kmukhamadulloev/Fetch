@@ -240,7 +240,7 @@ Objective: improve Downloads/Completed browsing and sidebar system visibility.
 Approved scope and acceptance criteria: `docs/METADATA.md`.
 
 - [x] Document the approved basic/advanced fields, required artwork, and modal.
-- [ ] Implement real metadata/artwork inspection and safe background saves.
+- [x] Implement real metadata/artwork inspection and safe background saves.
 - [ ] Integrate the top-left card pencil and localized responsive modal.
 - [ ] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
 - [ ] Synchronize documentation and pass repository checks.

@@ -2,6 +2,8 @@ mod config;
 mod diagnostics;
 mod downloads;
 mod library;
+mod metadata;
+mod metadata_adapter;
 mod proxy;
 mod startup;
 pub mod telegram;
@@ -103,6 +105,16 @@ async fn run_fetch(
         .all(|component| component.status == RuntimeStatus::Ready);
     let status = StatusService::new(env!("CARGO_PKG_VERSION"), true, runtime_ready);
     let events = EventBus::default();
+    let shutdown = CancellationToken::new();
+    let metadata = metadata::MetadataService::new(
+        storage.clone(),
+        metadata_adapter::MetadataAdapter {
+            paths: RuntimePaths::new(config.runtime_path()),
+            shutdown: shutdown.clone(),
+        },
+        events.clone(),
+    )
+    .await?;
     let downloads = Arc::new(DownloadManager::new(
         storage.clone(),
         runtime.clone(),
@@ -130,7 +142,6 @@ async fn run_fetch(
     ));
     telegram.start().await;
     let network_policy = fetch_server::NetworkPolicy::new(&settings.allowed_networks)?;
-    let shutdown = CancellationToken::new();
     let address = SocketAddr::new(settings.bind_address, settings.port);
     let tray_state = Arc::new(tray::TrayState::new(
         address,
@@ -166,7 +177,7 @@ async fn run_fetch(
         media,
         downloads: downloads.clone(),
         events,
-        completed: Arc::new(CompletedLibrary::new(storage.clone())),
+        completed: Arc::new(CompletedLibrary::with_metadata(storage.clone(), metadata)),
         settings: managed_settings,
         proxy: Arc::new(ManagedProxy::new(storage.clone(), proxy_policy)),
         listener: listener_control,

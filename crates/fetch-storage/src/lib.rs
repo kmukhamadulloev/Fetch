@@ -287,6 +287,67 @@ impl Storage {
             .transpose()
     }
 
+    pub async fn begin_metadata_edit(
+        &self,
+        id: uuid::Uuid,
+        journal: &str,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO metadata_edits (file_id, journal_json) VALUES (?, ?)")
+            .bind(id.to_string())
+            .bind(journal)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn metadata_edits(&self) -> Result<Vec<(uuid::Uuid, String, bool)>, StorageError> {
+        let rows = sqlx::query("SELECT file_id, journal_json, committed FROM metadata_edits")
+            .fetch_all(&self.pool)
+            .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    row.try_get::<String, _>("file_id")?
+                        .parse()
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    row.try_get("journal_json")?,
+                    row.try_get("committed")?,
+                ))
+            })
+            .collect()
+    }
+
+    pub async fn finish_metadata_edit(&self, file: &CompletedFile) -> Result<(), StorageError> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query(
+            "UPDATE completed_files SET title = ?, size_bytes = ?, thumbnail_path = ? WHERE id = ?",
+        )
+        .bind(&file.title)
+        .bind(file.size_bytes as i64)
+        .bind(
+            file.thumbnail_path
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned()),
+        )
+        .bind(file.id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query("UPDATE metadata_edits SET committed = 1 WHERE file_id = ?")
+            .bind(file.id.to_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    pub async fn clear_metadata_edit(&self, id: uuid::Uuid) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM metadata_edits WHERE file_id = ?")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn delete_completed_file(&self, id: uuid::Uuid) -> Result<bool, StorageError> {
         Ok(sqlx::query("DELETE FROM completed_files WHERE id = ?")
             .bind(id.to_string())

@@ -13,6 +13,7 @@ pub enum ErrorCode {
     ProcessFailed,
     InvalidSettings,
     InvalidRequest,
+    Conflict,
     OutputDirectoryUnavailable,
     FileNotFound,
     NetworkDenied,
@@ -66,6 +67,8 @@ pub enum FetchError {
     InvalidSettings(String),
     #[error("invalid request: {0}")]
     InvalidRequest(String),
+    #[error("{0}")]
+    Conflict(String),
     #[error("output directory is unavailable: {0}")]
     OutputDirectoryUnavailable(String),
     #[error("file was not found")]
@@ -97,6 +100,7 @@ impl FetchError {
             Self::ProcessFailed { .. } => ErrorCode::ProcessFailed,
             Self::InvalidSettings(_) => ErrorCode::InvalidSettings,
             Self::InvalidRequest(_) => ErrorCode::InvalidRequest,
+            Self::Conflict(_) => ErrorCode::Conflict,
             Self::OutputDirectoryUnavailable(_) => ErrorCode::OutputDirectoryUnavailable,
             Self::FileNotFound => ErrorCode::FileNotFound,
             Self::NetworkDenied => ErrorCode::NetworkDenied,

@@ -25,6 +25,26 @@ pub trait DownloadOperations: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait CompletedOperations: Send + Sync {
+    async fn metadata(&self, _id: Uuid) -> Result<crate::MediaMetadata, FetchError> {
+        Err(FetchError::InvalidRequest(
+            "Metadata editing is unavailable".into(),
+        ))
+    }
+    async fn metadata_artwork(&self, _id: Uuid) -> Result<Vec<u8>, FetchError> {
+        Err(FetchError::FileNotFound)
+    }
+    async fn update_metadata(
+        &self,
+        _id: Uuid,
+        _update: crate::MetadataUpdate,
+    ) -> Result<crate::MetadataSaveStatus, FetchError> {
+        Err(FetchError::InvalidRequest(
+            "Metadata editing is unavailable".into(),
+        ))
+    }
+    async fn metadata_status(&self, _id: Uuid) -> Result<crate::MetadataSaveStatus, FetchError> {
+        Err(FetchError::NotFound)
+    }
     async fn list_completed(&self) -> Result<Vec<CompletedFile>, FetchError>;
     async fn get_completed(&self, id: Uuid) -> Result<CompletedFile, FetchError>;
     async fn reveal_completed(&self, id: Uuid) -> Result<(), FetchError>;
@@ -58,6 +78,8 @@ pub enum ApplicationEvent {
     PlaybackProgressUpdated(PlaybackProgress),
     #[serde(rename = "library.progress-cleared")]
     PlaybackProgressCleared(Uuid),
+    #[serde(rename = "library.metadata")]
+    MetadataSaved(crate::MetadataSaveStatus),
     #[serde(rename = "telegram.status")]
     TelegramStatusUpdated(TelegramStatus),
 }
@@ -75,6 +97,7 @@ impl ApplicationEvent {
             Self::PlaybackProgressUpdated(_) => "library.progress",
             Self::PlaybackProgressCleared(_) => "library.progress-cleared",
             Self::TelegramStatusUpdated(_) => "telegram.status",
+            Self::MetadataSaved(_) => "library.metadata",
         }
     }
 
@@ -89,7 +112,8 @@ impl ApplicationEvent {
             Self::CompletedFileCreated(_)
             | Self::PlaybackProgressUpdated(_)
             | Self::PlaybackProgressCleared(_)
-            | Self::TelegramStatusUpdated(_) => None,
+            | Self::TelegramStatusUpdated(_)
+            | Self::MetadataSaved(_) => None,
         }
     }
 

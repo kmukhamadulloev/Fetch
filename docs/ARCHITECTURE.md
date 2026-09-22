@@ -223,3 +223,13 @@ Examples:
 - OutputDirectoryUnavailable
 - FileNotFound
 - NetworkDenied
+
+## Completed-media metadata
+
+`CompletedLibrary` delegates metadata operations to the application-owned
+`MetadataService`. `metadata_adapter` invokes managed FFprobe/FFmpeg with
+structured arguments, preserves encoded media streams, and validates candidate
+outputs. The service owns background status, edit/deletion serialization, a
+SQLite replacement journal, file recovery, and library SSE updates. The HTTP
+layer only resolves typed requests through the service contract. See
+`METADATA.md` for format boundaries and recovery semantics.

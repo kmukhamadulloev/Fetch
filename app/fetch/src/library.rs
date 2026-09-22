@@ -60,19 +60,43 @@ impl PathRevealer for SystemPathRevealer {
 pub struct CompletedLibrary {
     storage: Arc<Storage>,
     revealer: Arc<dyn PathRevealer>,
+    metadata: Option<crate::metadata::MetadataService>,
 }
 
 impl CompletedLibrary {
+    #[cfg(test)]
     pub fn new(storage: Arc<Storage>) -> Self {
         Self {
             storage,
             revealer: Arc::new(SystemPathRevealer),
+            metadata: None,
         }
     }
 
     #[cfg(test)]
     fn with_revealer(storage: Arc<Storage>, revealer: Arc<dyn PathRevealer>) -> Self {
-        Self { storage, revealer }
+        Self {
+            storage,
+            revealer,
+            metadata: None,
+        }
+    }
+
+    pub fn with_metadata(
+        storage: Arc<Storage>,
+        metadata: crate::metadata::MetadataService,
+    ) -> Self {
+        Self {
+            storage,
+            revealer: Arc::new(SystemPathRevealer),
+            metadata: Some(metadata),
+        }
+    }
+
+    fn metadata_service(&self) -> Result<&crate::metadata::MetadataService, FetchError> {
+        self.metadata
+            .as_ref()
+            .ok_or_else(|| FetchError::InvalidRequest("Metadata editing is unavailable".into()))
     }
 
     async fn find(&self, id: Uuid) -> Result<CompletedFile, FetchError> {
@@ -86,6 +110,26 @@ impl CompletedLibrary {
 
 #[async_trait::async_trait]
 impl CompletedOperations for CompletedLibrary {
+    async fn metadata(&self, id: Uuid) -> Result<fetch_core::MediaMetadata, FetchError> {
+        self.metadata_service()?.inspect(id).await
+    }
+    async fn metadata_artwork(&self, id: Uuid) -> Result<Vec<u8>, FetchError> {
+        self.metadata_service()?.artwork(id).await
+    }
+    async fn update_metadata(
+        &self,
+        id: Uuid,
+        update: fetch_core::MetadataUpdate,
+    ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
+        self.metadata_service()?.start(id, update).await
+    }
+    async fn metadata_status(
+        &self,
+        id: Uuid,
+    ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
+        self.metadata_service()?.status(id).await
+    }
+
     async fn list_completed(&self) -> Result<Vec<CompletedFile>, FetchError> {
         self.storage
             .list_completed_files()
@@ -108,6 +152,11 @@ impl CompletedOperations for CompletedLibrary {
     }
 
     async fn delete_completed(&self, id: Uuid) -> Result<(), FetchError> {
+        let _guard = self
+            .metadata
+            .as_ref()
+            .map(|service| service.lock.try_lock().map_err(|_| crate::metadata::busy()))
+            .transpose()?;
         let file = self.find(id).await?;
         remove_file_if_present(&file.path).await?;
         if let Some(thumbnail) = file.thumbnail_path.as_deref()
@@ -187,7 +236,7 @@ fn storage_error(error: fetch_storage::StorageError) -> FetchError {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use chrono::Utc;
     use fetch_core::{DownloadJob, DownloadMode, DownloadRequest};
@@ -204,7 +253,7 @@ mod tests {
         }
     }
 
-    async fn fixture() -> (tempfile::TempDir, Arc<Storage>, CompletedFile) {
+    pub(crate) async fn fixture() -> (tempfile::TempDir, Arc<Storage>, CompletedFile) {
         let directory = tempfile::tempdir().unwrap();
         let storage = Arc::new(
             Storage::open(&directory.path().join("fetch.sqlite3"))
