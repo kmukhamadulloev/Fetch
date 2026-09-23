@@ -132,6 +132,11 @@ pub fn router(services: ServerServices) -> Router {
                 .put(put_metadata)
                 .layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)),
         )
+        .route("/api/files/{id}/processing", get(processing_capabilities))
+        .route("/api/files/{id}/processes", post(start_export))
+        .route("/api/processes", get(list_processes))
+        .route("/api/processes/{id}/cancel", post(cancel_process))
+        .route("/api/processes/{id}/retry", post(retry_process))
         .route("/api/files/{id}/metadata/status", get(metadata_status))
         .route("/api/files/{id}/metadata/artwork", get(metadata_artwork))
         .route("/api/files/{id}/reveal", post(reveal_completed_file))
@@ -265,6 +270,68 @@ fn parse_uuid(value: &str) -> Result<uuid::Uuid, ApiError> {
 
 async fn list_completed(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(state.services.completed.list_completed().await?))
+}
+
+async fn processing_capabilities(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<fetch_core::ProcessingCapabilities>, ApiError> {
+    Ok(Json(
+        state
+            .services
+            .completed
+            .processing_capabilities(parse_uuid(&id)?)
+            .await?,
+    ))
+}
+async fn start_export(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<fetch_core::ExportRequest>,
+) -> Result<(StatusCode, Json<fetch_core::ProcessingJob>), ApiError> {
+    request.validate()?;
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(
+            state
+                .services
+                .completed
+                .start_export(parse_uuid(&id)?, request)
+                .await?,
+        ),
+    ))
+}
+async fn list_processes(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<fetch_core::ProcessingJob>>, ApiError> {
+    Ok(Json(state.services.completed.processes().await?))
+}
+async fn cancel_process(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<fetch_core::ProcessingJob>, ApiError> {
+    Ok(Json(
+        state
+            .services
+            .completed
+            .cancel_process(parse_uuid(&id)?)
+            .await?,
+    ))
+}
+async fn retry_process(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<(StatusCode, Json<fetch_core::ProcessingJob>), ApiError> {
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(
+            state
+                .services
+                .completed
+                .retry_process(parse_uuid(&id)?)
+                .await?,
+        ),
+    ))
 }
 
 async fn get_metadata(
@@ -947,6 +1014,8 @@ async fn events(
                             Event::default().event(application.event_name()).json_data(progress)
                         } else if let Some(id) = application.cleared_playback_file() {
                             Event::default().event(application.event_name()).json_data(id)
+                        } else if let ApplicationEvent::ProcessingUpdated(job) = &application {
+                            Event::default().event(application.event_name()).json_data(job)
                         } else if let ApplicationEvent::MetadataSaved(status) = &application {
                             Event::default().event(application.event_name()).json_data(status)
                         } else if let Some(status) = application.telegram_status() {
@@ -1177,6 +1246,23 @@ mod tests {
 
     #[async_trait::async_trait]
     impl CompletedOperations for TestCompletedFile {
+        async fn start_export(
+            &self,
+            id: uuid::Uuid,
+            request: fetch_core::ExportRequest,
+        ) -> Result<fetch_core::ProcessingJob, FetchError> {
+            self.get_completed(id).await?;
+            request.validate()?;
+            if request.revision != "v1" {
+                return Err(FetchError::Conflict("File changed".into()));
+            }
+            Ok(fetch_core::ProcessingJob::new(
+                request.kind(),
+                id,
+                self.0.filename.clone(),
+            ))
+        }
+
         async fn metadata(&self, id: uuid::Uuid) -> Result<fetch_core::MediaMetadata, FetchError> {
             self.get_completed(id).await?;
             Ok(fetch_core::MediaMetadata {
@@ -2036,8 +2122,61 @@ mod tests {
             playback: None,
             created_at: chrono::Utc::now(),
         };
+        let export_path = format!("/api/files/{}/processes", file.id);
         let path = format!("/api/files/{}/metadata", file.id);
         let app = app_with_completed(Arc::new(TestCompletedFile(file)));
+        let export = r#"{"revision":"v1","filename":"Converted","format":"mp4","acknowledge_omissions":true}"#;
+        let response = request(app.clone(), &export_path, "POST", Some(export)).await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let job: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(job["state"], "queued");
+        assert_eq!(job["kind"], "conversion");
+        assert!(!String::from_utf8_lossy(&body).contains("/private"));
+        assert_eq!(
+            request(
+                app.clone(),
+                &export_path,
+                "POST",
+                Some(&export.replace("Converted", "../unsafe"))
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            request(
+                app.clone(),
+                &export_path,
+                "POST",
+                Some(&export.replace("v1", "stale"))
+            )
+            .await
+            .status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            request(
+                app.clone(),
+                "/api/files/not-a-uuid/processes",
+                "POST",
+                Some(export)
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            request(
+                app.clone(),
+                &export_path,
+                "POST",
+                Some(&export.replace("\"format\"", "\"args\""))
+            )
+            .await
+            .status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
         let response = request(app.clone(), &path, "GET", None).await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();

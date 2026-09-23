@@ -246,3 +246,13 @@ outputs. The service owns background status, edit/deletion serialization, a
 SQLite replacement journal, file recovery, and library SSE updates. The HTTP
 layer only resolves typed requests through the service contract. See
 `METADATA.md` for format boundaries and recovery semantics.
+
+## Explicit local exports
+
+CompletedLibrary delegates processing to an application-owned ProcessingManager.
+Its single persistent worker shares MetadataService's source mutation lock and
+calls ProcessingAdapter or the existing metadata replacement lifecycle. HTTP
+only validates typed requests and delegates; no process is spawned in a route.
+ProcessingAdapter uses managed binaries and structured local arguments, bounded
+diagnostics, real progress, cancellation/child reaping, and FFprobe validation.
+See PROCESSING.md for publication, recovery, and the supported output matrix.

@@ -8,11 +8,11 @@ subsystem, expected behavior, actual behavior, and notes.
 
 Status: IN PROGRESS — see GOAL.md and docs/PROCESSING.md.
 
-The domain/schema slice supports independent export records and persisted
-process state. The shared scheduler, managed export adapter, processing API,
-Processes page, and conversion/edit modals are not delivered yet. Existing
-metadata and download workflows remain the active product behavior. No new
-runtime control or placeholder conversion/edit actions are exposed by this slice.
+The shared scheduler, managed export adapter, processing API/SSE, and metadata
+queue integration are implemented. Processes navigation and conversion/edit UI
+remain pending. Filesystems without hard-link support reject publication with
+an actionable disk/permissions error and preserve the source. Native-platform
+verification remains separate from local Linux evidence.
 
 ## BUG-033 — Runtime summary stays stale until backend activity
 

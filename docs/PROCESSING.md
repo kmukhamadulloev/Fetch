@@ -3,11 +3,10 @@
 Status: implementation contract for the active unversioned goal. This document
 separates planned behavior from delivered acceptance evidence. See GOAL.md.
 
-Delivered foundation: typed validated requests/lifecycle, migration 0008,
-persistent process records with private recovery options, nullable download
-linkage and historical source/origin fields, and an atomic database transaction
-for output registration plus process completion. Scheduler, runtime adapter,
-HTTP processing routes, and new UI are still pending; checkpoint 2 is incomplete.
+Delivered backend: persistent FIFO worker shared by metadata and exports,
+managed FFmpeg execution/progress and FFprobe validation, cancellation/retry,
+no-clobber publication and startup recovery, and opaque-ID HTTP/SSE contracts.
+The Processes page and export/edit forms remain pending.
 
 ## Supported output matrix
 
@@ -38,7 +37,8 @@ The final opt-in adapter tests must reproduce this with the application adapter.
 Select the first non-artwork video and first audio stream. The capability
 response reports extra streams, artwork, chapters, and tags. Preserve format
 tags supported by the destination; retain chapters only on full-length MP4/MKV
-exports. Copy compatible attached artwork where the destination supports it.
+exports. Copy JPEG/PNG attached pictures into MP4/M4A/MP3/FLAC. MKV attachments and
+other unsupported cover representations are omitted with acknowledgement.
 Omissions (additional tracks, subtitles, attachments, unsupported artwork/tags,
 trimmed chapters) require explicit acknowledgement in the form and request.
 Do not silently advertise universal preservation. The adapter must verify the
@@ -96,14 +96,16 @@ Resolve the configured root at acceptance; lazy-create Converted/ or Edits/.
 Validate safe basename and reserve output without overwriting, including races.
 Work in a unique sibling temporary file. Persist output/publication intent,
 FFprobe-validate and fsync the temporary file, publish using a no-clobber primitive,
-then atomically insert the completed row and mark the job completed in SQLite.
-Startup reconciles the intent: either finish the validated publication or remove
-an uncommitted output owned by that job. Never delete unrelated collision files.
+using a same-directory hard link (failure is surfaced on filesystems without
+hard-link support), then atomically insert the completed row and mark the job completed in SQLite.
+Startup reconciles the intent: remove an uncommitted output only when its filesystem identity matches the
+journaled temporary file, or retain a committed library output and clean its
+temporary link. Never delete unrelated collision files.
 A successful derived output remains when its source is deleted.
 
 ## API and events
 
-Planned routes, all under the existing allowed-client policy:
+Implemented routes, all under the existing allowed-client policy:
 
 - GET `/api/files/{id}/processing`: source revision/technical data, supported
   outputs/modes/quality, edit limits, preservation notices, and runtime readiness.
@@ -136,3 +138,27 @@ to `/processes`; a process query parameter focuses a row from submission feedbac
    orientation and unsupported-preview behavior.
 7. Full repository suite, production desktop/mobile browser suite, opt-in real
    runtime tests, dirty guards/focus/three locales, and individual A1–A10 evidence.
+
+## Backend evidence
+
+`FETCH_METADATA_RUNTIME=/tmp/fetch-metadata-runtime cargo test -p fetch real_managed_processing -- --ignored --nocapture`
+exercises six output formats, per-stream packet hashes for MP4/MKV copy, all six
+edits plus a combined export, trim A/V start-time alignment, queue serialization,
+root snapshots, source bytes, metadata history, cancellation and collisions.
+The directory must contain an installed managed `ffmpeg/ffmpeg` and
+`ffmpeg/ffprobe`; tests do not fall back to system executables.
+
+Metadata updates now enter the same persistent queue through CompletedLibrary.
+A second pending metadata update for the same file is rejected. The existing
+replacement journal remains authoritative; a crash between metadata commit and
+process completion is reported as interrupted with instructions to reopen the
+editor and inspect saved fields. Queued jobs survive; running jobs do not
+silently restart. A queue storage failure stops admission and asks for restart.
+
+Progress comes from FFmpeg `out_time_us`, capped below 100 until the atomic
+SQLite publication commit. ETA remains null. Settings changes affect new jobs,
+including retries, while already queued output roots are retained. Output names
+include the operation UUID to avoid cross-request collisions; hard links enforce
+no overwrite even if a destination races publication. Do not follow symlinked
+Edits/Converted folders. Source revisions detect ordinary external modification,
+not malicious writes preserving size and modification timestamp.

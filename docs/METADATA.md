@@ -52,7 +52,9 @@ process adapter owns FFprobe/FFmpeg invocation. HTTP accepts opaque file IDs and
 allowlisted field names, never paths or process arguments. Allowed LAN clients
 have the same editing access as existing completed-file deletion.
 
-One metadata operation runs at a time. Deletion and other metadata inspections
+Metadata saves enter the persistent processing queue shared with conversions
+and quick edits; one operation runs at a time. Queued saves retain the legacy
+`Saving` status. Process history and metadata status survive restart. Deletion and other metadata inspections
 receive a conflict while saving; existing file streams are not cancelled. A
 revision derived from file size and nanosecond modification time rejects stale
 edits before processing and immediately before replacement. This detects normal

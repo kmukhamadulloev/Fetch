@@ -143,7 +143,7 @@ impl MetadataService {
         Ok(status)
     }
 
-    async fn publish(&self, status: MetadataSaveStatus) {
+    pub(crate) async fn publish(&self, status: MetadataSaveStatus) {
         let mut statuses = self.statuses.lock().await;
         // Only the most recent operation per file is retained; bound session memory.
         if statuses.len() >= 256 {
@@ -153,7 +153,7 @@ impl MetadataService {
         self.events.publish(ApplicationEvent::MetadataSaved(status));
     }
 
-    async fn save(
+    pub(crate) async fn save(
         &self,
         mut file: CompletedFile,
         update: MetadataUpdate,
@@ -283,7 +283,7 @@ impl MetadataService {
     }
 }
 
-async fn sync_parent(path: &std::path::Path) -> Result<(), FetchError> {
+pub(crate) async fn sync_parent(path: &std::path::Path) -> Result<(), FetchError> {
     #[cfg(unix)]
     tokio::fs::File::open(path.parent().ok_or(FetchError::FileNotFound)?)
         .await
@@ -301,12 +301,12 @@ pub fn busy() -> FetchError {
         "Another metadata operation is in progress. Try again when it finishes.".into(),
     )
 }
-fn stale() -> FetchError {
+pub(crate) fn stale() -> FetchError {
     FetchError::Conflict(
         "This file changed since the editor opened. Reopen it before saving.".into(),
     )
 }
-async fn sync_file(path: &std::path::Path) -> Result<(), FetchError> {
+pub(crate) async fn sync_file(path: &std::path::Path) -> Result<(), FetchError> {
     tokio::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -317,7 +317,7 @@ async fn sync_file(path: &std::path::Path) -> Result<(), FetchError> {
         .await
         .map_err(io_error)
 }
-async fn remove(path: &std::path::Path) -> Result<(), FetchError> {
+pub(crate) async fn remove(path: &std::path::Path) -> Result<(), FetchError> {
     match tokio::fs::remove_file(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

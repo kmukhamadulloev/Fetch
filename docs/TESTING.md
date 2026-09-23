@@ -218,3 +218,11 @@ media without contacting media websites, and exercise MP3/M4A/FLAC/MP4/MKV tag
 and artwork read/write/clear. They compare encoded audio/video stream hashes,
 preserve MKV subtitle language/chapters, and exercise background save through
 SQLite/library/artwork updates and failure rollback. No fake executable ships.
+
+## Local processing backend
+
+Run `cargo test -p fetch processing` for deterministic queue, missing-runtime,
+stale-source and publication recovery checks. With managed FFmpeg installed,
+run `FETCH_METADATA_RUNTIME=/tmp/fetch-metadata-runtime cargo test -p fetch real_managed_processing -- --ignored --nocapture`.
+This exercises real conversion/copy/edit output and queue/collision/cancel behavior.
+Full UI acceptance remains tracked separately in GOAL.md and ACCEPTANCE.md.

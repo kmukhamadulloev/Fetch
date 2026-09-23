@@ -3,6 +3,31 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Processing execution checkpoint — Local verification (2026-09-23)
+
+- PASS — One persisted FIFO worker executes metadata, conversions and edits;
+  downloads retain their manager. Queued metadata keeps its existing Saving API.
+- PASS — FFmpeg progress is parsed, exports are probed before publication, and
+  public process records/SSE omit filesystem paths. Invalid API requests fail.
+- PASS — Missing runtimes/stale sources produce terminal errors; queued cancel,
+  running cancel, retry identity, queue restart and retained history are tested.
+- PASS — Root snapshots, unique no-clobber outputs, source preservation and
+  historical linkage are verified with actual exports. Recovery only removes
+  uncommitted destinations matching the temporary file's filesystem identity.
+- PASS — Actual six-format matrix, MP4/MKV per-stream copy hashes, six individual
+  edits, combined edits/dimensions and trim A/V start alignment pass managed tests.
+- PASS — Metadata journal/replacement tests and ten desktop/mobile metadata
+  browser regressions pass after routing saves through the shared worker.
+- NOT APPLICABLE to checkpoint 2 — New Processes/card/menu/modals; those remain
+  checkpoints 3–6. Full A1–A10 acceptance is still pending UI and final hardening.
+
+Checks: `cargo fmt --all -- --check`; strict workspace/all-target/all-feature
+Clippy; `cargo test --workspace` (122 passed, opt-in runtime tests excluded);
+`cargo build --workspace`; `FETCH_METADATA_RUNTIME=/tmp/fetch-metadata-runtime cargo test -p fetch real_managed_ -- --ignored --nocapture`
+(five real-runtime tests passed); frontend typecheck/lint/test/build (39 passed);
+`FETCH_E2E_PRODUCTION=1 npm run test:e2e -- --grep 'metadata'` in web (10 passed);
+`git diff --check`. No native-platform or release verification is claimed.
+
 ## Processing domain/schema slice — Local verification (2026-09-23)
 
 This is checkpoint 1 plus the domain/schema portion of checkpoint 2, not delivery

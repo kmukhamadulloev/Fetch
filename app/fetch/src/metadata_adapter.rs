@@ -64,7 +64,7 @@ fn tags(value: &Value) -> BTreeMap<String, String> {
 }
 
 impl MetadataAdapter {
-    async fn run(
+    pub(crate) async fn run(
         &self,
         executable: PathBuf,
         args: &[String],

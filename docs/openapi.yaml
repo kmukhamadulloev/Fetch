@@ -9,6 +9,74 @@ servers:
   - url: /
 security: []
 paths:
+  /api/files/{id}/processing:
+    get:
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Processing result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProcessingCapabilities'}
+        '400': {description: Invalid options or opaque ID}
+        '404': {description: Source or process not found}
+        '409': {description: Source changed or action unavailable}
+  /api/files/{id}/processes:
+    post:
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ExportRequest"}
+      responses:
+        '202':
+          description: Processing result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProcessingJob'}
+        '400': {description: Invalid options or opaque ID}
+        '404': {description: Source or process not found}
+        '409': {description: Source changed or action unavailable}
+  /api/processes:
+    get:
+      responses:
+        '200':
+          description: Processing result
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/ProcessingJob'}}
+        '400': {description: Invalid options or opaque ID}
+        '404': {description: Source or process not found}
+        '409': {description: Source changed or action unavailable}
+  /api/processes/{id}/cancel:
+    post:
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Processing result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProcessingJob'}
+        '400': {description: Invalid options or opaque ID}
+        '404': {description: Source or process not found}
+        '409': {description: Source changed or action unavailable}
+  /api/processes/{id}/retry:
+    post:
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '202':
+          description: Processing result
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProcessingJob'}
+        '400': {description: Invalid options or opaque ID}
+        '404': {description: Source or process not found}
+        '409': {description: Source changed or action unavailable}
   /api/status:
     get:
       responses:
@@ -594,6 +662,73 @@ components:
         error_message: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
+    ExportRequest:
+      type: object
+      additionalProperties: false
+      required: [revision, filename, format]
+      properties:
+        revision: {type: string}
+        filename: {type: string, maxLength: 180}
+        format: {type: string, enum: [mp4, mkv, m4a, mp3, flac, wav]}
+        quality: {type: string, enum: [compact, balanced, high], default: balanced}
+        stream_copy: {type: boolean, default: false}
+        acknowledge_omissions: {type: boolean, default: false}
+        edits:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            start_seconds: {type: [number, "null"], minimum: 0}
+            end_seconds: {type: [number, "null"], exclusiveMinimum: 0}
+            rotate: {type: integer, enum: [0, 90, 180, 270], default: 0}
+            mute: {type: boolean, default: false}
+            volume: {type: [number, "null"], minimum: 0, maximum: 4}
+            crop:
+              type: [object, "null"]
+              additionalProperties: false
+              required: [x, y, width, height]
+              properties:
+                x: {type: integer, minimum: 0}
+                y: {type: integer, minimum: 0}
+                width: {type: integer, minimum: 1}
+                height: {type: integer, minimum: 1}
+            resize:
+              type: [object, "null"]
+              additionalProperties: false
+              required: [width, height]
+              properties:
+                width: {type: integer, minimum: 2, maximum: 7680, multipleOf: 2}
+                height: {type: integer, minimum: 2, maximum: 7680, multipleOf: 2}
+    ProcessingJob:
+      type: object
+      required: [id, kind, source_file_id, output_file_id, title, state, stage, progress_percent, eta_seconds, created_at, started_at, updated_at, finished_at, error]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [conversion, edit, metadata]}
+        source_file_id: {type: string, format: uuid}
+        output_file_id: {type: [string, "null"], format: uuid}
+        title: {type: string}
+        state: {type: string, enum: [queued, running, completed, failed, cancelled, interrupted]}
+        stage: {type: string}
+        progress_percent: {type: [number, "null"]}
+        eta_seconds: {type: [number, "null"]}
+        created_at: {type: string, format: date-time}
+        started_at: {type: [string, "null"], format: date-time}
+        updated_at: {type: string, format: date-time}
+        finished_at: {type: [string, "null"], format: date-time}
+        error: {type: [string, "null"]}
+    ProcessingCapabilities:
+      type: object
+      required: [revision, duration_seconds, video, audio, width, height, formats, copy_formats, notices]
+      properties:
+        revision: {type: string}
+        duration_seconds: {type: number}
+        video: {type: boolean}
+        audio: {type: boolean}
+        width: {type: [integer, "null"]}
+        height: {type: [integer, "null"]}
+        formats: {type: array, items: {type: string}}
+        copy_formats: {type: array, items: {type: string}}
+        notices: {type: array, items: {type: string}}
     CompletedFile:
       type: object
       required: [id, job_id, origin, source_file_id, playlist, filename, thumbnail_available, size_bytes, mime_type, browser_playable, playback, created_at]

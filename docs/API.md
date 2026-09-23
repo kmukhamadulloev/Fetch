@@ -53,7 +53,7 @@ Completed records retain their download `job_id` for downloaded files. The
 field is nullable for independent exports; `origin` is nullable or `conversion` /
 `edit`, and `source_file_id` is a nullable historical source UUID. Source deletion
 does not remove derived records. Existing downloads return null for the two new
-fields. Export creation endpoints are not delivered yet; the planned processing
+fields. The processing
 contract is in [PROCESSING.md](PROCESSING.md).
 
 File paths are never serialized and cannot be supplied to an endpoint. The
@@ -205,3 +205,17 @@ publish `library.completed` with the updated completed record. Clients upsert
 by ID, refresh title/size, and invalidate artwork URLs. Thumbnail endpoints now
 use `no-cache` rather than immutable caching. See `METADATA.md` for recovery and
 container limitations. These routes retain the existing allowed-LAN policy.
+
+## Local processing
+
+- `GET /api/files/{id}/processing`: actual source/runtime capabilities.
+- `POST /api/files/{id}/processes`: accepted typed conversion/edit request (202).
+- `GET /api/processes`: persisted metadata/conversion/edit history.
+- `POST /api/processes/{id}/cancel`: cancel an eligible export.
+- `POST /api/processes/{id}/retry`: a new export attempt (202), never partial resume.
+
+These routes use the normal allowed-client policy. Input is an opaque completed
+ID; filesystem paths and arbitrary FFmpeg arguments are not accepted. Output
+records contain no private paths. `process.updated` SSE carries ProcessingJob;
+metadata also retains `library.metadata`, and success emits `library.completed`.
+Metadata has no cancel/retry action; reopen its editor after interruption.

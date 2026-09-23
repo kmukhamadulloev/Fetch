@@ -61,6 +61,7 @@ pub struct CompletedLibrary {
     storage: Arc<Storage>,
     revealer: Arc<dyn PathRevealer>,
     metadata: Option<crate::metadata::MetadataService>,
+    processing: Option<crate::processing::ProcessingManager>,
 }
 
 impl CompletedLibrary {
@@ -70,6 +71,7 @@ impl CompletedLibrary {
             storage,
             revealer: Arc::new(SystemPathRevealer),
             metadata: None,
+            processing: None,
         }
     }
 
@@ -79,9 +81,11 @@ impl CompletedLibrary {
             storage,
             revealer,
             metadata: None,
+            processing: None,
         }
     }
 
+    #[cfg(test)]
     pub fn with_metadata(
         storage: Arc<Storage>,
         metadata: crate::metadata::MetadataService,
@@ -90,7 +94,24 @@ impl CompletedLibrary {
             storage,
             revealer: Arc::new(SystemPathRevealer),
             metadata: Some(metadata),
+            processing: None,
         }
+    }
+
+    pub fn with_processing(
+        storage: Arc<Storage>,
+        metadata: crate::metadata::MetadataService,
+        processing: crate::processing::ProcessingManager,
+    ) -> Self {
+        Self {
+            storage,
+            revealer: Arc::new(SystemPathRevealer),
+            metadata: Some(metadata),
+            processing: Some(processing),
+        }
+    }
+    fn processor(&self) -> Result<&crate::processing::ProcessingManager, FetchError> {
+        self.processing.as_ref().ok_or(FetchError::NotFound)
     }
 
     fn metadata_service(&self) -> Result<&crate::metadata::MetadataService, FetchError> {
@@ -110,6 +131,29 @@ impl CompletedLibrary {
 
 #[async_trait::async_trait]
 impl CompletedOperations for CompletedLibrary {
+    async fn processing_capabilities(
+        &self,
+        id: Uuid,
+    ) -> Result<fetch_core::ProcessingCapabilities, FetchError> {
+        self.processor()?.capabilities(id).await
+    }
+    async fn start_export(
+        &self,
+        id: Uuid,
+        request: fetch_core::ExportRequest,
+    ) -> Result<fetch_core::ProcessingJob, FetchError> {
+        self.processor()?.start_export(id, request).await
+    }
+    async fn processes(&self) -> Result<Vec<fetch_core::ProcessingJob>, FetchError> {
+        self.processor()?.list().await
+    }
+    async fn cancel_process(&self, id: Uuid) -> Result<fetch_core::ProcessingJob, FetchError> {
+        self.processor()?.cancel(id).await
+    }
+    async fn retry_process(&self, id: Uuid) -> Result<fetch_core::ProcessingJob, FetchError> {
+        self.processor()?.retry(id).await
+    }
+
     async fn metadata(&self, id: Uuid) -> Result<fetch_core::MediaMetadata, FetchError> {
         self.metadata_service()?.inspect(id).await
     }
@@ -121,13 +165,21 @@ impl CompletedOperations for CompletedLibrary {
         id: Uuid,
         update: fetch_core::MetadataUpdate,
     ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
-        self.metadata_service()?.start(id, update).await
+        if let Some(processor) = &self.processing {
+            processor.start_metadata(id, update).await
+        } else {
+            self.metadata_service()?.start(id, update).await
+        }
     }
     async fn metadata_status(
         &self,
         id: Uuid,
     ) -> Result<fetch_core::MetadataSaveStatus, FetchError> {
-        self.metadata_service()?.status(id).await
+        if let Some(processor) = &self.processing {
+            processor.metadata_status(id).await
+        } else {
+            self.metadata_service()?.status(id).await
+        }
     }
 
     async fn list_completed(&self) -> Result<Vec<CompletedFile>, FetchError> {

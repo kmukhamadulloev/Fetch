@@ -25,6 +25,29 @@ pub trait DownloadOperations: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait CompletedOperations: Send + Sync {
+    async fn processing_capabilities(
+        &self,
+        _id: Uuid,
+    ) -> Result<crate::ProcessingCapabilities, FetchError> {
+        Err(FetchError::NotFound)
+    }
+    async fn start_export(
+        &self,
+        _id: Uuid,
+        _request: crate::ExportRequest,
+    ) -> Result<crate::ProcessingJob, FetchError> {
+        Err(FetchError::NotFound)
+    }
+    async fn processes(&self) -> Result<Vec<crate::ProcessingJob>, FetchError> {
+        Err(FetchError::NotFound)
+    }
+    async fn cancel_process(&self, _id: Uuid) -> Result<crate::ProcessingJob, FetchError> {
+        Err(FetchError::NotFound)
+    }
+    async fn retry_process(&self, _id: Uuid) -> Result<crate::ProcessingJob, FetchError> {
+        Err(FetchError::NotFound)
+    }
+
     async fn metadata(&self, _id: Uuid) -> Result<crate::MediaMetadata, FetchError> {
         Err(FetchError::InvalidRequest(
             "Metadata editing is unavailable".into(),
@@ -80,6 +103,8 @@ pub enum ApplicationEvent {
     PlaybackProgressCleared(Uuid),
     #[serde(rename = "library.metadata")]
     MetadataSaved(crate::MetadataSaveStatus),
+    #[serde(rename = "process.updated")]
+    ProcessingUpdated(crate::ProcessingJob),
     #[serde(rename = "telegram.status")]
     TelegramStatusUpdated(TelegramStatus),
 }
@@ -98,6 +123,7 @@ impl ApplicationEvent {
             Self::PlaybackProgressCleared(_) => "library.progress-cleared",
             Self::TelegramStatusUpdated(_) => "telegram.status",
             Self::MetadataSaved(_) => "library.metadata",
+            Self::ProcessingUpdated(_) => "process.updated",
         }
     }
 
@@ -113,7 +139,8 @@ impl ApplicationEvent {
             | Self::PlaybackProgressUpdated(_)
             | Self::PlaybackProgressCleared(_)
             | Self::TelegramStatusUpdated(_)
-            | Self::MetadataSaved(_) => None,
+            | Self::MetadataSaved(_)
+            | Self::ProcessingUpdated(_) => None,
         }
     }
 

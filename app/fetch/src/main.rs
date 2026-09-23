@@ -4,6 +4,8 @@ mod downloads;
 mod library;
 mod metadata;
 mod metadata_adapter;
+mod processing;
+mod processing_adapter;
 mod proxy;
 mod startup;
 pub mod telegram;
@@ -115,6 +117,19 @@ async fn run_fetch(
         events.clone(),
     )
     .await?;
+    let processing = processing::ProcessingManager::new(
+        storage.clone(),
+        metadata.clone(),
+        processing_adapter::ProcessingAdapter {
+            media: metadata_adapter::MetadataAdapter {
+                paths: RuntimePaths::new(config.runtime_path()),
+                shutdown: shutdown.clone(),
+            },
+        },
+        events.clone(),
+        shutdown.clone(),
+    )
+    .await?;
     let downloads = Arc::new(DownloadManager::new(
         storage.clone(),
         runtime.clone(),
@@ -177,7 +192,11 @@ async fn run_fetch(
         media,
         downloads: downloads.clone(),
         events,
-        completed: Arc::new(CompletedLibrary::with_metadata(storage.clone(), metadata)),
+        completed: Arc::new(CompletedLibrary::with_processing(
+            storage.clone(),
+            metadata,
+            processing.clone(),
+        )),
         settings: managed_settings,
         proxy: Arc::new(ManagedProxy::new(storage.clone(), proxy_policy)),
         listener: listener_control,
@@ -240,6 +259,7 @@ async fn run_fetch(
     if tokio::time::timeout(GRACEFUL_SHUTDOWN_TIMEOUT, async {
         telegram.shutdown().await;
         downloads.shutdown().await;
+        processing.shutdown().await;
         for task in active_tasks {
             let _ = task.await;
         }

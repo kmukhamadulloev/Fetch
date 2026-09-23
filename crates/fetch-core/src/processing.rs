@@ -351,3 +351,17 @@ mod tests {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessingCapabilities {
+    pub revision: String,
+    pub duration_seconds: f64,
+    pub video: bool,
+    pub audio: bool,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub formats: Vec<OutputFormat>,
+    pub copy_formats: Vec<OutputFormat>,
+    /// Stable notice codes, translated by the client before acknowledgement.
+    pub notices: Vec<String>,
+}

@@ -911,6 +911,7 @@ dependencies = [
  "ksni",
  "libc",
  "mime_guess",
+ "same-file",
  "serde",
  "serde_json",
  "tempfile",
