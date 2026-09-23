@@ -248,9 +248,10 @@ Approved scope and acceptance criteria: `docs/METADATA.md`.
 ## Processes, conversion, and quick edits — Approved active scope (unversioned)
 
 The complete agreed UX, architecture boundaries, ordered steps, and acceptance
-criteria are in [GOAL.md](GOAL.md). Implementation has not started.
+criteria are in [GOAL.md](GOAL.md). Implementation is in progress.
+The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.md).
 
-- [ ] 1. Define contracts, capabilities/presets, lifecycle, recovery, and migrations.
+- [x] 1. Define contracts, capabilities/presets, lifecycle, recovery, and migrations.
 - [ ] 2. Implement persistent FFmpeg processing and integrate safe metadata saves.
 - [ ] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
 - [ ] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
