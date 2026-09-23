@@ -6,7 +6,7 @@ separates planned behavior from delivered acceptance evidence. See GOAL.md.
 Delivered backend: persistent FIFO worker shared by metadata and exports,
 managed FFmpeg execution/progress and FFprobe validation, cancellation/retry,
 no-clobber publication and startup recovery, and opaque-ID HTTP/SSE contracts.
-The Processes page merges these jobs with downloads. The separate Convert form and card menu are implemented; Quick edit supports trim, rotate, and mute; crop/resize/volume controls remain pending.
+The Processes page merges these jobs with downloads. The separate Convert form and card menu are implemented; Quick edit supports trim, rotate, mute, crop, resize, and volume in one export.
 
 ## Supported output matrix
 

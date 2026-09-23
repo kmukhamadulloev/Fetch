@@ -458,3 +458,14 @@ cargo test -p fetch real_managed_processing_matrix_and_combined_edits -- --ignor
 The former /tmp runtime directory was absent; that initial attempt failed with
 RuntimeMissing and was rerun successfully using the installed managed binaries.
 Crop/resize/volume UI and final whole-goal evidence remain pending.
+
+
+## Processing checkpoint 6 — Remaining quick edits
+
+PASS: crop/resize/volume controls, even/bounded dimensions, proportional resize
+unless explicitly stretched, and mute/volume exclusion. `npm run typecheck`,
+`npm run lint`, `npm test` (45), `npm run build`, and production Playwright
+`--grep 'quick edit'` (4 desktop/mobile cases) pass. Real adapter tests from
+checkpoint 5 exercise all six edits individually and together with A/V sync;
+this checkpoint connects the remaining controls to that tested request contract.
+Final full-suite, localization/layout and hardening evidence remain pending.

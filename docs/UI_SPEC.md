@@ -276,3 +276,10 @@ optional audio removal. Selected operations form one export into Edits/.
 The source extension is preferred when supported; otherwise the user explicitly
 chooses a supported format. Output quality, preservation acknowledgement, dirty
 and submission handling match Convert. Derived cards show Edited.
+
+Crop controls use even pixel bounds on the oriented source, before rotation.
+Resize defaults to keeping the cropped/rotated aspect ratio (height rounds to
+an even pixel); changing it requires the explicit stretching checkbox. Both
+output axes must be even and at most 7680 pixels. Volume is 0–400%, with 100%
+unchanged, and is hidden/excluded when muted. Video-only controls are hidden
+for audio. Invalid combinations keep export disabled and explain the constraint.

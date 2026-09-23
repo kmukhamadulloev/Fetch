@@ -10,7 +10,7 @@ Status: IN PROGRESS — see GOAL.md and docs/PROCESSING.md.
 
 The shared scheduler, managed export adapter, processing API/SSE, and metadata
 queue integration are implemented. Processes navigation, filters, actions and realtime snapshots are implemented.
-The card menu and Convert modal are implemented. Quick edit supports trim/rotate/mute; crop/resize/volume controls remain pending. Filesystems without hard-link support reject publication with
+The card menu and Convert modal are implemented. All six quick-edit controls are implemented. Final hardening and full acceptance remain. Filesystems without hard-link support reject publication with
 an actionable disk/permissions error and preserve the source. Native-platform
 verification remains separate from local Linux evidence.
 

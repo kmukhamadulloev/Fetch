@@ -258,7 +258,7 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 - [x] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
 - [x] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
 - [x] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
-- [ ] 6. Add crop/resize/volume and validate supported edit combinations.
+- [x] 6. Add crop/resize/volume and validate supported edit combinations.
 - [ ] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
 
 Explicit user-requested local exports are approved. Playback/preview transcoding,
