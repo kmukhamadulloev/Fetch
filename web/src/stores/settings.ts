@@ -19,7 +19,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const saving = ref(false)
   const error = ref<string | null>(null)
   const saved = ref(false)
-  async function refresh() {
+  let refreshInFlight: Promise<void> | null = null
+  function refresh() {
+    refreshInFlight ??= loadSnapshot().finally(() => { refreshInFlight = null })
+    return refreshInFlight
+  }
+
+  async function loadSnapshot() {
     loading.value = true
     try { [value.value, network.value] = await Promise.all([getSettings(), getNetworkInfo()]); error.value = null }
     catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.settingsUnavailable') }

@@ -18,6 +18,7 @@ pub trait TelegramOperations: Send + Sync {
     ) -> Result<TelegramIntegration, FetchError>;
     async fn put_token(&self, token: TelegramToken) -> Result<TelegramIntegration, FetchError>;
     async fn delete_token(&self) -> Result<TelegramIntegration, FetchError>;
+    async fn restart(&self) -> Result<TelegramIntegration, FetchError>;
     async fn test_connection(&self) -> Result<TelegramIntegration, FetchError>;
 }
 
@@ -214,6 +215,10 @@ pub struct TelegramStatus {
     pub bot_username: Option<String>,
     pub last_success_at: Option<DateTime<Utc>>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub failed_attempts: u8,
+    #[serde(default)]
+    pub retry_at: Option<DateTime<Utc>>,
 }
 
 impl Default for TelegramStatus {
@@ -225,6 +230,8 @@ impl Default for TelegramStatus {
             bot_username: None,
             last_success_at: None,
             error: None,
+            failed_attempts: 0,
+            retry_at: None,
         }
     }
 }

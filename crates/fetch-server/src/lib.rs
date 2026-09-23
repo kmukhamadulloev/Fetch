@@ -148,6 +148,7 @@ pub fn router(services: ServerServices) -> Router {
             put(put_telegram_token).delete(delete_telegram_token),
         )
         .route("/api/telegram/test", post(test_telegram))
+        .route("/api/telegram/restart", post(restart_telegram))
         .route("/api/network", get(network_info))
         .route("/api/logs", get(logs).delete(clear_logs))
         .route("/api/diagnostics", get(diagnostics))
@@ -617,6 +618,14 @@ async fn delete_telegram_token(
     Ok(Json(state.services.telegram.delete_token().await?))
 }
 
+async fn restart_telegram(
+    State(state): State<AppState>,
+    connection: Option<Extension<ConnectInfo<SocketAddr>>>,
+) -> Result<Json<TelegramIntegration>, ApiError> {
+    require_host_client(connection)?;
+    Ok(Json(state.services.telegram.restart().await?))
+}
+
 async fn test_telegram(
     State(state): State<AppState>,
     connection: Option<Extension<ConnectInfo<SocketAddr>>>,
@@ -907,6 +916,8 @@ async fn events(
     let host_client =
         connection.is_some_and(|Extension(ConnectInfo(address))| is_host_client(address.ip()));
     let stream = async_stream::stream! {
+        // Flush the stream immediately, including when no application events occur.
+        yield Ok(Event::default().comment("connected"));
         loop {
             tokio::select! {
                 _ = shutdown.cancelled() => break,
@@ -1316,6 +1327,10 @@ mod tests {
             self.get_integration().await
         }
 
+        async fn restart(&self) -> Result<TelegramIntegration, FetchError> {
+            self.get_integration().await
+        }
+
         async fn test_connection(&self) -> Result<TelegramIntegration, FetchError> {
             self.get_integration().await
         }
@@ -1492,6 +1507,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn idle_event_stream_sends_an_immediate_opening_comment() {
+        let response = request(app(), "/api/events", "GET", None).await;
+        let mut body = response.into_body().into_data_stream();
+        let first = tokio::time::timeout(Duration::from_millis(250), body.next())
+            .await
+            .expect("idle SSE must not wait for an event or the 15-second keepalive")
+            .unwrap()
+            .unwrap();
+        assert_eq!(&first[..], b": connected\n\n");
+    }
+
+    #[tokio::test]
     async fn telegram_status_events_are_visible_to_host_clients_only() {
         let host_events = EventBus::default();
         let host_shutdown = CancellationToken::new();
@@ -1512,6 +1539,8 @@ mod tests {
             ..TelegramStatus::default()
         }));
         let mut host_body = host.into_body().into_data_stream();
+        let opening = host_body.next().await.unwrap().unwrap();
+        assert_eq!(&opening[..], b": connected\n\n");
         let host_chunk = tokio::time::timeout(Duration::from_secs(1), host_body.next())
             .await
             .unwrap()
@@ -1558,6 +1587,8 @@ mod tests {
             }),
         ));
         let mut remote_body = remote.into_body().into_data_stream();
+        let opening = remote_body.next().await.unwrap().unwrap();
+        assert_eq!(&opening[..], b": connected\n\n");
         let remote_chunk = tokio::time::timeout(Duration::from_secs(1), remote_body.next())
             .await
             .unwrap()
@@ -1661,6 +1692,26 @@ mod tests {
             app(),
             "/api/telegram",
             "GET",
+            ([192, 168, 2, 8], 4000).into(),
+        )
+        .await;
+        assert_eq!(remote.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn telegram_restart_is_host_only() {
+        let local = request_from(
+            app(),
+            "/api/telegram/restart",
+            "POST",
+            ([127, 0, 0, 1], 4000).into(),
+        )
+        .await;
+        assert_eq!(local.status(), StatusCode::OK);
+        let remote = request_from(
+            app(),
+            "/api/telegram/restart",
+            "POST",
             ([192, 168, 2, 8], 4000).into(),
         )
         .await;

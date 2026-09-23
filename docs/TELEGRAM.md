@@ -1,6 +1,6 @@
 # Telegram Bot Integration
 
-Status: core implementation complete; 0.1.4 release hardening in progress.
+Status: implemented; native release verification remains separate.
 
 ## Purpose
 
@@ -108,19 +108,20 @@ line arguments. The host-only SSE status event contains non-secret operational
 state only. Redact the exact token and Bot API URL token segment from every
 transport error before it crosses the adapter boundary.
 
-Only a host browser may read or change Telegram configuration or invoke Test
-connection. Remote LAN clients receive `LOCAL_CLIENT_REQUIRED` and the UI does
+Only a host browser may read or change Telegram configuration, invoke Test
+connection, or restart Telegram. Remote LAN clients receive `LOCAL_CLIENT_REQUIRED` and the UI does
 not request the configuration endpoint. Telegram status events are likewise
 filtered out of remote LAN SSE streams.
 
-Planned host-only API surface:
+Host-only API surface:
 
 ```text
-GET  /api/integrations/telegram
-PUT  /api/integrations/telegram
-PUT  /api/integrations/telegram/token
-DELETE /api/integrations/telegram/token
-POST /api/integrations/telegram/test
+GET  /api/telegram
+PUT  /api/telegram/settings
+PUT  /api/telegram/token
+DELETE /api/telegram/token
+POST /api/telegram/test
+POST /api/telegram/restart
 ```
 
 The normal settings response contains no Telegram fields. The integration GET
@@ -209,8 +210,25 @@ contract for the upstream boundary.
 - Use bounded connect, request, and long-poll durations.
 - Stream attachments from disk with a bounded upload duration; never buffer an
   entire media file in memory.
-- Honor Telegram retry-after responses and use capped exponential backoff with
-  jitter for transient failures.
+- Startup identity checks and established polling share a bounded recovery cycle:
+  attempt immediately, retry after 10 seconds, then after 60 seconds. After the
+  third consecutive failure, stop automatic polling requests and publish an
+  actionable error.
+- A successful update poll resets the failure budget. A successful identity
+  check alone does not reset it, so repeated polling failures remain bounded.
+- Invalid tokens, forbidden operations, conflicts, malformed responses, and
+  invalid client configuration require action immediately without automatic retry.
+- Telegram rate limits can extend a scheduled delay to the server's retry-after
+  value (with the existing defensive one-hour cap); they still consume attempts.
+- Retry waits and idle error states remain cancellable and watch opted-in proxy
+  changes. A saved proxy change starts a fresh cycle even after exhaustion.
+- Host-only Restart Telegram cancels and joins the previous worker, rebuilds the
+  client from saved settings, and starts a fresh cycle. It preserves the SQLite
+  polling offset, pending confirmations, and job history; it does not enable a
+  disabled integration or silently switch to a direct connection.
+- Status includes `failed_attempts` and nullable UTC `retry_at`; the UI shows a
+  countdown and a localized three-attempt failure message. Status is operational
+  memory, while existing settings and polling offsets remain persisted.
 - Treat invalid/revoked token, conflicting poller, forbidden bot, and malformed
   response as distinct actionable states.
 - Hot enabling starts one poller; disabling or token replacement cancels and
@@ -231,7 +249,7 @@ density and mobile settings navigation. The Telegram card includes:
 - queued/completed/failed notification toggles;
 - off-by-default completed-media delivery and an integer 1–50 MB limit;
 - privacy acknowledgement;
-- Test connection and Save controls with independent progress/errors;
+- Test connection, Restart Telegram, and Save controls with progress/errors;
 - setup instructions for creating a bot and obtaining the caller's numeric ID.
 
 The token input is always blank after submission. Errors are specific enough to

@@ -15,8 +15,8 @@ use fetch_core::{
 };
 use fetch_storage::Storage;
 use fetch_telegram::{
-    Backoff, BotApiClient, CallbackAction, IncomingMessage, InlineKeyboardButton,
-    InlineKeyboardMarkup, SendFile, SendFileKind, SendMessage, TelegramApi, TelegramError, Update,
+    BotApiClient, CallbackAction, IncomingMessage, InlineKeyboardButton, InlineKeyboardMarkup,
+    SendFile, SendFileKind, SendMessage, TelegramApi, TelegramError, Update,
 };
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -173,7 +173,8 @@ impl TelegramBotManager {
     }
 
     async fn restart_poller(&self) {
-        stop_task(&self.inner.poller).await;
+        let mut poller = self.inner.poller.lock().await;
+        stop_running(&mut poller).await;
         let settings = match self.inner.storage.load_telegram_settings().await {
             Ok(settings) => settings,
             Err(error) => {
@@ -249,7 +250,7 @@ impl TelegramBotManager {
         let handle = tokio::spawn(async move {
             run_poller(inner, token, settings, source, task_cancellation).await;
         });
-        *self.inner.poller.lock().await = Some(RunningTask {
+        *poller = Some(RunningTask {
             cancellation,
             handle,
         });
@@ -268,6 +269,7 @@ impl TelegramBotManager {
             .await;
         update_status(&self.inner, |status| {
             status.state = TelegramConnectionState::Error;
+            status.retry_at = None;
             status.error = Some(public.to_owned());
         })
         .await;
@@ -365,6 +367,22 @@ impl TelegramOperations for TelegramBotManager {
         self.get_integration().await
     }
 
+    async fn restart(&self) -> Result<TelegramIntegration, FetchError> {
+        let settings = self
+            .inner
+            .storage
+            .load_telegram_settings()
+            .await
+            .map_err(storage_error)?;
+        if !settings.enabled {
+            return Err(FetchError::InvalidSettings(
+                "Enable Telegram before restarting it".into(),
+            ));
+        }
+        self.restart_poller().await;
+        self.get_integration().await
+    }
+
     async fn test_connection(&self) -> Result<TelegramIntegration, FetchError> {
         let (token, source) = self.effective_token().await?;
         let token = token.ok_or_else(|| {
@@ -442,9 +460,19 @@ impl TelegramOperations for TelegramBotManager {
 }
 
 async fn stop_task(slot: &tokio::sync::Mutex<Option<RunningTask>>) {
-    if let Some(task) = slot.lock().await.take() {
+    stop_running(&mut *slot.lock().await).await;
+}
+
+async fn stop_running(slot: &mut Option<RunningTask>) {
+    if let Some(mut task) = slot.take() {
         task.cancellation.cancel();
-        let _ = tokio::time::timeout(Duration::from_secs(3), task.handle).await;
+        if tokio::time::timeout(Duration::from_secs(3), &mut task.handle)
+            .await
+            .is_err()
+        {
+            task.handle.abort();
+            let _ = task.handle.await;
+        }
     }
 }
 
@@ -476,94 +504,110 @@ async fn run_poller(
     source: TelegramTokenSource,
     cancellation: CancellationToken,
 ) {
-    let mut proxy_updates = inner.proxy.subscribe();
-    loop {
-        let proxy = telegram_proxy(&inner, &settings);
-        let proxy_mode = proxy_mode_name(proxy.mode);
-        let client = match BotApiClient::new(token.clone(), &proxy) {
+    run_poller_with_client(inner, settings, source, cancellation, move |proxy| {
+        BotApiClient::new(token.clone(), proxy)
+    })
+    .await;
+}
+
+async fn run_poller_with_client<C: TelegramApi>(
+    inner: Arc<ManagerInner>,
+    settings: TelegramSettings,
+    source: TelegramTokenSource,
+    cancellation: CancellationToken,
+    make_client: impl Fn(&ProxySettings) -> Result<C, TelegramError>,
+) {
+    let mut recovery = PollingRecovery {
+        failed_attempts: 0,
+        proxy_updates: inner.proxy.subscribe(),
+        use_proxy: settings.use_proxy,
+    };
+    'connect: loop {
+        update_status(&inner, |status| {
+            status.state = TelegramConnectionState::Connecting;
+            status.retry_at = None;
+            status.failed_attempts = recovery.failed_attempts;
+            status.error = None;
+        })
+        .await;
+        let client = match make_client(&telegram_proxy(&inner, &settings)) {
             Ok(client) => client,
             Err(error) => {
-                record_poller_error(&inner, &error, source).await;
+                if recovery.failed(&inner, &error, &cancellation).await {
+                    continue;
+                }
                 return;
             }
         };
         let identity = tokio::select! {
             _ = cancellation.cancelled() => return,
-            changed = proxy_updates.changed(), if settings.use_proxy => {
-                if changed.is_err() {
-                    return;
-                }
-                let mode = { proxy_updates.borrow().mode };
-                record_proxy_reconnect(&inner, mode).await;
-                update_status(&inner, |status| {
-                    status.state = TelegramConnectionState::Connecting;
-                    status.error = None;
-                }).await;
+            changed = recovery.proxy_updates.changed(), if settings.use_proxy => {
+                if changed.is_err() { return; }
+                recovery.route_changed(&inner).await;
                 continue;
             }
             result = client.get_me() => result,
         };
         match identity {
             Ok(bot) => {
-                publish_status(
-                    &inner,
-                    TelegramStatus {
-                        state: TelegramConnectionState::Connected,
-                        token_configured: true,
-                        token_source: source,
-                        bot_username: bot.username,
-                        last_success_at: Some(Utc::now()),
-                        error: None,
-                    },
-                )
+                update_status(&inner, |status| {
+                    status.token_configured = true;
+                    status.token_source = source;
+                    status.bot_username = bot.username;
+                    status.last_success_at = Some(Utc::now());
+                })
                 .await;
-                let _ = inner
-                    .storage
-                    .append_log(
-                        "info",
-                        "telegram",
-                        "Telegram bot connected",
-                        Some(&format!("proxy_mode: {proxy_mode}")),
-                    )
-                    .await;
             }
             Err(error) => {
-                record_poller_error(&inner, &error, source).await;
+                if recovery.failed(&inner, &error, &cancellation).await {
+                    continue;
+                }
                 return;
             }
         }
-        let mut backoff = Backoff::default();
         loop {
             let offset = match inner.storage.telegram_polling_offset().await {
                 Ok(offset) => offset,
                 Err(error) => {
                     tracing::error!(subsystem = "telegram", %error, "could not load polling offset");
+                    update_status(&inner, |status| {
+                        status.state = TelegramConnectionState::Error;
+                        status.error = Some("Could not load Telegram polling offset".into());
+                        status.retry_at = None;
+                    })
+                    .await;
                     return;
                 }
             };
             let poll_result = tokio::select! {
                 _ = cancellation.cancelled() => return,
-                changed = proxy_updates.changed(), if settings.use_proxy => {
-                    if changed.is_err() {
-                        return;
-                    }
-                    let mode = { proxy_updates.borrow().mode };
-                    record_proxy_reconnect(&inner, mode).await;
-                    None
+                changed = recovery.proxy_updates.changed(), if settings.use_proxy => {
+                    if changed.is_err() { return; }
+                    recovery.route_changed(&inner).await;
+                    continue 'connect;
                 }
-                result = client.get_updates(offset, Duration::from_secs(25), &cancellation) => Some(result),
-            };
-            let Some(poll_result) = poll_result else {
-                update_status(&inner, |status| {
-                    status.state = TelegramConnectionState::Connecting;
-                    status.error = None;
-                })
-                .await;
-                break;
+                result = client.get_updates(offset, Duration::from_secs(25), &cancellation) => result,
             };
             match poll_result {
                 Ok(updates) => {
-                    backoff.reset();
+                    if inner.status.read().await.state != TelegramConnectionState::Connected {
+                        let mode = proxy_mode_name(telegram_proxy(&inner, &settings).mode);
+                        tracing::info!(
+                            subsystem = "telegram",
+                            proxy_mode = mode,
+                            "Telegram bot connected"
+                        );
+                        let _ = inner
+                            .storage
+                            .append_log(
+                                "info",
+                                "telegram",
+                                "Telegram bot connected",
+                                Some(&format!("proxy_mode: {mode}")),
+                            )
+                            .await;
+                    }
+                    recovery.failed_attempts = 0;
                     for update in updates {
                         if cancellation.is_cancelled() {
                             return;
@@ -611,62 +655,101 @@ async fn run_poller(
                         status.state = TelegramConnectionState::Connected;
                         status.last_success_at = Some(Utc::now());
                         status.error = None;
+                        status.failed_attempts = 0;
+                        status.retry_at = None;
                     })
                     .await;
                 }
                 Err(TelegramError::Cancelled) => return,
-                Err(error) if error.retryable() => {
-                    let delay = backoff.next_delay(&error);
-                    tracing::warn!(
-                        subsystem = "telegram",
-                        error = %error,
-                        retry_delay_seconds = delay.as_secs(),
-                        proxy_mode,
-                        "Telegram polling interrupted; retry scheduled"
-                    );
-                    let _ = inner
-                        .storage
-                        .append_log(
-                            "warn",
-                            "telegram",
-                            "Telegram polling interrupted; retry scheduled",
-                            Some(&format!(
-                                "cause: {error}\nretry_delay_seconds: {}\nproxy_mode: {proxy_mode}",
-                                delay.as_secs()
-                            )),
-                        )
-                        .await;
-                    update_status(&inner, |status| {
-                        status.state = TelegramConnectionState::BackingOff;
-                        status.error = Some(error.to_string());
-                    })
-                    .await;
-                    let proxy_changed = tokio::select! {
-                        _ = cancellation.cancelled() => return,
-                        changed = proxy_updates.changed(), if settings.use_proxy => {
-                            if changed.is_err() {
-                                return;
-                            }
-                            true
-                        }
-                        _ = tokio::time::sleep(delay) => false
-                    };
-                    if proxy_changed {
-                        let mode = { proxy_updates.borrow().mode };
-                        record_proxy_reconnect(&inner, mode).await;
-                        update_status(&inner, |status| {
-                            status.state = TelegramConnectionState::Connecting;
-                            status.error = None;
-                        })
-                        .await;
-                        break;
-                    }
-                }
                 Err(error) => {
-                    record_poller_error(&inner, &error, source).await;
+                    if recovery.failed(&inner, &error, &cancellation).await {
+                        continue 'connect;
+                    }
                     return;
                 }
             }
+        }
+    }
+}
+
+struct PollingRecovery {
+    failed_attempts: u8,
+    proxy_updates: tokio::sync::watch::Receiver<ProxySettings>,
+    use_proxy: bool,
+}
+
+impl PollingRecovery {
+    async fn route_changed(&mut self, inner: &ManagerInner) {
+        self.failed_attempts = 0;
+        let mode = self.proxy_updates.borrow_and_update().mode;
+        record_proxy_reconnect(inner, mode).await;
+    }
+
+    // False means shutdown. After exhaustion, remain idle but watch for a new route.
+    async fn failed(
+        &mut self,
+        inner: &ManagerInner,
+        error: &TelegramError,
+        cancellation: &CancellationToken,
+    ) -> bool {
+        self.failed_attempts += 1;
+        let delay = if error.retryable() {
+            match self.failed_attempts {
+                1 => Some(Duration::from_secs(10)),
+                2 => Some(Duration::from_secs(60)),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let delay = delay.map(|delay| match error {
+            TelegramError::RateLimited {
+                retry_after_seconds,
+            } => delay.max(Duration::from_secs((*retry_after_seconds).min(3_600))),
+            _ => delay,
+        });
+        let retry_deadline = delay.map(|delay| tokio::time::Instant::now() + delay);
+        let retry_at = delay
+            .and_then(|delay| chrono::Duration::from_std(delay).ok())
+            .and_then(|delay| Utc::now().checked_add_signed(delay));
+        update_status(inner, |status| {
+            status.state = if delay.is_some() {
+                TelegramConnectionState::BackingOff
+            } else {
+                TelegramConnectionState::Error
+            };
+            status.error = Some(error.to_string());
+            status.failed_attempts = self.failed_attempts;
+            status.retry_at = retry_at;
+        })
+        .await;
+        let proxy_mode = proxy_mode_name(if self.use_proxy {
+            inner.proxy.current().mode
+        } else {
+            ProxyMode::Direct
+        });
+        let message = if delay.is_some() {
+            "Telegram connection failed; retry scheduled"
+        } else {
+            "Telegram connection stopped; action required"
+        };
+        tracing::warn!(subsystem = "telegram", error = %error, failed_attempts = self.failed_attempts, ?delay, proxy_mode, message);
+        let _ = inner.storage.append_log("warn", "telegram", message, Some(&format!(
+            "cause: {error}\nfailed_attempts: {}\nretry_delay_seconds: {:?}\nproxy_mode: {proxy_mode}", self.failed_attempts, delay.map(|delay| delay.as_secs())
+        ))).await;
+        tokio::select! {
+            _ = cancellation.cancelled() => false,
+            changed = self.proxy_updates.changed(), if self.use_proxy => {
+                if changed.is_err() { return false; }
+                self.route_changed(inner).await;
+                true
+            }
+            _ = async {
+                match retry_deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending::<()>().await,
+                }
+            } => true,
         }
     }
 }
@@ -687,30 +770,6 @@ async fn record_proxy_reconnect(inner: &ManagerInner, mode: ProxyMode) {
             Some(&format!("proxy_mode: {proxy_mode}")),
         )
         .await;
-}
-
-async fn record_poller_error(
-    inner: &ManagerInner,
-    error: &TelegramError,
-    source: TelegramTokenSource,
-) {
-    let message = error.to_string();
-    tracing::warn!(subsystem = "telegram", error = %message, "Telegram poller stopped");
-    let _ = inner
-        .storage
-        .append_log("error", "telegram", &message, None)
-        .await;
-    publish_status(
-        inner,
-        TelegramStatus {
-            state: TelegramConnectionState::Error,
-            token_configured: true,
-            token_source: source,
-            error: Some(message),
-            ..TelegramStatus::default()
-        },
-    )
-    .await;
 }
 
 async fn handle_update(
@@ -1758,6 +1817,297 @@ mod tests {
         (inner, downloads)
     }
 
+    type ScriptedResponses<T> = Arc<std::sync::Mutex<VecDeque<Result<T, TelegramError>>>>;
+
+    struct ScriptedPollingApi {
+        calls: Arc<std::sync::Mutex<Vec<(String, i64)>>>,
+        identities: ScriptedResponses<BotUser>,
+        updates: ScriptedResponses<Vec<Update>>,
+    }
+
+    #[async_trait::async_trait]
+    impl TelegramApi for ScriptedPollingApi {
+        async fn get_me(&self) -> Result<BotUser, TelegramError> {
+            self.calls.lock().unwrap().push(("identity".into(), 0));
+            self.identities
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or(Ok(BotUser {
+                    id: 1,
+                    is_bot: true,
+                    username: Some("fixture".into()),
+                }))
+        }
+        async fn get_updates(
+            &self,
+            offset: i64,
+            _: Duration,
+            cancellation: &CancellationToken,
+        ) -> Result<Vec<Update>, TelegramError> {
+            self.calls.lock().unwrap().push(("poll".into(), offset));
+            let result = self.updates.lock().unwrap().pop_front();
+            if let Some(result) = result {
+                return result;
+            }
+            cancellation.cancelled().await;
+            Err(TelegramError::Cancelled)
+        }
+        async fn send_message(&self, _: SendMessage<'_>) -> Result<Message, TelegramError> {
+            unreachable!()
+        }
+        async fn send_file(
+            &self,
+            _: SendFile<'_>,
+            _: &CancellationToken,
+        ) -> Result<Message, TelegramError> {
+            unreachable!()
+        }
+        async fn answer_callback_query(&self, _: &str) -> Result<(), TelegramError> {
+            unreachable!()
+        }
+    }
+
+    async fn wait_state(inner: &ManagerInner, state: TelegramConnectionState, failures: u8) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let status = inner.status.read().await.clone();
+            if status.state == state && status.failed_attempts == failures {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "unexpected status: {status:?}"
+            );
+            tokio::task::yield_now().await;
+        }
+        // Let the retained log finish and the retry timer register before advancing.
+        for _ in 0..1000 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn polling_retries_startup_at_10_and_60_seconds_then_parks_until_proxy_change() {
+        let (inner, _) = test_inner().await;
+        let inner = Arc::new(inner);
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let identities = Arc::new(std::sync::Mutex::new(VecDeque::from([
+            Err(TelegramError::Network),
+            Err(TelegramError::Timeout),
+            Err(TelegramError::Network),
+        ])));
+        let task_calls = calls.clone();
+        let cancellation = CancellationToken::new();
+        let task_cancel = cancellation.clone();
+        let task_inner = inner.clone();
+        tokio::time::pause();
+        let task = tokio::spawn(async move {
+            run_poller_with_client(
+                task_inner,
+                TelegramSettings {
+                    use_proxy: true,
+                    ..TelegramSettings::default()
+                },
+                TelegramTokenSource::Native,
+                task_cancel,
+                move |_| {
+                    Ok(ScriptedPollingApi {
+                        calls: task_calls.clone(),
+                        identities: identities.clone(),
+                        updates: Arc::new(std::sync::Mutex::new(VecDeque::new())),
+                    })
+                },
+            )
+            .await;
+        });
+        wait_state(&inner, TelegramConnectionState::BackingOff, 1).await;
+        assert!(inner.status.read().await.retry_at.is_some());
+        tokio::time::advance(Duration::from_secs(9)).await;
+        assert_eq!(calls.lock().unwrap().len(), 1);
+        tokio::time::advance(Duration::from_millis(1001)).await;
+        wait_state(&inner, TelegramConnectionState::BackingOff, 2).await;
+        tokio::time::advance(Duration::from_secs(59)).await;
+        assert_eq!(calls.lock().unwrap().len(), 2);
+        tokio::time::advance(Duration::from_millis(1001)).await;
+        wait_state(&inner, TelegramConnectionState::Error, 3).await;
+        assert!(inner.status.read().await.retry_at.is_none());
+        tokio::time::advance(Duration::from_secs(3600)).await;
+        assert_eq!(calls.lock().unwrap().len(), 3);
+        inner
+            .proxy
+            .replace(ProxySettings {
+                mode: ProxyMode::Direct,
+                url: None,
+            })
+            .unwrap();
+        wait_state(&inner, TelegramConnectionState::Connecting, 0).await;
+        assert_eq!(calls.lock().unwrap().len(), 5); // new identity and long poll
+        cancellation.cancel();
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn polling_loss_resets_budget_only_after_successful_poll_and_preserves_offset() {
+        let (inner, _) = test_inner().await;
+        inner.storage.claim_telegram_update(41).await.unwrap();
+        inner
+            .storage
+            .complete_telegram_update(41, 42)
+            .await
+            .unwrap();
+        let inner = Arc::new(inner);
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let updates = Arc::new(std::sync::Mutex::new(VecDeque::from([
+            Err(TelegramError::Network),
+            Ok(vec![]),
+            Err(TelegramError::Network),
+            Err(TelegramError::Network),
+            Err(TelegramError::Network),
+        ])));
+        let task_calls = calls.clone();
+        let task_inner = inner.clone();
+        let cancellation = CancellationToken::new();
+        let task_cancel = cancellation.clone();
+        tokio::time::pause();
+        let task = tokio::spawn(async move {
+            run_poller_with_client(
+                task_inner,
+                TelegramSettings::default(),
+                TelegramTokenSource::Native,
+                task_cancel,
+                move |_| {
+                    Ok(ScriptedPollingApi {
+                        calls: task_calls.clone(),
+                        identities: Arc::new(std::sync::Mutex::new(VecDeque::new())),
+                        updates: updates.clone(),
+                    })
+                },
+            )
+            .await;
+        });
+        wait_state(&inner, TelegramConnectionState::BackingOff, 1).await;
+        tokio::time::advance(Duration::from_millis(10001)).await;
+        // The successful poll resets the budget before another network failure.
+        for _ in 0..1000 {
+            tokio::task::yield_now().await;
+        }
+        wait_state(&inner, TelegramConnectionState::BackingOff, 1).await;
+        assert_eq!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(kind, _)| kind == "poll")
+                .count(),
+            3
+        );
+        tokio::time::advance(Duration::from_millis(10001)).await;
+        wait_state(&inner, TelegramConnectionState::BackingOff, 2).await;
+        tokio::time::advance(Duration::from_millis(60001)).await;
+        wait_state(&inner, TelegramConnectionState::Error, 3).await;
+        assert!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(kind, _)| kind == "poll")
+                .all(|(_, offset)| *offset == 42)
+        );
+        cancellation.cancel();
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recovery_cancels_waits_and_rejects_permanent_errors_without_retry() {
+        let (inner, _) = test_inner().await;
+        for error in [TelegramError::Network, TelegramError::Unauthorized] {
+            let cancellation = CancellationToken::new();
+            let mut recovery = PollingRecovery {
+                failed_attempts: 0,
+                proxy_updates: inner.proxy.subscribe(),
+                use_proxy: false,
+            };
+            cancellation.cancel();
+            assert!(!recovery.failed(&inner, &error, &cancellation).await);
+            let status = inner.status.read().await;
+            assert_eq!(status.failed_attempts, 1);
+            assert_eq!(
+                status.state,
+                if error.retryable() {
+                    TelegramConnectionState::BackingOff
+                } else {
+                    TelegramConnectionState::Error
+                }
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn recovery_honors_rate_limits_and_proxy_changes_interrupt_retry_waits() {
+        let (inner, _) = test_inner().await;
+        let mut recovery = PollingRecovery {
+            failed_attempts: 0,
+            proxy_updates: inner.proxy.subscribe(),
+            use_proxy: true,
+        };
+        let cancellation = CancellationToken::new();
+        let before = Utc::now();
+        let result = tokio::join!(
+            recovery.failed(
+                &inner,
+                &TelegramError::RateLimited {
+                    retry_after_seconds: 120
+                },
+                &cancellation
+            ),
+            async {
+                wait_state(&inner, TelegramConnectionState::BackingOff, 1).await;
+                let status = inner.status.read().await.clone();
+                assert!(status.retry_at.unwrap() >= before + chrono::Duration::seconds(120));
+                inner
+                    .proxy
+                    .replace(ProxySettings {
+                        mode: ProxyMode::Direct,
+                        url: None,
+                    })
+                    .unwrap();
+            }
+        );
+        assert!(result.0);
+        assert_eq!(recovery.failed_attempts, 0);
+        let result = tokio::join!(
+            recovery.failed(&inner, &TelegramError::Network, &cancellation),
+            async {
+                wait_state(&inner, TelegramConnectionState::BackingOff, 1).await;
+                cancellation.cancel();
+            }
+        );
+        assert!(!result.0);
+    }
+
+    #[tokio::test]
+    async fn restart_does_not_enable_a_disabled_integration() {
+        let (inner, _) = test_inner().await;
+        let manager = TelegramBotManager {
+            inner: Arc::new(inner),
+        };
+        assert!(matches!(
+            manager.restart().await,
+            Err(FetchError::InvalidSettings(_))
+        ));
+        assert!(manager.inner.poller.lock().await.is_none());
+        assert!(
+            !manager
+                .inner
+                .storage
+                .load_telegram_settings()
+                .await
+                .unwrap()
+                .enabled
+        );
+    }
+
     fn message_update(update_id: i64, user_id: i64, text: &str) -> Update {
         Update {
             update_id,
@@ -1813,11 +2163,21 @@ mod tests {
             .unwrap();
 
         record_proxy_reconnect(&inner, ProxyMode::Custom).await;
-        record_poller_error(&inner, &TelegramError::Network, TelegramTokenSource::Native).await;
+        let mut recovery = PollingRecovery {
+            failed_attempts: 2,
+            proxy_updates: inner.proxy.subscribe(),
+            use_proxy: true,
+        };
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        recovery
+            .failed(&inner, &TelegramError::Network, &cancellation)
+            .await;
 
         let logs = inner.storage.list_logs(10).await.unwrap();
         assert!(logs.iter().any(|entry| {
-            entry.subsystem == "telegram" && entry.message == "Telegram is unreachable"
+            entry.subsystem == "telegram"
+                && entry.message == "Telegram connection stopped; action required"
         }));
         assert!(logs.iter().any(|entry| {
             entry.message == "Telegram outbound route changed; reconnecting"

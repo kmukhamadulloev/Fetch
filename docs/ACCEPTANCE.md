@@ -3,6 +3,93 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Runtime summary recovery — Local verification (2026-09-23)
+
+- [x] S1 PASS — Idle SSE sends an immediate opening comment without waiting for
+  user activity or a keepalive; host-only Telegram filtering still passes.
+- [x] S2 PASS — Initial connection, reconnection, and tab visibility reload
+  backend/runtime and permitted Telegram/proxy snapshots. Failed reads retry
+  automatically while connected; disconnect/stop clear retry timers.
+- [x] S3 PASS — Stores share overlapping startup reads. Late REST snapshots
+  preserve newer runtime events and Telegram status received before first load.
+- [x] S4 PASS — Secondary tabs request the primary's actual connection state;
+  lease ownership alone does not claim connectivity. Old-primary messages and
+  replaced-stream callbacks cannot overwrite the current state. Takeover and
+  automatic failover retain one SSE owner.
+- [x] S5 PASS — LAN clients make no host-only snapshot requests. Background
+  refresh does not discard unsaved proxy edits or replace loaded forms with
+  initial-loading placeholders. Desktop/mobile browser coverage verifies this.
+- [x] S6 PASS — Formatting, strict Clippy, Rust/frontend/browser tests, builds,
+  and API/architecture/testing/issue documentation are aligned.
+- NOT APPLICABLE — Database migrations, media-runtime changes, version bump,
+  release publication, or external service smoke tests.
+
+Exact checks:
+
+- `cargo fmt --all -- --check` — passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — passed.
+- `cargo test --workspace` — 115 passed, 3 existing opt-in tests ignored.
+- `cargo build --workspace` — passed with the production frontend embedded.
+- `npm --prefix web run typecheck` — passed.
+- `npm --prefix web run lint` — passed without lint warnings.
+- `npm --prefix web test` — 39 passed in 17 files.
+- `npm --prefix web run build` — passed, including Vue/TypeScript checking.
+- `FETCH_E2E_PRODUCTION=1 npm --prefix web run test:e2e` — 56 passed across
+  desktop/mobile Chromium.
+- `FETCH_E2E_PRODUCTION=1 npm --prefix web run test:e2e -- --grep 'runtime summary|host can configure Telegram|host can hot-apply'`
+  — 6 passed after the final unsaved-form protection. Includes recovery with no
+  user actions, existing integration controls, and retained
+  proxy edits after a visibility-triggered snapshot refresh.
+- OpenAPI YAML parsed successfully; `git diff --check` passed.
+
+No known implementation blocker remains. Native Windows/macOS execution and
+reproduction in the user's exact browser/network remain unverified.
+
+## Telegram recovery and restart — Local verification (2026-09-23)
+
+- [x] T1 PASS — Startup and established polling use three consecutive attempts:
+  immediate, after 10 seconds, and after another 60 seconds; exhaustion stops
+  automatic polling requests and publishes Error with the last cause.
+- [x] T2 PASS — Successful polling resets the budget. Permanent errors stop
+  immediately, and rate-limit retry-after values can extend the scheduled wait.
+- [x] T3 PASS — Saved opted-in proxy changes interrupt retry waits and wake
+  exhausted workers with a fresh budget. Cancellation interrupts recovery;
+  replacement serializes stopping/joining the previous worker.
+- [x] T4 PASS — Host-only `POST /api/telegram/restart` uses saved settings;
+  disabled integrations cannot be started through it. Polling offsets remain
+  persisted, and LAN clients cannot restart or receive private Telegram status.
+- [x] T5 PASS — Integrations exposes Restart Telegram, retry countdown, last
+  error, and exhaustion text in English/Russian/Tajik. Component tests cover
+  live status, countdown cleanup, disabled/busy controls, and the API request;
+  production browser tests cover restart and containment on desktop/mobile.
+- [x] T6 PASS — Format, strict Clippy, Rust/frontend tests, frontend lint and
+  typecheck, production build, and API/subsystem/issue documentation align.
+- NOT APPLICABLE — Database migration, version bump, managed media runtime
+  changes, or release publication.
+
+Exact checks:
+
+- `FETCH_RUN_E2E=1 ./scripts/check.sh` — release-note tests, `npm ci`, frontend
+  typecheck/lint, 32 unit tests, and production frontend build passed. The first
+  run stopped at Clippy's test-fixture type-complexity warning; it was fixed with
+  a type alias and all remaining steps were executed explicitly below.
+- `cargo fmt --all -- --check` — passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — passed.
+- `cargo test --workspace` — 114 passed, 3 existing opt-in tests ignored.
+- `cargo build --workspace` — passed.
+- `FETCH_E2E_PRODUCTION=1 npm --prefix web run test:e2e` — 52 passed; the two
+  Telegram cases found an ambiguous Disabled status selector introduced by the
+  additional status panel. The selector now targets the setup status explicitly.
+- `FETCH_E2E_PRODUCTION=1 npm --prefix web run test:e2e -- --grep 'host can configure Telegram'`
+  — both affected desktop/mobile cases passed after the selector correction;
+  all 54 browser cases are covered by the full run plus this focused rerun.
+- `git diff --check` — passed.
+
+No known implementation blocker remains. The user's actual proxy and a live
+Telegram bot were not exercised; transport tests use a local HTTP/proxy fixture
+and lifecycle tests use scripted Bot API responses. Native Windows/macOS
+execution remains separate release verification.
+
 ## Metadata editor — Local verification (2026-09-23)
 
 - [x] A1 PASS — Top-left rounded pencil opens the modal on individual cards,

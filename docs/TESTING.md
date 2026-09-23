@@ -34,7 +34,9 @@ Storage:
 Network:
 - CIDR parsing;
 - allow/deny decisions.
-- cancellation closes active SSE bodies during graceful shutdown.
+- cancellation closes active SSE bodies during graceful shutdown;
+- idle SSE responses immediately send an opening comment without an application
+  event, while Telegram events remain filtered for LAN clients.
 - proxy mode/URL validation and default compatibility;
 - proxy persistence outside application settings;
 - matching yt-dlp analysis/download arguments for system, direct, and custom;
@@ -107,6 +109,12 @@ Required:
 - API mapping;
 - bounded API timeout/error mapping;
 - unified SSE state updates and cross-tab primary/secondary takeover;
+- automatic snapshot refresh on connect/reconnect/visibility, failed-read retry
+  cleanup, truthful secondary-tab state, and obsolete stream callback rejection;
+- delayed REST snapshots preserve newer runtime and Telegram events;
+- browser recovery of the runtime summary without clicks after a failed initial
+  read and after reconnection, plus preservation of unsaved proxy edits during
+  background refresh;
 - browser E2E for first run, analyze, add download, progress, responsive native
   player actions, duration/status detail, host/remote completed actions, guarded
   deletion, stacked playlist galleries, watch progress, resume/start-over,

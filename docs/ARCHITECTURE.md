@@ -171,9 +171,22 @@ SPA fallback serves `index.html` for client routes without intercepting `/api/*`
 
 Use SSE at `GET /api/events` for progress/status/runtime events. Commands remain ordinary HTTP requests.
 
+The server sends an immediate SSE opening comment so an idle connection becomes
+usable without waiting for a runtime/download event or the 15-second keepalive.
+On initial connection, reconnection, and return to a visible tab, the frontend
+refreshes backend/runtime snapshots and host-only Telegram/proxy snapshots.
+Failed snapshot reads retry after five seconds while connected, with one refresh
+in flight; individual stores also share overlapping reads during startup.
+Disconnect and teardown cancel the retry timer. Runtime and Telegram
+stores preserve newer SSE updates when an older REST response arrives later.
+
 The Vue realtime coordinator elects one primary tab per origin using a short
 renewable browser-storage lease. Only that tab opens the SSE stream; it relays
-typed events to secondary tabs with `BroadcastChannel`. A secondary tab can
+typed events to secondary tabs with `BroadcastChannel`. Secondary tabs request
+the current connection state from the elected primary instead of treating its
+lease as proof of connectivity. The primary also shares its state on heartbeats;
+replaced-stream callbacks and messages from an old primary cannot override it.
+A secondary tab can
 explicitly take ownership, and an expired/released lease triggers automatic
 failover. Initial and retry REST reads remain independent from realtime and
 have bounded request timeouts, so an unavailable SSE stream cannot block data

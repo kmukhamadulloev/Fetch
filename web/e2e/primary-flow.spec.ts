@@ -28,7 +28,7 @@ async function mockApi(
   let proxy: ProxySettings = { mode: 'system', url: null }
   let telegram: TelegramIntegration = {
     settings: { enabled: false, use_proxy: false, send_completed_media: false, upload_limit_mb: 50, allowed_user_ids: [], notify_queued: true, notify_completed: true, notify_failed: true, privacy_acknowledged: false },
-    status: { state: 'disabled', token_configured: false, token_source: 'missing', bot_username: null, last_success_at: null, error: null },
+    status: { state: 'disabled', failed_attempts: 0, retry_at: null, token_configured: false, token_source: 'missing', bot_username: null, last_success_at: null, error: null },
   }
   await page.route('**/*', async (route) => {
     const request = route.request()
@@ -86,6 +86,8 @@ async function mockApi(
         telegram = { ...telegram, status: { ...telegram.status, token_configured: false, token_source: 'missing' } }
       } else if (path === '/api/telegram/settings' && request.method() === 'PUT') {
         telegram = { ...telegram, settings: request.postDataJSON(), status: { ...telegram.status, state: request.postDataJSON().enabled ? 'connecting' : 'disabled' } }
+      } else if (path === '/api/telegram/restart' && request.method() === 'POST') {
+        telegram = { ...telegram, status: { ...telegram.status, state: 'connecting', failed_attempts: 0, retry_at: null, error: null } }
       } else if (path === '/api/telegram/test' && request.method() === 'POST') {
         telegram = { ...telegram, status: { ...telegram.status, bot_username: 'fetch_fixture_bot', last_success_at: '2026-08-20T00:00:00Z' } }
       }
@@ -209,7 +211,7 @@ test('host can configure Telegram without the token appearing in responses or th
   await expect(page.getByRole('heading', { name: 'Telegram bot' })).toBeVisible()
   const tokenInput = page.getByLabel('New bot token')
   await expect(tokenInput).toBeDisabled()
-  await expect(page.getByRole('status').getByText('Disabled', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Telegram setup' }).getByText('Disabled', { exact: true })).toBeVisible()
   await page.getByLabel('Enable Telegram bot').check()
   await expect(page.getByText('Action needed')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Save Telegram settings' })).toBeDisabled()
@@ -239,6 +241,10 @@ test('host can configure Telegram without the token appearing in responses or th
   await page.getByRole('button', { name: 'Save Telegram settings' }).click()
   expect((await settingsSave).postDataJSON()).toMatchObject({ enabled: true, use_proxy: true, send_completed_media: true, upload_limit_mb: 25, allowed_user_ids: [123456789] })
   await expect(page.getByText('Telegram updated')).toBeVisible()
+  const restartRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/telegram/restart' && request.method() === 'POST')
+  await page.getByRole('button', { name: 'Restart Telegram', exact: true }).click()
+  await restartRequest
+  await expect(page.getByRole('button', { name: 'Restart Telegram', exact: true })).toBeEnabled()
   expect(renderErrors).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => document.documentElement.clientWidth),
@@ -466,6 +472,51 @@ test('language switches immediately, persists, and remains responsive', async ({
   )
 })
 
+test('runtime summary recovers initial reads and reconnects without user actions', async ({ page }) => {
+  await page.addInitScript(() => {
+    const sources: BrowserEventSource[] = []
+    class BrowserEventSource extends EventTarget {
+      onopen: ((event: Event) => void) | null = null
+      onerror: ((event: Event) => void) | null = null
+      constructor(public readonly url: string) {
+        super()
+        sources.push(this)
+        setTimeout(() => this.onopen?.(new Event('open')), 0)
+      }
+      close() {}
+    }
+    Object.defineProperty(window, 'EventSource', { configurable: true, value: BrowserEventSource })
+    Object.defineProperty(window, '__connection', { value: (connected: boolean) => {
+      const source = sources.at(-1)
+      if (connected) source?.onopen?.(new Event('open'))
+      else source?.onerror?.(new Event('error'))
+    } })
+  })
+  const runtime = readyRuntime.map((component) => ({ ...component }))
+  await mockApi(page, runtime, { urls: ['http://127.0.0.1:8080'], local_client: true })
+  let available = false
+  await page.route('**/api/runtime', (route) => available
+    ? route.fulfill({ json: runtime })
+    : route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Temporarily unavailable' } } }))
+  await page.goto('/settings#network')
+  const summary = page.locator('[data-summary-row="runtime"]')
+  await expect(page.getByRole('button', { name: 'Live', exact: true })).toBeVisible()
+  await expect(summary).toContainText('Error')
+  available = true
+  await expect(summary).toContainText('Ready', { timeout: 8000 })
+  await page.evaluate(() => (window as typeof window & { __connection: (connected: boolean) => void }).__connection(false))
+  await expect(summary).toContainText('Unknown')
+  runtime[1].status = 'missing'
+  await page.evaluate(() => (window as typeof window & { __connection: (connected: boolean) => void }).__connection(true))
+  await expect(summary).toContainText('Setup pending')
+  await page.getByLabel('Outbound proxy mode').selectOption('custom')
+  await page.getByLabel('Proxy URL').fill('socks5://127.0.0.1:1080')
+  const refresh = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/proxy')
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await refresh
+  await expect(page.getByLabel('Proxy URL')).toHaveValue('socks5://127.0.0.1:1080')
+})
+
 test('one primary tab owns realtime and another tab can take over', async ({ page, context }) => {
   await context.addInitScript(() => {
     class BrowserEventSource extends EventTarget {
@@ -498,6 +549,7 @@ test('one primary tab owns realtime and another tab can take over', async ({ pag
   await mockApi(second)
   await second.goto('/')
   await expect(second.getByText('Another Fetch tab is primary.')).toBeVisible()
+  await expect(second.getByRole('button', { name: 'Shared live', exact: true })).toBeVisible()
   await expect.poll(() => second.evaluate(() => Number(localStorage.getItem('fetch.test.active-sse')))).toBe(1)
 
   await second.getByRole('button', { name: 'Make primary' }).click()

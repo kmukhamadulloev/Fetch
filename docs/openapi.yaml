@@ -341,6 +341,17 @@ paths:
               schema: {$ref: '#/components/schemas/TelegramIntegration'}
         '400': {$ref: '#/components/responses/Error'}
         '403': {$ref: '#/components/responses/Error'}
+  /api/telegram/restart:
+    post:
+      description: Host-only restart using saved settings; cancels the previous worker and resets retries without changing the polling offset. Requires the integration to be enabled.
+      responses:
+        '200':
+          description: Restart scheduled; current integration snapshot
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TelegramIntegration'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
   /api/logs:
     get:
       responses:
@@ -401,7 +412,7 @@ paths:
     get:
       responses:
         '200':
-          description: Server-Sent Event stream
+          description: Server-Sent Event stream with an immediate opening comment and 15-second keepalives; events are not replayed
           content:
             text/event-stream:
               schema: {type: string}
@@ -672,8 +683,12 @@ components:
         privacy_acknowledged: {type: boolean, default: false}
     TelegramStatus:
       type: object
-      required: [state, token_configured, token_source, bot_username, last_success_at, error]
+      required: [state, token_configured, token_source, bot_username, last_success_at, error, failed_attempts, retry_at]
       properties:
+        failed_attempts: {type: integer, minimum: 0, maximum: 3}
+        retry_at:
+          description: UTC deadline for the next attempt; null when no retry is scheduled
+          anyOf: [{type: string, format: date-time}, {type: 'null'}]
         state: {type: string, enum: [disabled, connecting, connected, backing_off, error]}
         token_configured: {type: boolean}
         token_source: {type: string, enum: [native, environment, missing]}

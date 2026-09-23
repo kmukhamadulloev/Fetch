@@ -4,6 +4,11 @@ import { useDownloadsStore } from './downloads'
 import { useLibraryStore } from './library'
 import { useRealtimeStore } from './realtime'
 import { useTelegramStore } from './telegram'
+import { useStatusStore } from './status'
+import { useRuntimeStore } from './runtime'
+import { useSettingsStore } from './settings'
+import { useProxyStore } from './proxy'
+import { flushPromises } from '@vue/test-utils'
 import type { CompletedFile, DownloadJob, TelegramIntegration } from '@/app/api/client'
 
 const fixtureJob: DownloadJob = {
@@ -51,7 +56,7 @@ const fixtureTelegram: TelegramIntegration = {
     privacy_acknowledged: true,
   },
   status: {
-    state: 'connecting',
+    state: 'connecting', failed_attempts: 0, retry_at: null,
     token_configured: true,
     token_source: 'native',
     bot_username: null,
@@ -100,10 +105,15 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.stubGlobal('BroadcastChannel', TestBroadcastChannel)
   vi.stubGlobal('EventSource', TestEventSource)
+  for (const store of [useStatusStore(), useRuntimeStore(), useSettingsStore(), useTelegramStore(), useProxyStore()]) {
+    vi.spyOn(store, 'refresh').mockResolvedValue()
+  }
+  useSettingsStore().network = { local_client: false, bind_address: '127.0.0.1', port: 8080, urls: [], authentication: false, restart_required_after_bind_change: false }
 })
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -158,6 +168,104 @@ describe('realtime coordinator', () => {
     expect(realtime.role).toBe('primary')
     expect(TestEventSource.instances).toHaveLength(1)
     realtime.stop()
+  })
+
+  it('refreshes snapshots on first open and reconnect without requesting host data on LAN', async () => {
+    const realtime = useRealtimeStore()
+    const runtime = useRuntimeStore()
+    realtime.start()
+    await vi.advanceTimersByTimeAsync(100)
+    const source = TestEventSource.instances[0]
+    source.onopen?.(new Event('open'))
+    await flushPromises()
+    expect(runtime.refresh).toHaveBeenCalledOnce()
+    expect(useStatusStore().refresh).toHaveBeenCalledOnce()
+    expect(useTelegramStore().refresh).not.toHaveBeenCalled()
+    expect(useProxyStore().refresh).not.toHaveBeenCalled()
+    source.onerror?.(new Event('error'))
+    useSettingsStore().network!.local_client = true
+    source.onopen?.(new Event('open'))
+    await flushPromises()
+    expect(runtime.refresh).toHaveBeenCalledTimes(2)
+    expect(useTelegramStore().refresh).toHaveBeenCalledOnce()
+    expect(useProxyStore().refresh).toHaveBeenCalledOnce()
+    realtime.stop()
+  })
+
+  it('recovers a failed initial snapshot automatically and cancels retries on stop', async () => {
+    const realtime = useRealtimeStore()
+    const runtime = useRuntimeStore()
+    vi.mocked(runtime.refresh).mockImplementation(async () => { runtime.error = 'Temporary failure' })
+    realtime.start()
+    await vi.advanceTimersByTimeAsync(100)
+    TestEventSource.instances[0].onopen?.(new Event('open'))
+    await flushPromises()
+    expect(runtime.refresh).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(runtime.refresh).toHaveBeenCalledTimes(2)
+    realtime.stop()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(runtime.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('requests the real primary state instead of assuming an existing lease means connected', async () => {
+    window.localStorage.setItem('fetch.realtime.primary', JSON.stringify({ tabId: 'other-tab', expiresAt: Date.now() + 10000 }))
+    const realtime = useRealtimeStore()
+    realtime.start()
+    expect(realtime.connection).toBe('connecting')
+    const channel = TestBroadcastChannel.instances[0]
+    expect(channel.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'request-state' }))
+    const state = (sender: string, state: string) => channel.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'state', sender, state, error: null },
+    }))
+    state('stale-tab', 'connected')
+    expect(realtime.connection).toBe('connecting')
+    state('other-tab', 'reconnecting')
+    expect(realtime.connection).toBe('reconnecting')
+    state('other-tab', 'connected')
+    await flushPromises()
+    expect(realtime.connection).toBe('connected')
+    expect(useRuntimeStore().refresh).toHaveBeenCalledOnce()
+    state('other-tab', 'connected')
+    await flushPromises()
+    expect(useRuntimeStore().refresh).toHaveBeenCalledOnce()
+    realtime.stop()
+  })
+
+  it('answers late-joining tabs and ignores callbacks from a replaced stream', async () => {
+    const realtime = useRealtimeStore()
+    realtime.start()
+    await vi.advanceTimersByTimeAsync(100)
+    const old = TestEventSource.instances[0]
+    old.onerror?.(new Event('error'))
+    const channel = TestBroadcastChannel.instances[0]
+    channel.postMessage.mockClear()
+    channel.dispatchEvent(new MessageEvent('message', { data: { type: 'request-state', sender: 'late-tab' } }))
+    expect(channel.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'state', state: 'reconnecting' }))
+    realtime.retry()
+    const current = TestEventSource.instances[1]
+    current.onopen?.(new Event('open'))
+    old.onerror?.(new Event('error'))
+    expect(realtime.connection).toBe('connected')
+    old.dispatchEvent(new MessageEvent('telegram.status', { data: 'invalid' }))
+    expect(realtime.connection).toBe('connected')
+    realtime.stop()
+  })
+
+  it('refreshes when a sleeping page becomes visible again', async () => {
+    const realtime = useRealtimeStore()
+    realtime.start()
+    await vi.advanceTimersByTimeAsync(100)
+    TestEventSource.instances[0].onopen?.(new Event('open'))
+    await flushPromises()
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(useRuntimeStore().refresh).toHaveBeenCalledTimes(2)
+    realtime.stop()
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+    expect(useRuntimeStore().refresh).toHaveBeenCalledTimes(2)
   })
 
   it('merges completed files for direct and relayed library events', async () => {

@@ -4,6 +4,9 @@ import { useDownloadsStore } from '@/stores/downloads'
 import { useLibraryStore } from '@/stores/library'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useTelegramStore } from '@/stores/telegram'
+import { useStatusStore } from '@/stores/status'
+import { useSettingsStore } from '@/stores/settings'
+import { useProxyStore } from '@/stores/proxy'
 import type { TelegramStatus } from '@/app/api/client'
 
 const channelName = 'fetch.realtime.v1'
@@ -37,6 +40,7 @@ type Lease = { tabId: string; expiresAt: number }
 type ChannelMessage =
   | { type: 'event'; sender: string; name: string; data: string }
   | { type: 'state'; sender: string; state: ConnectionState; error: string | null }
+  | { type: 'request-state'; sender: string }
   | { type: 'takeover'; sender: string }
   | { type: 'released'; sender: string }
 
@@ -49,6 +53,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const library = useLibraryStore()
   const runtime = useRuntimeStore()
   const telegram = useTelegramStore()
+  const status = useStatusStore()
+  const settings = useSettingsStore()
+  const proxy = useProxyStore()
   const tabId = createTabId()
   const role = ref<RealtimeRole>('electing')
   const connection = ref<ConnectionState>('connecting')
@@ -61,6 +68,43 @@ export const useRealtimeStore = defineStore('realtime', () => {
   let channel: BroadcastChannel | null = null
   let heartbeat: ReturnType<typeof setInterval> | null = null
   let electionSequence = 0
+  let snapshotInFlight: Promise<void> | null = null
+  let snapshotRequested = false
+  let snapshotRetry: ReturnType<typeof setTimeout> | null = null
+
+  function clearSnapshotRetry() {
+    if (snapshotRetry) clearTimeout(snapshotRetry)
+    snapshotRetry = null
+  }
+
+  function refreshSnapshots() {
+    if (!started || connection.value !== 'connected') return
+    clearSnapshotRetry()
+    if (snapshotInFlight) { snapshotRequested = true; return }
+    snapshotInFlight = (async () => {
+      await Promise.all([
+        status.refresh(), runtime.refresh(),
+        !settings.network ? settings.refresh() : Promise.resolve(),
+      ])
+      if (!started || connection.value !== 'connected') return
+      const host = settings.network?.local_client === true
+      if (host) await Promise.all([telegram.refresh(), proxy.refresh()])
+      if (started && connection.value === 'connected'
+        && (status.error || runtime.error || !settings.network || (host && (telegram.error || proxy.error)))) {
+        snapshotRetry = setTimeout(refreshSnapshots, 5000)
+      }
+    })().finally(() => {
+      snapshotInFlight = null
+      if (snapshotRequested) { snapshotRequested = false; refreshSnapshots() }
+    })
+  }
+
+  function handleVisibility() {
+    if (document.visibilityState === 'visible') {
+      checkLeadership()
+      refreshSnapshots()
+    }
+  }
 
   function readLease(): Lease | null {
     try {
@@ -94,8 +138,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function setConnection(state: ConnectionState, message: string | null = null) {
+    const changed = connection.value !== state
     connection.value = state
     error.value = message
+    if (state !== 'connected') clearSnapshotRetry()
+    else if (changed) refreshSnapshots()
     if (role.value === 'primary') post({ type: 'state', sender: tabId, state, error: message })
   }
 
@@ -127,10 +174,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
     setConnection('connecting')
     const next = new EventSource('/api/events')
     source = next
-    next.onopen = () => setConnection('connected')
-    next.onerror = () => setConnection('reconnecting', 'Realtime updates were interrupted. Fetch is reconnecting…')
+    next.onopen = () => { if (source === next) setConnection('connected') }
+    next.onerror = () => { if (source === next) setConnection('reconnecting', 'Realtime updates were interrupted. Fetch is reconnecting…') }
     for (const name of eventNames) {
       next.addEventListener(name, (event) => {
+        if (source !== next) return
         const data = (event as MessageEvent).data as string
         applyEvent(name, data)
         post({ type: 'event', sender: tabId, name, data })
@@ -138,12 +186,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
     }
   }
 
-  function becomeSecondary(owner: string, state: ConnectionState = 'connected', message: string | null = null) {
+  function becomeSecondary(owner: string, state: ConnectionState = 'connecting', message: string | null = null) {
     closeSource()
     role.value = 'secondary'
     primaryTabId.value = owner
-    connection.value = state
-    error.value = message
+    setConnection(state, message)
+    post({ type: 'request-state', sender: tabId })
   }
 
   function becomePrimary() {
@@ -178,6 +226,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function checkLeadership() {
+    if (!started) return
+    if (!channel) {
+      if (!source) openSource()
+      return
+    }
     const lease = readLease()
     if (role.value === 'primary') {
       if (lease && lease.tabId !== tabId && lease.expiresAt > Date.now()) {
@@ -185,21 +238,23 @@ export const useRealtimeStore = defineStore('realtime', () => {
       } else {
         writeLease()
         if (!source) openSource()
+        else post({ type: 'state', sender: tabId, state: connection.value, error: error.value })
       }
       return
     }
     if (!lease || lease.expiresAt <= Date.now()) void elect()
-    else if (lease.tabId !== tabId) primaryTabId.value = lease.tabId
+    else if (lease.tabId !== tabId && primaryTabId.value !== lease.tabId) becomeSecondary(lease.tabId)
   }
 
   function handleMessage(event: MessageEvent<ChannelMessage>) {
     const message = event.data
     if (!message || message.sender === tabId) return
-    if (message.type === 'event' && role.value !== 'primary') applyEvent(message.name, message.data)
-    if (message.type === 'state' && role.value !== 'primary') {
-      primaryTabId.value = message.sender
-      connection.value = message.state
-      error.value = message.error
+    if (message.type === 'request-state' && role.value === 'primary') {
+      post({ type: 'state', sender: tabId, state: connection.value, error: error.value })
+    }
+    if (message.type === 'event' && role.value !== 'primary' && message.sender === primaryTabId.value) applyEvent(message.name, message.data)
+    if (message.type === 'state' && role.value !== 'primary' && message.sender === primaryTabId.value) {
+      setConnection(message.state, message.error)
     }
     if (message.type === 'takeover') becomeSecondary(message.sender, 'connecting')
     if (message.type === 'released') setTimeout(checkLeadership, electionDelayMs)
@@ -222,6 +277,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     started = true
     window.addEventListener('pagehide', release)
     window.addEventListener('pageshow', checkLeadership)
+    document.addEventListener('visibilitychange', handleVisibility)
     if (typeof BroadcastChannel === 'undefined') {
       // Older embedded browsers cannot relay events between tabs. Preserve
       // realtime correctness there by using an independent stream per tab.
@@ -238,12 +294,15 @@ export const useRealtimeStore = defineStore('realtime', () => {
   function stop() {
     started = false
     electionSequence += 1
+    clearSnapshotRetry()
+    snapshotRequested = false
     release()
     if (heartbeat) clearInterval(heartbeat)
     heartbeat = null
     window.removeEventListener('storage', handleStorage)
     window.removeEventListener('pagehide', release)
     window.removeEventListener('pageshow', checkLeadership)
+    document.removeEventListener('visibilitychange', handleVisibility)
     channel?.close()
     channel = null
   }

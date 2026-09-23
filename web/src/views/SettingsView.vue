@@ -6,6 +6,7 @@ import {
   Bot, Check, CheckCircle2, Clipboard, Cpu, Download, Eye, EyeOff, ExternalLink, FileClock, Film,
   KeyRound, Network, RefreshCw, RotateCcw, SlidersHorizontal, SquareTerminal, Trash2, TriangleAlert, Waypoints, Wrench,
 } from '@lucide/vue'
+import TelegramRuntimeControls from '@/components/TelegramRuntimeControls.vue'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useSettingsStore } from '@/stores/settings'
 import { useProxyStore } from '@/stores/proxy'
@@ -57,7 +58,10 @@ watch(() => settings.value, (value) => {
   form.value = { ...value, allowed_networks: [...value.allowed_networks] }
   networks.value = value.allowed_networks.join('\n')
 }, { immediate: true })
-watch(() => proxy.value, (value) => {
+watch(() => proxy.value, (value, previous) => {
+  // Background status refreshes must not discard a proxy edit in progress.
+  if (proxyForm.value && previous
+    && (proxyForm.value.mode !== previous.mode || proxyForm.value.url !== previous.url)) return
   proxyForm.value = value ? { ...value } : null
 }, { immediate: true })
 watch(() => telegram.value, (value) => {
@@ -257,7 +261,7 @@ async function saveTelegramToken() {
               <Network :size="18" class="shrink-0" />
               <span>{{ t('settings.proxyRemote') }}</span>
             </div>
-            <div v-else-if="proxy.loading" class="mt-5 min-h-24 animate-pulse rounded-xl bg-[var(--app-surface-2)]" :aria-label="t('settings.proxyLoading')"></div>
+            <div v-else-if="proxy.loading && !proxyForm" class="mt-5 min-h-24 animate-pulse rounded-xl bg-[var(--app-surface-2)]" :aria-label="t('settings.proxyLoading')"></div>
             <div v-else-if="!proxyForm" class="error-panel mt-5" role="alert">
               <span>{{ t('settings.proxyLoadError') }}</span>
               <button class="secondary-btn ml-auto shrink-0" type="button" @click="proxy.refresh">{{ t('common.retry') }}</button>
@@ -298,7 +302,7 @@ async function saveTelegramToken() {
               </div>
             </div>
             <div v-if="!isHost" class="info-panel mt-5"><Network :size="18" class="shrink-0" /><span>{{ t('settings.telegramRemote') }}</span></div>
-            <div v-else-if="telegram.loading" class="mt-5 min-h-36 animate-pulse rounded-xl bg-[var(--app-surface-2)]" :aria-label="t('settings.telegramLoading')"></div>
+            <div v-else-if="telegram.loading && !telegramForm" class="mt-5 min-h-36 animate-pulse rounded-xl bg-[var(--app-surface-2)]" :aria-label="t('settings.telegramLoading')"></div>
             <div v-else-if="telegramForm && telegram.value" class="mt-6 space-y-5">
               <label class="setting-row rounded-xl bg-[var(--app-surface-2)] px-4 py-3">
                 <span><span class="setting-title">{{ t('settings.enableTelegram') }}</span><span class="setting-help">{{ t('settings.enableTelegramHelp') }}</span></span>
@@ -316,6 +320,8 @@ async function saveTelegramToken() {
                 </ul>
                 <p v-else class="mt-2 text-[11px] leading-5 text-emerald-500">{{ t('settings.telegramReadyHelp') }}</p>
               </div>
+
+              <TelegramRuntimeControls />
 
               <fieldset class="space-y-5 transition-opacity" :class="{ 'opacity-50': !telegramForm.enabled }" :disabled="!telegramForm.enabled">
                 <div class="rounded-xl bg-[var(--app-surface-2)] p-4">
@@ -370,7 +376,6 @@ async function saveTelegramToken() {
                 </div>
                 <label class="flex items-start gap-3 text-xs leading-5"><input v-model="telegramForm.privacy_acknowledged" class="mt-1" type="checkbox" /><span>{{ t('settings.privacy') }}</span></label>
               </fieldset>
-              <div v-if="telegram.value.status.error" class="warning-panel"><TriangleAlert :size="18" class="shrink-0" /><span>{{ telegram.value.status.error }}</span></div>
               <div class="flex min-h-10 flex-wrap items-center justify-between gap-3">
                 <span class="text-xs" aria-live="polite"><span v-if="telegram.saved" class="helper text-emerald-500"><CheckCircle2 :size="15" />{{ t('settings.telegramUpdated') }}</span></span>
                 <button class="primary-btn" type="button" :disabled="telegram.saving || (telegramForm.enabled && telegramSetupIssues.length > 0)" @click="saveTelegramSettings">{{ telegram.saving ? t('settings.saving') : t('settings.saveTelegram') }}</button>

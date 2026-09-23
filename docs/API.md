@@ -111,6 +111,7 @@ poll reconnects on proxy changes.
 - `PUT /api/telegram/settings`
 - `PUT|DELETE /api/telegram/token`
 - `POST /api/telegram/test`
+- `POST /api/telegram/restart`
 
 Every Telegram endpoint is host-device only. The integration response contains
 typed non-secret settings plus connection state, token presence/source, bot
@@ -123,6 +124,16 @@ or removing a token hot-reconfigures the single outbound poller.
 delivery, while `upload_limit_mb` is an integer from 1 through 50 and defaults
 to 50 for older stored settings. Files above the limit remain local and produce
 a normal completion message without an attachment.
+
+Restart requires saved `enabled: true`; otherwise it returns `INVALID_SETTINGS`.
+It schedules a fresh connection cycle without waiting for Telegram's network
+response and returns the integration snapshot. Existing work is cancelled and
+joined before replacement. The polling offset and saved configuration survive.
+Status adds `failed_attempts` (0–3) and nullable UTC `retry_at`. Temporary failures
+retry after 10 and 60 seconds, then remain in `error` until restart or a saved
+proxy/settings change. A successful update poll resets the budget. Permanent
+errors stop immediately; rate limits may lengthen a retry delay. Opted-in proxy
+changes also wake a worker that has exhausted its retries.
 
 ## Runtime and diagnostics
 
@@ -143,7 +154,10 @@ runtime, and disabled mode clears all runtime defaults.
 
 ## Events
 
-`GET /api/events` is an SSE stream with keepalives. Event names are:
+`GET /api/events` is an SSE stream with an immediate `: connected` opening
+comment and 15-second keepalives. The comment confirms stream availability only;
+it contains no application state. Clients refresh status snapshots when the
+stream connects or reconnects, since events are not replayed. Event names are:
 
 - `download.created`, `download.progress`, `download.postprocessing`,
   `download.completed`, `download.failed`, `download.stopped`

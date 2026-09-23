@@ -17,7 +17,8 @@ download process when it is spawned. Telegram Bot API traffic can opt into it
 with its integration setting and is explicitly direct otherwise. Changing the
 route does not interrupt an active download; queued work uses the latest
 setting. An opted-in Telegram poller cancels its current request and reconnects
-immediately through the new route.
+immediately through the new route, resetting its retry budget even when it is
+waiting or has stopped after three failed attempts.
 
 The proxy does not route Fetch's Axum listener, browser-to-Fetch traffic, file
 streaming over the LAN, browser navigation, or managed runtime downloads.

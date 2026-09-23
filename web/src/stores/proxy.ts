@@ -10,7 +10,13 @@ export const useProxyStore = defineStore('proxy', () => {
   const saved = ref(false)
   const error = ref<string | null>(null)
 
-  async function refresh() {
+  let refreshInFlight: Promise<void> | null = null
+  function refresh() {
+    refreshInFlight ??= loadSnapshot().finally(() => { refreshInFlight = null })
+    return refreshInFlight
+  }
+
+  async function loadSnapshot() {
     loading.value = true
     try {
       value.value = await getProxySettings()

@@ -4,6 +4,53 @@ Maintained by implementation agents. Record real defects, architecture
 mismatches, and missing mandatory behavior with an ID, status, affected
 subsystem, expected behavior, actual behavior, and notes.
 
+## BUG-033 — Runtime summary stays stale until backend activity
+
+Status: RESOLVED
+
+Affected:
+- fetch-server SSE stream initialization
+- web status stores, realtime coordinator, and connection labels
+
+Expected: Status becomes available without clicking a backend action and
+recovers automatically after reconnecting or returning to the tab.
+
+Actual: An idle SSE stream emitted no initial bytes before its 15-second
+keepalive or the next application event. Reconnection did not reload snapshots;
+secondary tabs inferred connectivity from a lease, and delayed REST responses
+could overwrite newer runtime/Telegram events.
+
+Resolution: Send an immediate non-data opening comment, refresh snapshots on
+connection/reconnection/visibility, retry failed reads while connected, and
+share overlapping status reads. Preserve newer events, request the actual
+primary state, and ignore replaced-stream/old-primary updates. Host-only data
+remains inaccessible to LAN clients. Regression coverage includes automatic
+browser recovery without user actions; see `docs/ACCEPTANCE.md`.
+
+## BUG-032 — Telegram stops recovering after a startup network failure
+
+Status: RESOLVED
+
+Affected:
+- app/fetch Telegram lifecycle
+- fetch-core / fetch-server Telegram status and restart contract
+- web Integrations settings
+
+Expected: Temporary startup and polling failures allow three attempts with
+10-second and 60-second waits, then stop with an actionable error. Users can
+restart Telegram, and saved proxy changes can recover an exhausted worker.
+
+Actual: The initial identity request exited the worker on any error, removing
+its proxy-change subscription. Established polling retried indefinitely, and
+the UI had no explicit restart control or retry deadline.
+
+Resolution: Added a shared bounded recovery cycle, cancellable waits and idle
+error states, proxy-change reset, host-only restart, and localized countdown /
+exhaustion UI. Restart serializes cancellation and replacement and preserves
+SQLite offsets. Deterministic lifecycle, API authorization, component, and
+desktop/mobile browser coverage pass; see `docs/ACCEPTANCE.md` for commands.
+Live operation through the user's proxy has not been reproduced locally.
+
 ## Release verification
 
 Status: LOCAL VERIFICATION COMPLETE FOR 0.1.6

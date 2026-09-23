@@ -8,6 +8,8 @@ export const useRuntimeStore = defineStore('runtime', () => {
   const javascript = ref<JavaScriptRuntime[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+  let eventRevision = 0
+  const componentRevisions = new Map<string, number>()
 
   const ytdlp = computed(() => components.value.find((item) => item.name === 'yt-dlp'))
   const needsSetup = computed(() => ytdlp.value?.status === 'missing' || ytdlp.value?.status === 'failed')
@@ -18,11 +20,22 @@ export const useRuntimeStore = defineStore('runtime', () => {
     else components.value[index] = component
   }
 
-  async function refresh() {
+  let refreshInFlight: Promise<void> | null = null
+  function refresh() {
+    refreshInFlight ??= loadSnapshot().finally(() => { refreshInFlight = null })
+    return refreshInFlight
+  }
+
+  async function loadSnapshot() {
+    const revision = eventRevision
     loading.value = true
     error.value = null
     try {
-      ;[components.value, javascript.value] = await Promise.all([getRuntime(), getJavaScriptRuntimes()])
+      const [snapshot, detected] = await Promise.all([getRuntime(), getJavaScriptRuntimes()])
+      for (const component of snapshot) {
+        if ((componentRevisions.get(component.name) ?? 0) <= revision) merge(component)
+      }
+      javascript.value = detected
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.runtimeUnavailable')
     } finally {
@@ -39,7 +52,11 @@ export const useRuntimeStore = defineStore('runtime', () => {
     }
   }
 
-  function applyEvent(payload: unknown) { merge(payload as RuntimeComponent) }
+  function applyEvent(payload: unknown) {
+    const component = payload as RuntimeComponent
+    componentRevisions.set(component.name, ++eventRevision)
+    merge(component)
+  }
 
   return { components, javascript, ytdlp, needsSetup, loading, error, refresh, act, applyEvent }
 })

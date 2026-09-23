@@ -8,7 +8,13 @@ export const useStatusStore = defineStore('status', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function refresh() {
+  let refreshInFlight: Promise<void> | null = null
+  function refresh() {
+    refreshInFlight ??= loadSnapshot().finally(() => { refreshInFlight = null })
+    return refreshInFlight
+  }
+
+  async function loadSnapshot() {
     loading.value = true
     error.value = null
     try {

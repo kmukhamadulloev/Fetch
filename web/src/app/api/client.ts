@@ -149,6 +149,8 @@ export interface TelegramSettings {
   privacy_acknowledged: boolean
 }
 export interface TelegramStatus {
+  failed_attempts: number
+  retry_at: string | null
   state: 'disabled' | 'connecting' | 'connected' | 'backing_off' | 'error'
   token_configured: boolean
   token_source: 'native' | 'environment' | 'missing'
@@ -301,6 +303,10 @@ export function putTelegramToken(token: string): Promise<TelegramIntegration> {
 export function deleteTelegramToken(): Promise<TelegramIntegration> {
   return jsonRequest('/api/telegram/token', { method: 'DELETE' })
 }
+export async function restartTelegram(): Promise<TelegramIntegration> {
+  return jsonRequest('/api/telegram/restart', { method: 'POST' })
+}
+
 export function testTelegramConnection(): Promise<TelegramIntegration> {
   return jsonRequest('/api/telegram/test', { method: 'POST' })
 }
