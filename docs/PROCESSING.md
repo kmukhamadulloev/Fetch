@@ -3,6 +3,12 @@
 Status: implementation contract for the active unversioned goal. This document
 separates planned behavior from delivered acceptance evidence. See GOAL.md.
 
+Delivered foundation: typed validated requests/lifecycle, migration 0008,
+persistent process records with private recovery options, nullable download
+linkage and historical source/origin fields, and an atomic database transaction
+for output registration plus process completion. Scheduler, runtime adapter,
+HTTP processing routes, and new UI are still pending; checkpoint 2 is incomplete.
+
 ## Supported output matrix
 
 | Output | Re-encode | Quality presets | Stream copy |
@@ -99,9 +105,9 @@ A successful derived output remains when its source is deleted.
 
 Planned routes, all under the existing allowed-client policy:
 
-- GET `/api/completed/{id}/processing`: source revision/technical data, supported
+- GET `/api/files/{id}/processing`: source revision/technical data, supported
   outputs/modes/quality, edit limits, preservation notices, and runtime readiness.
-- POST `/api/completed/{id}/processes`: typed conversion/edit request, revision,
+- POST `/api/files/{id}/processes`: typed conversion/edit request, revision,
   basename, format, quality, copy flag, edit options, omission acknowledgement;
   returns the accepted process record. Reject unknown fields.
 - GET `/api/processes`: persisted non-download processes newest first.

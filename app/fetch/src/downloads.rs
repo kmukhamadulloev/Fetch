@@ -729,7 +729,9 @@ async fn validate_completed_path(
     );
     Ok(CompletedFile {
         id: Uuid::new_v4(),
-        job_id: job.id,
+        job_id: Some(job.id),
+        origin: None,
+        source_file_id: None,
         playlist: job.request.playlist.clone(),
         filename,
         path: canonical,

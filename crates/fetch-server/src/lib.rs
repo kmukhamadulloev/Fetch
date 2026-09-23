@@ -1764,7 +1764,9 @@ mod tests {
         tokio::fs::write(&path, b"0123456789").await.unwrap();
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: uuid::Uuid::new_v4(),
+            job_id: Some(uuid::Uuid::new_v4()),
+            origin: None,
+            source_file_id: None,
             playlist: None,
             filename: "media.mp4".into(),
             path,
@@ -1809,7 +1811,9 @@ mod tests {
             .unwrap();
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: uuid::Uuid::new_v4(),
+            job_id: Some(uuid::Uuid::new_v4()),
+            origin: None,
+            source_file_id: None,
             playlist: None,
             filename: "media.mp4".into(),
             path: media_path,
@@ -1843,7 +1847,9 @@ mod tests {
     async fn reveal_is_loopback_only_while_completed_delete_is_available_to_allowed_clients() {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: uuid::Uuid::new_v4(),
+            job_id: Some(uuid::Uuid::new_v4()),
+            origin: None,
+            source_file_id: None,
             playlist: None,
             filename: "media.mp4".into(),
             path: "media.mp4".into(),
@@ -1891,7 +1897,9 @@ mod tests {
     async fn playback_progress_can_be_saved_and_cleared_by_opaque_file_id() {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: uuid::Uuid::new_v4(),
+            job_id: Some(uuid::Uuid::new_v4()),
+            origin: None,
+            source_file_id: None,
             playlist: None,
             filename: "media.mp4".into(),
             path: "media.mp4".into(),
@@ -2013,7 +2021,9 @@ mod tests {
     async fn metadata_api_resolves_opaque_ids_and_validates_background_requests() {
         let file = fetch_core::CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: uuid::Uuid::new_v4(),
+            job_id: Some(uuid::Uuid::new_v4()),
+            origin: None,
+            source_file_id: None,
             playlist: None,
             filename: "fixture.mp4".into(),
             path: "/private/fixture.mp4".into(),

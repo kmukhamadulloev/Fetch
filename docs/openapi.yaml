@@ -596,10 +596,12 @@ components:
         updated_at: {type: string, format: date-time}
     CompletedFile:
       type: object
-      required: [id, job_id, playlist, filename, thumbnail_available, size_bytes, mime_type, browser_playable, playback, created_at]
+      required: [id, job_id, origin, source_file_id, playlist, filename, thumbnail_available, size_bytes, mime_type, browser_playable, playback, created_at]
       properties:
         id: {type: string, format: uuid}
-        job_id: {type: string, format: uuid}
+        job_id: {type: [string, "null"], format: uuid}
+        origin: {type: [string, "null"], enum: [conversion, edit, null]}
+        source_file_id: {type: [string, "null"], format: uuid}
         playlist:
           anyOf:
             - {$ref: '#/components/schemas/PlaylistContext'}

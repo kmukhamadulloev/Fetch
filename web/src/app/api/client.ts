@@ -95,7 +95,9 @@ export interface DownloadJob extends DownloadRequest {
 }
 export interface CompletedFile {
   id: string
-  job_id: string
+  job_id: string | null
+  origin?: 'conversion' | 'edit' | null
+  source_file_id?: string | null
   playlist: PlaylistContext | null
   filename: string
   thumbnail_available: boolean

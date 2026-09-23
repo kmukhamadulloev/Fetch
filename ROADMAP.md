@@ -253,6 +253,9 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 
 - [x] 1. Define contracts, capabilities/presets, lifecycle, recovery, and migrations.
 - [ ] 2. Implement persistent FFmpeg processing and integrate safe metadata saves.
+  Domain/schema slice delivered: validated requests, lifecycle, persistence,
+  independent output records, and populated migration/atomicity tests.
+  Shared scheduler, adapter, and metadata integration remain pending.
 - [ ] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
 - [ ] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
 - [ ] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.

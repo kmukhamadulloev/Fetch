@@ -239,9 +239,19 @@ impl Storage {
     }
 
     pub async fn insert_completed_file(&self, file: &CompletedFile) -> Result<(), StorageError> {
-        sqlx::query("INSERT INTO completed_files (id, job_id, filename, path, thumbnail_path, size_bytes, mime_type, title, browser_playable, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        let mut transaction = self.pool.begin().await?;
+        Self::insert_completed_in(&mut transaction, file).await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
+    async fn insert_completed_in(
+        transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        file: &CompletedFile,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO completed_files (id, job_id, filename, path, thumbnail_path, size_bytes, mime_type, title, browser_playable, created_at, origin, source_file_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(file.id.to_string())
-            .bind(file.job_id.to_string())
+            .bind(file.job_id.map(|id| id.to_string()))
             .bind(&file.filename)
             .bind(file.path.to_string_lossy().as_ref())
             .bind(file.thumbnail_path.as_ref().map(|path| path.to_string_lossy().into_owned()))
@@ -250,12 +260,84 @@ impl Storage {
             .bind(&file.title)
             .bind(file.browser_playable)
             .bind(file.created_at.to_rfc3339())
+            .bind(file.origin.map(|kind| match kind { fetch_core::ProcessingKind::Conversion => "conversion", fetch_core::ProcessingKind::Edit => "edit", fetch_core::ProcessingKind::Metadata => "metadata" }))
+            .bind(file.source_file_id.map(|id| id.to_string()))
+            .execute(&mut **transaction).await?;
+        Ok(())
+    }
+
+    pub async fn insert_processing_job(
+        &self,
+        job: &fetch_core::ProcessingJob,
+        private_json: &str,
+    ) -> Result<(), StorageError> {
+        sqlx::query("INSERT INTO processing_jobs (id, record_json, private_json, created_at) VALUES (?, ?, ?, ?)")
+            .bind(job.id.to_string()).bind(to_json(job)?).bind(private_json).bind(job.created_at.to_rfc3339())
             .execute(&self.pool).await?;
         Ok(())
     }
 
+    pub async fn update_processing_job(
+        &self,
+        job: &fetch_core::ProcessingJob,
+        private_json: &str,
+    ) -> Result<(), StorageError> {
+        let result = sqlx::query(
+            "UPDATE processing_jobs SET record_json = ?, private_json = ? WHERE id = ?",
+        )
+        .bind(to_json(job)?)
+        .bind(private_json)
+        .bind(job.id.to_string())
+        .execute(&self.pool)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StorageError::Data("Processing job not found".into()));
+        }
+        Ok(())
+    }
+
+    pub async fn processing_jobs(
+        &self,
+    ) -> Result<Vec<(fetch_core::ProcessingJob, String)>, StorageError> {
+        sqlx::query("SELECT record_json, private_json FROM processing_jobs ORDER BY created_at ASC, rowid ASC")
+            .fetch_all(&self.pool).await?.into_iter().map(|row| Ok((from_json(row.try_get("record_json")?)?, row.try_get("private_json")?))).collect()
+    }
+
+    /// Commit the library entry and terminal process state in the same transaction.
+    pub async fn finish_processing_job(
+        &self,
+        job: &fetch_core::ProcessingJob,
+        private_json: &str,
+        file: &CompletedFile,
+    ) -> Result<(), StorageError> {
+        if job.state != fetch_core::ProcessingState::Completed
+            || job.output_file_id != Some(file.id)
+            || file.source_file_id != Some(job.source_file_id)
+            || file.origin != Some(job.kind)
+        {
+            return Err(StorageError::Data(
+                "Invalid completed processing output".into(),
+            ));
+        }
+        let mut transaction = self.pool.begin().await?;
+        Self::insert_completed_in(&mut transaction, file).await?;
+        let result = sqlx::query(
+            "UPDATE processing_jobs SET record_json = ?, private_json = ? WHERE id = ?",
+        )
+        .bind(to_json(job)?)
+        .bind(private_json)
+        .bind(job.id.to_string())
+        .execute(&mut *transaction)
+        .await?;
+        if result.rows_affected() != 1 {
+            return Err(StorageError::Data("Processing job not found".into()));
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn list_completed_files(&self) -> Result<Vec<CompletedFile>, StorageError> {
-        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id ORDER BY completed_files.created_at DESC")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files LEFT JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id ORDER BY completed_files.created_at DESC")
             .fetch_all(&self.pool)
             .await?
             .into_iter()
@@ -267,7 +349,7 @@ impl Storage {
         &self,
         id: uuid::Uuid,
     ) -> Result<Option<CompletedFile>, StorageError> {
-        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.id = ?")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files LEFT JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.id = ?")
             .bind(id.to_string())
             .fetch_optional(&self.pool)
             .await?
@@ -279,7 +361,7 @@ impl Storage {
         &self,
         job_id: uuid::Uuid,
     ) -> Result<Option<CompletedFile>, StorageError> {
-        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.job_id = ?")
+        sqlx::query("SELECT completed_files.*, download_jobs.request_json AS job_request_json, playback_progress.position_seconds AS playback_position_seconds, playback_progress.duration_seconds AS playback_duration_seconds, playback_progress.completed AS playback_completed, playback_progress.updated_at AS playback_updated_at FROM completed_files LEFT JOIN download_jobs ON download_jobs.id = completed_files.job_id LEFT JOIN playback_progress ON playback_progress.file_id = completed_files.id WHERE completed_files.job_id = ?")
             .bind(job_id.to_string())
             .fetch_optional(&self.pool)
             .await?
@@ -669,7 +751,10 @@ fn decode_job(row: sqlx::sqlite::SqliteRow) -> Result<DownloadJob, StorageError>
 
 fn decode_completed(row: sqlx::sqlite::SqliteRow) -> Result<CompletedFile, StorageError> {
     let size: i64 = row.try_get("size_bytes")?;
-    let request: fetch_core::DownloadRequest = from_json(row.try_get("job_request_json")?)?;
+    let request = row
+        .try_get::<Option<String>, _>("job_request_json")?
+        .map(from_json::<fetch_core::DownloadRequest>)
+        .transpose()?;
     let thumbnail_path = row
         .try_get::<Option<String>, _>("thumbnail_path")?
         .map(PathBuf::from);
@@ -689,8 +774,19 @@ fn decode_completed(row: sqlx::sqlite::SqliteRow) -> Result<CompletedFile, Stora
         .transpose()?;
     Ok(CompletedFile {
         id: parse(row.try_get::<String, _>("id")?)?,
-        job_id: parse(row.try_get::<String, _>("job_id")?)?,
-        playlist: request.playlist,
+        job_id: row
+            .try_get::<Option<String>, _>("job_id")?
+            .map(parse)
+            .transpose()?,
+        origin: row
+            .try_get::<Option<String>, _>("origin")?
+            .map(|value| from_json(format!("\"{value}\"")))
+            .transpose()?,
+        source_file_id: row
+            .try_get::<Option<String>, _>("source_file_id")?
+            .map(parse)
+            .transpose()?,
+        playlist: request.and_then(|r| r.playlist),
         filename: row.try_get("filename")?,
         path: PathBuf::from(row.try_get::<String, _>("path")?),
         thumbnail_available: thumbnail_path.is_some(),
@@ -739,6 +835,196 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn processing_history_and_private_recovery_options_survive_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("processing.sqlite");
+        let storage = Storage::open(&path).await.unwrap();
+        let mut job = fetch_core::ProcessingJob::new(
+            fetch_core::ProcessingKind::Edit,
+            uuid::Uuid::new_v4(),
+            "Edited copy".into(),
+        );
+        let private = r#"{"root":"/private/Edits","revision":"42-1000","options":{"rotate":90}}"#;
+        storage.insert_processing_job(&job, private).await.unwrap();
+        assert!(storage.insert_processing_job(&job, private).await.is_err());
+        job.transition(fetch_core::ProcessingState::Running)
+            .unwrap();
+        job.progress_percent = Some(42.);
+        storage.update_processing_job(&job, private).await.unwrap();
+        storage.pool.close().await;
+        let storage = Storage::open(&path).await.unwrap();
+        let records = storage.processing_jobs().await.unwrap();
+        assert_eq!(records, vec![(job.clone(), private.into())]);
+        // Recovery must be owned by the application, not fabricated by storage.
+        assert_eq!(records[0].0.state, fetch_core::ProcessingState::Running);
+        assert!(
+            !serde_json::to_string(&records[0].0)
+                .unwrap()
+                .contains("/private")
+        );
+        job.id = uuid::Uuid::new_v4();
+        assert!(storage.update_processing_job(&job, private).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn processing_migration_preserves_library_dependents_and_accepts_independent_exports() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .in_memory(true)
+                    .foreign_keys(true),
+            )
+            .await
+            .unwrap();
+        for migration in sqlx::migrate!().iter().filter(|m| m.version < 8) {
+            sqlx::raw_sql(&migration.sql).execute(&pool).await.unwrap();
+        }
+        let source = uuid::Uuid::new_v4();
+        let download = uuid::Uuid::new_v4();
+        sqlx::query("INSERT INTO download_jobs VALUES (?, '{}', 'completed', '{}', NULL, NULL, '2026-09-23T00:00:00Z', '2026-09-23T00:00:00Z')").bind(download.to_string()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO completed_files (id,job_id,filename,path,size_bytes,mime_type,title,browser_playable,created_at,thumbnail_path) VALUES (?,?,'original.mp4','/media/original.mp4',42,'video/mp4','Original',1,'2026-09-23T00:00:00Z','/media/cover.jpg')").bind(source.to_string()).bind(download.to_string()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO playback_progress VALUES (?,12,42,0,'2026-09-23T00:00:00Z')")
+            .bind(source.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO metadata_edits VALUES (?, '{\"source\":\"original\"}', 0)")
+            .bind(source.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(include_str!("../migrations/0008_processing.sql"))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let preserved: (String, String, String) =
+            sqlx::query_as("SELECT job_id,path,thumbnail_path FROM completed_files WHERE id=?")
+                .bind(source.to_string())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            preserved,
+            (
+                download.to_string(),
+                "/media/original.mp4".into(),
+                "/media/cover.jpg".into()
+            )
+        );
+        let position: f64 = sqlx::query_scalar("SELECT position_seconds FROM playback_progress")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(position, 12.);
+        let journal: String = sqlx::query_scalar("SELECT journal_json FROM metadata_edits")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(journal, r#"{"source":"original"}"#);
+        assert!(
+            sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&pool)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let storage = Storage { pool };
+        let now = chrono::Utc::now();
+        let file = CompletedFile {
+            id: uuid::Uuid::new_v4(),
+            job_id: None,
+            origin: Some(fetch_core::ProcessingKind::Conversion),
+            source_file_id: Some(source),
+            playlist: None,
+            filename: "converted.mp4".into(),
+            path: "/media/Converted/converted.mp4".into(),
+            thumbnail_path: None,
+            thumbnail_available: false,
+            size_bytes: 20,
+            mime_type: "video/mp4".into(),
+            title: Some("Converted".into()),
+            browser_playable: true,
+            playback: None,
+            created_at: now,
+        };
+        let mut job = fetch_core::ProcessingJob {
+            id: uuid::Uuid::new_v4(),
+            kind: fetch_core::ProcessingKind::Conversion,
+            source_file_id: source,
+            output_file_id: None,
+            title: "Converted".into(),
+            state: fetch_core::ProcessingState::Queued,
+            stage: "queued".into(),
+            progress_percent: None,
+            eta_seconds: None,
+            created_at: now,
+            started_at: None,
+            updated_at: now,
+            finished_at: None,
+            error: None,
+        };
+        storage
+            .insert_processing_job(&job, r#"{"root":"/media"}"#)
+            .await
+            .unwrap();
+        job.state = fetch_core::ProcessingState::Completed;
+        job.output_file_id = Some(file.id);
+        storage
+            .finish_processing_job(&job, "{}", &file)
+            .await
+            .unwrap();
+        let loaded = storage.get_completed_file(file.id).await.unwrap().unwrap();
+        assert_eq!(loaded, file);
+        assert_eq!(storage.processing_jobs().await.unwrap()[0].0, job);
+        storage.clear_metadata_edit(source).await.unwrap();
+        storage.delete_completed_file(source).await.unwrap();
+        assert_eq!(
+            storage
+                .get_completed_file(file.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .source_file_id,
+            Some(source)
+        );
+        assert!(
+            sqlx::query("SELECT * FROM playback_progress")
+                .fetch_all(&storage.pool)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            sqlx::query("PRAGMA foreign_key_check")
+                .fetch_all(&storage.pool)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let mut failed_output = file.clone();
+        failed_output.id = uuid::Uuid::new_v4();
+        failed_output.path = "/media/Converted/rollback.mp4".into();
+        job.id = uuid::Uuid::new_v4();
+        job.output_file_id = Some(failed_output.id);
+        assert!(
+            storage
+                .finish_processing_job(&job, "{}", &failed_output)
+                .await
+                .is_err()
+        );
+        assert!(
+            storage
+                .get_completed_file(failed_output.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
     async fn opens_database_and_runs_initial_migration() {
         let storage = Storage::open(Path::new(":memory:")).await.unwrap();
         storage.health_check().await.unwrap();
@@ -746,7 +1032,7 @@ mod tests {
             .fetch_one(storage.pool())
             .await
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 8);
         assert_eq!(
             storage.load_proxy_settings().await.unwrap(),
             ProxySettings::default()
@@ -797,7 +1083,9 @@ mod tests {
 
         let completed = CompletedFile {
             id: uuid::Uuid::new_v4(),
-            job_id: job.id,
+            job_id: Some(job.id),
+            origin: None,
+            source_file_id: None,
             playlist: job.request.playlist.clone(),
             filename: "media.mp4".into(),
             path: PathBuf::from("/tmp/media.mp4"),

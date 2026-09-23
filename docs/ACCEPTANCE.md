@@ -3,6 +3,53 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Processing domain/schema slice — Local verification (2026-09-23)
+
+This is checkpoint 1 plus the domain/schema portion of checkpoint 2, not delivery
+of Convert, Quick edit, or Processes. Remaining work is tracked in GOAL.md.
+
+- PASS — Structured format/quality/edit requests reject unsafe filenames,
+  unknown fields, invalid numeric ranges, overflow, and conflicting options.
+- PASS — Lifecycle validation disallows completing queued work or reopening
+  terminal attempts; metadata cancellation/retry are not advertised.
+- PASS — Migration 0008 upgrades populated pre-existing tables with foreign keys
+  enabled while retaining file IDs/paths/thumbnails, playback and metadata journals.
+- PASS — Independent exported records have nullable download linkage, explicit
+  source/origin, no playlist/playback, and survive source deletion.
+- PASS — Process records/private recovery options survive database reopen. Atomic
+  output registration rolls back when its process update cannot complete.
+- PASS — Existing download/library/API/metadata behavior passes regressions;
+  managed-runtime metadata saves still preserve originals and artwork correctly.
+- NOT APPLICABLE to this slice — New HTTP routes/SSE, scheduler, export adapter,
+  cancellation/recovery execution, and conversion/edit UI. These remain required.
+
+Exact final checks:
+
+- `cargo fmt --all -- --check` — PASS.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — PASS.
+- `cargo test --workspace` — PASS: 120 passed, 3 opt-in tests ignored.
+- `cargo build --workspace` — PASS.
+- `FETCH_METADATA_RUNTIME=/tmp/fetch-metadata-runtime cargo test -p fetch real_managed_metadata -- --ignored --nocapture`
+  — PASS: both real managed-FFmpeg metadata tests.
+- In `web`: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`
+  — PASS: 39 frontend tests and production build.
+- In `web`: `FETCH_E2E_PRODUCTION=1 npm run test:e2e -- --grep 'metadata|completed|Completed'`
+  — PASS: 22 desktop/mobile browser tests.
+- Relative documentation links and `git diff --check` — PASS.
+
+Full-goal gates remain unchecked individually:
+
+- [ ] A1 — New menu and metadata regression together: pending menu implementation.
+- [ ] A2 — Application conversion matrix/copy: pending adapter integration.
+- [ ] A3 — Six edits and synchronization: pending implementation.
+- [ ] A4 — Complete filesystem/library output safety: schema portion verified only.
+- [ ] A5 — Processes view, actions, history: pending UI/API/scheduler.
+- [ ] A6 — Runtime cancellation, recovery and consistency: pending execution layer.
+- [ ] A7 — Processing snapshots/SSE/LAN convergence: pending integration.
+- [ ] A8 — New forms/accessibility/localization: pending UI.
+- [ ] A9 — Application export real-runtime tests and aligned final docs: pending.
+- [ ] A10 — Full final goal suite/export smoke: pending; native/release unexecuted.
+
 ## Runtime summary recovery — Local verification (2026-09-23)
 
 - [x] S1 PASS — Idle SSE sends an immediate opening comment without waiting for

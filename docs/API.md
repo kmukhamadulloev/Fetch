@@ -49,6 +49,13 @@ own persisted progress and actions while the server safely places it under
 - `DELETE /api/files/{opaque_file_id}`
 - `PUT|DELETE /api/files/{opaque_file_id}/progress`
 
+Completed records retain their download `job_id` for downloaded files. The
+field is nullable for independent exports; `origin` is nullable or `conversion` /
+`edit`, and `source_file_id` is a nullable historical source UUID. Source deletion
+does not remove derived records. Existing downloads return null for the two new
+fields. Export creation endpoints are not delivered yet; the planned processing
+contract is in [PROCESSING.md](PROCESSING.md).
+
 File paths are never serialized and cannot be supplied to an endpoint. The
 stream route supports a single bounded, open-ended, or suffix `Range`, returns
 `206` and `Content-Range`, and returns `416` for invalid ranges. Neither route

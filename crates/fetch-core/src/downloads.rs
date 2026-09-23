@@ -297,7 +297,9 @@ impl DownloadJob {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CompletedFile {
     pub id: Uuid,
-    pub job_id: Uuid,
+    pub job_id: Option<Uuid>,
+    pub origin: Option<crate::ProcessingKind>,
+    pub source_file_id: Option<Uuid>,
     pub playlist: Option<PlaylistContext>,
     pub filename: String,
     #[serde(skip_serializing)]

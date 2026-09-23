@@ -2439,7 +2439,9 @@ mod tests {
             .storage
             .insert_completed_file(&CompletedFile {
                 id: Uuid::new_v4(),
-                job_id: job.id,
+                job_id: Some(job.id),
+                origin: None,
+                source_file_id: None,
                 playlist: None,
                 filename: "fixture.mp4".into(),
                 path,

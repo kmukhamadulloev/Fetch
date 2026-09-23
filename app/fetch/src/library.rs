@@ -283,7 +283,9 @@ pub(crate) mod tests {
         tokio::fs::write(&thumbnail, b"thumbnail").await.unwrap();
         let completed = CompletedFile {
             id: Uuid::new_v4(),
-            job_id: job.id,
+            job_id: Some(job.id),
+            origin: None,
+            source_file_id: None,
             playlist: job.request.playlist.clone(),
             filename: "media.mp4".into(),
             path: media,
@@ -323,7 +325,13 @@ pub(crate) mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(storage.get_job(completed.job_id).await.unwrap().is_some());
+        assert!(
+            storage
+                .get_job(completed.job_id.unwrap())
+                .await
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[tokio::test]
