@@ -9,7 +9,7 @@ import CompletedCardMenu from './CompletedCardMenu.vue'
 import { formatBytes } from '@/i18n/format'
 
 const props = defineProps<{ file: CompletedFile }>()
-const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile]; edit: [file: CompletedFile]; convert: [file: CompletedFile] }>()
+const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile]; edit: [file: CompletedFile]; convert: [file: CompletedFile]; quickEdit: [file: CompletedFile] }>()
 const library = useLibraryStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
@@ -43,7 +43,7 @@ function playLabel() {
         <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
         <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
       </div>
-      <CompletedCardMenu :id="file.id" :name="file.title ?? file.filename" @metadata="emit('edit', file)" @convert="emit('convert', file)" />
+      <CompletedCardMenu :id="file.id" :name="file.title ?? file.filename" @metadata="emit('edit', file)" @convert="emit('convert', file)" @quick-edit="emit('quickEdit', file)" />
     </div>
     <div class="p-4">
       <span v-if="file.origin" class="badge muted mb-2">{{ t(file.origin === 'conversion' ? 'exports.converted' : 'exports.edited') }}</span>

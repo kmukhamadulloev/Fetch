@@ -252,8 +252,7 @@ including navigating into a source playlist for metadata results.
 
 Reconnect and secondary-tab snapshots refresh jobs and the completed library.
 Late snapshots retain newer SSE state instead of reverting progress or dropping
-an export that finished during the request. The new menu/forms follow in the
-next checkpoints; no placeholder export action is exposed.
+an export that finished during the request. The separate export forms submit these jobs from the Completed card menu.
 
 
 ### Conversion
@@ -266,3 +265,14 @@ acknowledgement. Outputs go to Converted/ and show a Converted origin badge.
 The form traps/restores focus, guards dirty dismissal, disables duplicate submits,
 and preserves inputs on failure. Acceptance closes the modal and offers View
 process without navigating automatically. Mobile content scrolls above the footer.
+
+
+### Quick edit
+
+Quick edit is a separate wider dialog with native source playback (never a
+rendered edit preview), or Open/Download when playback is unavailable. Trim uses
+seconds within the source duration; video also offers clockwise rotation and
+optional audio removal. Selected operations form one export into Edits/.
+The source extension is preferred when supported; otherwise the user explicitly
+chooses a supported format. Output quality, preservation acknowledgement, dirty
+and submission handling match Convert. Derived cards show Edited.

@@ -257,7 +257,7 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
   metadata queue, opaque-ID API/SSE and real-runtime evidence are delivered.
 - [x] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
 - [x] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
-- [ ] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
+- [x] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
 - [ ] 6. Add crop/resize/volume and validate supported edit combinations.
 - [ ] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
 

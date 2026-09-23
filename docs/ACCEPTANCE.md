@@ -444,3 +444,17 @@ Validation: `npm run typecheck`, `npm run lint`, `npm test` (44 tests),
 (10 metadata scenarios passed; the two conversion scenarios passed on corrected
 rerun). Backend matrix evidence remains recorded in checkpoint 2.
 Whole-goal A1/A3/A8/A10 remain pending until Quick edit and final validation.
+
+
+## Processing checkpoint 5 — Basic quick edits
+
+PASS: separate Quick edit modal, trim/rotate/mute combined submission, invalid
+trim rejection, original-format preference, honest preview fallback and Edits/
+destination. `npm run typecheck`, `npm run lint`, `npm test` (44), `npm run build`
+and production Playwright `--grep 'quick edit|conversion menu|metadata menu'`
+(6 desktop/mobile cases) pass. Real managed-runtime matrix/combined edits test
+passes with `FETCH_METADATA_RUNTIME=/home/mkomron/.local/share/fetch/runtime
+cargo test -p fetch real_managed_processing_matrix_and_combined_edits -- --ignored --nocapture`.
+The former /tmp runtime directory was absent; that initial attempt failed with
+RuntimeMissing and was rerun successfully using the installed managed binaries.
+Crop/resize/volume UI and final whole-goal evidence remain pending.

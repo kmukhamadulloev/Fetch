@@ -1,9 +1,11 @@
+import { editMessages } from './editMessages'
 import { exportMessages } from './exportMessages'
 import { processingMessages } from './processingMessages'
 
 export const en = {
   processing: processingMessages.en,
   exports: exportMessages.en,
+  quickEdit: editMessages.en,
   metadata: {
     cachedArtwork: 'Library thumbnail; no artwork is embedded in this file.',
     "edit": "Edit metadata",
@@ -229,6 +231,7 @@ export const en = {
 export const ru = {
   processing: processingMessages.ru,
   exports: exportMessages.ru,
+  quickEdit: editMessages.ru,
   metadata: {
     cachedArtwork: 'Миниатюра библиотеки; в файл обложка не встроена.',
     "edit": "Изменить метаданные",
@@ -443,6 +446,7 @@ export const ru = {
 export const tg = {
   processing: processingMessages.tg,
   exports: exportMessages.tg,
+  quickEdit: editMessages.tg,
   metadata: {
     cachedArtwork: 'Тасвири китобхона; муқова дар файл ҷойгир нашудааст.',
     "edit": "Таҳрири метамаълумот",
