@@ -245,6 +245,23 @@ Approved scope and acceptance criteria: `docs/METADATA.md`.
 - [x] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
 - [x] Synchronize documentation and pass repository checks.
 
+## Processes, conversion, and quick edits — Approved active scope (unversioned)
+
+The complete agreed UX, architecture boundaries, ordered steps, and acceptance
+criteria are in [GOAL.md](GOAL.md). Implementation has not started.
+
+- [ ] 1. Define contracts, capabilities/presets, lifecycle, recovery, and migrations.
+- [ ] 2. Implement persistent FFmpeg processing and integrate safe metadata saves.
+- [ ] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
+- [ ] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
+- [ ] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
+- [ ] 6. Add crop/resize/volume and validate supported edit combinations.
+- [ ] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
+
+Explicit user-requested local exports are approved. Playback/preview transcoding,
+external-file imports, batch jobs, and multi-track editing remain outside scope.
+Release numbering and publication are not part of these implementation steps.
+
 ## Candidate ideas
 
 These are not commitments and must be promoted into a version before
@@ -262,4 +279,6 @@ implementation:
 
 - User accounts, profiles, cloud sync, and application authentication.
 - Public internet exposure and hosted services.
-- Server-side transcoding or a general-purpose media-server feature set.
+- Automatic/on-demand playback or live transcoding and a general-purpose
+  media-server feature set. Explicit local export jobs are covered by the active
+  approved conversion/quick-edit goal.

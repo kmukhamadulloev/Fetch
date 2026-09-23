@@ -66,6 +66,13 @@ Never add production logic such as `if youtube`, `if tiktok`, `if vimeo`, etc. S
 
 FFmpeg is used for normal yt-dlp media processing: merge, remux, audio extraction/conversion, metadata, subtitles, thumbnails, post-processing.
 
+The approved conversion/quick-edit goal in `GOAL.md` additionally permits explicit,
+user-requested FFmpeg processing of completed local files into saved outputs in
+`Converted/` and `Edits/` under the configured download directory. This is a
+bounded file-export capability, with originals preserved; it does not authorize
+live processing for playback or previews. The mandatory runtime/backend stack
+and local/LAN access model remain unchanged.
+
 Fetch must NOT become a transcoding server. Browser playback serves compatible completed files with HTTP Range support. If a browser cannot play a file, show Download/Open instead of transcoding it.
 
 ## UI rule
