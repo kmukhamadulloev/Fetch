@@ -229,14 +229,14 @@ following content.
 
 ## Metadata editor
 
-Individual completed-media cards have a permanently visible 44 px rounded pencil
+Individual completed-media cards have a permanently visible 44 px rounded three-dot menu
 button inset at the top-left of the image or placeholder. It is a sibling of the
 play button, so editing cannot trigger playback. Playlist cards remain unchanged.
-The pencil opens a modal with the basic audio/video fields and required artwork
+The Edit metadata menu item opens a modal with the basic audio/video fields and required artwork
 controls specified in `METADATA.md`. Advanced starts collapsed. Read-only file
 information has a separate disclosure. Save/Cancel stay visible in the footer;
 the content scrolls within the viewport. Dirty dismissal requires confirmation,
-keyboard focus stays inside the modal and returns to the invoking pencil, and
+keyboard focus stays inside the modal and returns to the invoking menu trigger, and
 loading/saving/failure states are announced. All form labels and actions are
 translated in English, Russian, and Tajik. Unsupported formats are read-only.
 
@@ -254,3 +254,15 @@ Reconnect and secondary-tab snapshots refresh jobs and the completed library.
 Late snapshots retain newer SSE state instead of reverting progress or dropping
 an export that finished during the request. The new menu/forms follow in the
 next checkpoints; no placeholder export action is exposed.
+
+
+### Conversion
+
+The individual-card menu offers Edit metadata and Convert, including placeholder
+covers and playlist children. Arrow keys navigate; Escape/outside click dismiss.
+The separate Convert modal offers installed-runtime formats, video/audio output,
+quality or compatible stream copy, safe basename, and explicit preservation
+acknowledgement. Outputs go to Converted/ and show a Converted origin badge.
+The form traps/restores focus, guards dirty dismissal, disables duplicate submits,
+and preserves inputs on failure. Acceptance closes the modal and offers View
+process without navigating automatically. Mobile content scrolls above the footer.

@@ -2,7 +2,7 @@
 
 ## Approved scope
 
-The top-left pencil on an individual completed card opens a modal. Basic audio
+Edit metadata in the top-left three-dot menu on an individual completed card opens a modal. Basic audio
 fields are title, artwork, artist, album, album artist, and track number. Basic
 video fields are title, artwork, creator, and description. Advanced starts
 collapsed and contains supported date, genre, copyright, comment, audio
@@ -24,7 +24,7 @@ and MKV are the initial targets; unsupported files explain their limitation.
 ## Acceptance criteria
 
 - A1: Individual audio/video cards open the modal through an accessible rounded
-  top-left pencil, without triggering playback; playlist cards remain unchanged.
+  top-left three-dot menu, without triggering playback; playlist cards remain unchanged.
 - A2: Basic/Advanced fields match the approved audio/video split and actual
   container capabilities; technical information is read-only.
 - A3: Real embedded tags can be read, changed, and cleared without renaming or
@@ -94,7 +94,7 @@ The form sends only changed tags. Track and disc totals are combined with their
 numbers for embedded tags; a total requires a number and cannot be smaller.
 Date is a text field so users may retain a year or fuller date. Technical
 information is read-only. The modal traps keyboard focus, restores focus to the
-pencil, locks background scrolling, guards route/tab dismissal, and keeps its
+menu trigger, locks background scrolling, guards route/tab dismissal, and keeps its
 footer visible on phones. Save status uses SSE plus a bounded REST polling
 fallback; no percentage is fabricated. Latest operation status is session-local
 (bounded to 256 entries); after restart clients reopen the recovered file.

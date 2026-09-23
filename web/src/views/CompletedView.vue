@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, LayoutGrid, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
 import SortDropdown from '@/components/SortDropdown.vue'
 import CompletedMediaCard from '@/components/CompletedMediaCard.vue'
+import ConvertDialog from '@/components/ConvertDialog.vue'
 import MetadataEditorDialog from '@/components/MetadataEditorDialog.vue'
 import MediaPlayerDialog from '@/components/MediaPlayerDialog.vue'
 import { useLibraryStore, type CompletedPlaylistGroup } from '@/stores/library'
@@ -27,6 +28,8 @@ const reverse = ref(false)
 const filters = ['all', 'audio', 'video', 'playlist'] as const
 const filterIcons = { all: LayoutGrid, audio: Music2, video: FileVideo, playlist: ListVideo }
 const selected = ref<CompletedFile | null>(null)
+const converting = ref<CompletedFile | null>(null)
+const acceptedProcess = ref<string | null>(null)
 const editing = ref<CompletedFile | null>(null)
 const pendingDelete = ref<CompletedFile | null>(null)
 const failedPlaylistThumbnails = ref(new Set<string>())
@@ -95,7 +98,7 @@ async function confirmDelete() {
         <span class="badge muted shrink-0"><ListVideo :size="12" />{{ activePlaylist.files.length }}</span>
       </div>
       <div class="mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3" data-playlist-gallery>
-        <CompletedMediaCard v-for="file in activePlaylist.files" :key="file.id" :file="file" @edit="editing = $event" @play="selected = $event" @delete="pendingDelete = $event" />
+        <CompletedMediaCard v-for="file in activePlaylist.files" :key="file.id" :file="file" @edit="editing = $event" @convert="converting = $event" @play="selected = $event" @delete="pendingDelete = $event" />
       </div>
     </template>
 
@@ -118,7 +121,7 @@ async function confirmDelete() {
       <div v-if="library.loading && !library.completed.length" class="card mt-6 flex min-h-48 items-center justify-center gap-2 p-8 text-sm text-muted" role="status"><LoaderCircle class="animate-spin" :size="18" />{{ t('completedView.loading') }}</div>
       <div v-else-if="libraryEntries.length" class="completed-grid mt-6 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <template v-for="entry in libraryEntries" :key="entry.kind === 'file' ? entry.file.id : `playlist-${entry.playlist.id}`">
-          <CompletedMediaCard v-if="entry.kind === 'file'" :file="entry.file" @edit="editing = $event" @play="selected = $event" @delete="pendingDelete = $event" />
+          <CompletedMediaCard v-if="entry.kind === 'file'" :file="entry.file" @edit="editing = $event" @convert="converting = $event" @play="selected = $event" @delete="pendingDelete = $event" />
           <article v-else class="playlist-card-shell min-w-0 w-full max-w-full" :data-playlist-id="entry.playlist.id">
             <div class="playlist-media-card media-card card min-w-0 w-full max-w-full overflow-hidden">
               <div class="media-cover">
@@ -141,6 +144,8 @@ async function confirmDelete() {
 
     <div v-if="requestedPlaylistId && !activePlaylist && !library.loading" class="card mt-6 flex min-h-64 flex-col items-center justify-center p-8 text-center"><div class="empty-icon"><ListVideo :size="22" /></div><h3 class="mt-4 text-sm font-semibold">{{ t('completedView.unavailable') }}</h3><p class="mt-2 text-xs text-muted">{{ t('completedView.unavailableHelp') }}</p><button class="secondary-btn mt-5" type="button" @click="closePlaylist"><ArrowLeft :size="15" />{{ t('completedView.back') }}</button></div>
 
+    <div v-if="acceptedProcess" class="card fixed bottom-24 right-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-3 p-4 shadow-xl" role="status"><span class="text-sm">{{ t('exports.added') }}</span><RouterLink class="secondary-btn" :to="{ path: '/processes', query: { process: acceptedProcess } }">{{ t('exports.view') }}</RouterLink><button type="button" class="icon-btn" :aria-label="t('common.close')" @click="acceptedProcess = null"><X :size="16" /></button></div>
+    <ConvertDialog v-if="converting" :file="converting" @close="converting = null" @accepted="acceptedProcess = $event.id" />
     <MetadataEditorDialog v-if="editing" :file="editing" @close="editing = null" />
     <MediaPlayerDialog v-if="selected" :file="selected" :local-client="settings.network?.local_client ?? false" @close="selected = null" />
     <div v-if="pendingDelete" class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-file-title">

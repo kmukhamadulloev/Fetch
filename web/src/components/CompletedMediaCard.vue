@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Download, ExternalLink, FileVideo, FolderOpen, LoaderCircle, Music2, Pencil, Play, Trash2 } from '@lucide/vue'
+import { Download, ExternalLink, FileVideo, FolderOpen, LoaderCircle, Music2, Play, Trash2 } from '@lucide/vue'
 import { useLibraryStore } from '@/stores/library'
 import { useSettingsStore } from '@/stores/settings'
 import type { CompletedFile } from '@/app/api/client'
+import CompletedCardMenu from './CompletedCardMenu.vue'
 import { formatBytes } from '@/i18n/format'
 
 const props = defineProps<{ file: CompletedFile }>()
-const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile]; edit: [file: CompletedFile] }>()
+const emit = defineEmits<{ play: [file: CompletedFile]; delete: [file: CompletedFile]; edit: [file: CompletedFile]; convert: [file: CompletedFile] }>()
 const library = useLibraryStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
@@ -42,9 +43,10 @@ function playLabel() {
         <Music2 v-else-if="file.mime_type.startsWith('audio/')" class="text-muted" :size="48" /><FileVideo v-else class="text-muted" :size="48" />
         <span v-if="file.playback" class="watch-progress" :class="{ completed: file.playback.completed }"><span :style="{ width: `${progressPercent()}%` }"></span></span>
       </div>
-      <button class="metadata-pencil" type="button" :aria-label="t('metadata.editNamed', { name: file.title ?? file.filename })" :title="t('metadata.edit')" @click.stop="emit('edit', file)"><Pencil :size="17" /></button>
+      <CompletedCardMenu :id="file.id" :name="file.title ?? file.filename" @metadata="emit('edit', file)" @convert="emit('convert', file)" />
     </div>
     <div class="p-4">
+      <span v-if="file.origin" class="badge muted mb-2">{{ t(file.origin === 'conversion' ? 'exports.converted' : 'exports.edited') }}</span>
       <div class="flex items-start gap-3">
         <div class="min-w-0 flex-1"><h3 class="truncate text-sm font-semibold" :title="file.title ?? file.filename">{{ file.title ?? file.filename }}</h3><p class="mt-1 truncate text-[11px] text-muted" :title="file.filename">{{ file.filename }} · {{ bytes(file.size_bytes) }}</p></div>
         <button class="icon-btn size-8 shrink-0 text-rose-300" type="button" :aria-label="t('mediaCard.deleteNamed', { name: file.title ?? file.filename })" @click="emit('delete', file)"><Trash2 :size="14" /></button>

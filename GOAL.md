@@ -4,7 +4,7 @@ Implement separate **Convert** and **Quick edit** workflows for completed media,
 and evolve **Downloads** into **Processes** so users can follow downloads,
 conversions, edits, and metadata saves in one place.
 
-Status: in progress; contracts and capability design verified. This goal is unversioned.
+Status: in progress; backend, Processes, and conversion workflow verified; quick-edit UI and final hardening remain. This goal is unversioned.
 Release numbering, tagging, pushing, and publication are separate work.
 
 ## Read first

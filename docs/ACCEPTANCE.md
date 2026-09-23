@@ -431,3 +431,16 @@ explicitly to complete every remaining script step.
   diagnostics remain unchanged.
 - [x] PASS — translated desktop and mobile layouts remain contained and
   functional in browser tests.
+
+
+## Processing checkpoint 4 — Conversion interface
+
+PASS: capability-driven Convert form, stream-copy choice, extraction, safe names,
+preservation acknowledgement, independent origin badges, menu keyboard handling,
+dirty guard, submission failure retention and accepted-job focus link.
+Metadata regression: ten desktop/mobile scenarios pass through the new menu.
+Validation: `npm run typecheck`, `npm run lint`, `npm test` (44 tests),
+`npm run build`; production Playwright `--grep 'metadata|conversion menu'`
+(10 metadata scenarios passed; the two conversion scenarios passed on corrected
+rerun). Backend matrix evidence remains recorded in checkpoint 2.
+Whole-goal A1/A3/A8/A10 remain pending until Quick edit and final validation.
