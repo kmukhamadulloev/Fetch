@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { useProcessesStore } from '@/stores/processes'
 import { useDownloadsStore } from '@/stores/downloads'
 import { useLibraryStore } from '@/stores/library'
 import { useRuntimeStore } from '@/stores/runtime'
@@ -32,7 +33,7 @@ const runtimeEvents = new Set([
 ])
 const libraryEvents = new Set(['library.completed', 'library.progress', 'library.progress-cleared', 'library.metadata'])
 const telegramEvents = new Set(['telegram.status'])
-const eventNames = [...downloadEvents, ...runtimeEvents, ...libraryEvents, ...telegramEvents]
+const eventNames = ['process.updated', ...downloadEvents, ...runtimeEvents, ...libraryEvents, ...telegramEvents]
 
 type RealtimeRole = 'electing' | 'primary' | 'secondary'
 type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline'
@@ -49,6 +50,7 @@ function createTabId() {
 }
 
 export const useRealtimeStore = defineStore('realtime', () => {
+  const processes = useProcessesStore()
   const downloads = useDownloadsStore()
   const library = useLibraryStore()
   const runtime = useRuntimeStore()
@@ -83,14 +85,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
     if (snapshotInFlight) { snapshotRequested = true; return }
     snapshotInFlight = (async () => {
       await Promise.all([
-        status.refresh(), runtime.refresh(),
+        status.refresh(), runtime.refresh(), processes.refresh(), downloads.refresh(), library.refresh(),
         !settings.network ? settings.refresh() : Promise.resolve(),
       ])
       if (!started || connection.value !== 'connected') return
       const host = settings.network?.local_client === true
       if (host) await Promise.all([telegram.refresh(), proxy.refresh()])
       if (started && connection.value === 'connected'
-        && (status.error || runtime.error || !settings.network || (host && (telegram.error || proxy.error)))) {
+        && (status.error || runtime.error || processes.error || downloads.error || library.error || !settings.network || (host && (telegram.error || proxy.error)))) {
         snapshotRetry = setTimeout(refreshSnapshots, 5000)
       }
     })().finally(() => {
@@ -153,6 +155,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
         downloads.applyEvent(payload)
         library.applyDownload(payload)
       }
+      else if (name === 'process.updated') processes.applyEvent(payload)
       else if (runtimeEvents.has(name)) runtime.applyEvent(payload)
       else if (name === 'library.metadata') library.applyMetadata(payload)
       else if (name === 'library.completed') library.applyCompleted(payload)

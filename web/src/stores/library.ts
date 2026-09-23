@@ -59,15 +59,38 @@ export const useLibraryStore = defineStore('library', () => {
       .sort((left, right) => right.latest_created_at.localeCompare(left.latest_created_at))
   })
 
-  async function refresh() {
-    loading.value = true
-    try {
-      const [files, jobs] = await Promise.all([getCompleted(), getHistory()])
-      completed.value = files
-      history.value = jobs
-      error.value = null
-    } catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.libraryUnavailable') }
-    finally { loading.value = false }
+  let inFlight: Promise<void> | null = null
+  let revision = 0
+  const changed = new Map<string, number>()
+  let historyRevision = 0
+  const historyChanged = new Map<string, number>()
+  const deleted = new Set<string>()
+  const pendingPlayback = new Map<string, PlaybackProgress | null>()
+  function refresh() {
+    if (inFlight) return inFlight
+    const started = revision
+    const historyStarted = historyRevision
+    loading.value = completed.value.length === 0
+    inFlight = (async () => {
+      try {
+        const [files, jobs] = await Promise.all([getCompleted(), getHistory()])
+        const current = new Map(completed.value.map(file => [file.id, file]))
+        completed.value = files.filter(file => !deleted.has(file.id) || (changed.get(file.id) ?? 0) <= started)
+          .map(file => {
+            const result = (changed.get(file.id) ?? 0) > started ? current.get(file.id) ?? file : file
+            if (pendingPlayback.has(file.id)) result.playback = pendingPlayback.get(file.id) ?? null
+            return result
+          })
+        pendingPlayback.clear()
+        for (const [id, file] of current) if ((changed.get(id) ?? 0) > started && !completed.value.some(item => item.id === id)) completed.value.unshift(file)
+        const previousHistory = new Map(history.value.map(job => [job.id, job]))
+        history.value = jobs.map(job => (historyChanged.get(job.id) ?? 0) > historyStarted ? previousHistory.get(job.id) ?? job : job)
+        for (const [id, job] of previousHistory) if ((historyChanged.get(id) ?? 0) > historyStarted && !history.value.some(item => item.id === id)) history.value.unshift(job)
+        error.value = null
+      } catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('errors.libraryUnavailable') }
+      finally { loading.value = false; inFlight = null }
+    })()
+    return inFlight
   }
 
   async function reveal(file: CompletedFile) {
@@ -81,6 +104,8 @@ export const useLibraryStore = defineStore('library', () => {
     actingId.value = file.id
     try {
       await deleteCompleted(file.id)
+      changed.set(file.id, ++revision)
+      deleted.add(file.id)
       completed.value = completed.value.filter((item) => item.id !== file.id)
       error.value = null
       return true
@@ -92,6 +117,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   function applyCompleted(payload: unknown) {
     const file = payload as CompletedFile
+    changed.set(file.id, ++revision)
     const index = completed.value.findIndex((item) => item.id === file.id)
     if (index === -1) completed.value.unshift(file)
     else { completed.value[index] = file; thumbnailVersions.value[file.id] = Date.now() }
@@ -99,6 +125,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   function applyDownload(payload: unknown) {
     const job = payload as DownloadJob
+    historyChanged.set(job.id, ++historyRevision)
     const index = history.value.findIndex((item) => item.id === job.id)
     if (index === -1) history.value.unshift(job)
     else history.value[index] = job
@@ -106,14 +133,18 @@ export const useLibraryStore = defineStore('library', () => {
 
   function applyPlayback(payload: unknown) {
     const progress = payload as PlaybackProgress
+    changed.set(progress.file_id, ++revision)
     const file = completed.value.find((item) => item.id === progress.file_id)
     if (file) file.playback = progress
+    else pendingPlayback.set(progress.file_id, progress)
   }
 
   function clearPlayback(payload: unknown) {
     const id = payload as string
+    changed.set(id, ++revision)
     const file = completed.value.find((item) => item.id === id)
     if (file) file.playback = null
+    else pendingPlayback.set(id, null)
   }
 
   async function saveProgress(file: CompletedFile, positionSeconds: number, durationSeconds: number) {

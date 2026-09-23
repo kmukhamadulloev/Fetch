@@ -80,3 +80,16 @@ describe('library store', () => {
     expect(library.playlists[0].files.map((item) => item.title)).toEqual(['First item', 'Second item'])
   })
 })
+
+it('preserves exports and playback received during a reconnect snapshot', async () => {
+  let respond!: (response: Response) => void
+  vi.stubGlobal('fetch', vi.fn((path: string) => path === '/api/completed' ? new Promise<Response>(resolve => { respond = resolve }) : Promise.resolve(new Response('[]'))))
+  const store = useLibraryStore()
+  const pending = store.refresh()
+  store.applyPlayback({ file_id: file.id, position_seconds: 25, duration_seconds: 100, completed: false, updated_at: '2026-09-23T00:00:00Z' })
+  store.applyCompleted({ ...file, id: 'derived', job_id: null, origin: 'conversion', source_file_id: file.id })
+  respond(new Response(JSON.stringify([file])))
+  await pending
+  expect(store.completed).toHaveLength(2)
+  expect(store.completed.find(item => item.id === file.id)?.playback?.position_seconds).toBe(25)
+})

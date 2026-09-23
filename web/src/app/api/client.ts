@@ -347,3 +347,29 @@ export function saveMetadata(id: string, update: MetadataUpdate): Promise<Metada
   return jsonRequest(`/api/files/${id}/metadata`, { method: 'PUT', body: JSON.stringify(update) })
 }
 export function getMetadataStatus(id: string): Promise<MetadataSaveStatus> { return jsonRequest(`/api/files/${id}/metadata/status`) }
+
+export type OutputFormat = 'mp4' | 'mkv' | 'm4a' | 'mp3' | 'flac' | 'wav'
+export interface QuickEdits {
+  start_seconds?: number | null; end_seconds?: number | null; rotate: number; mute: boolean
+  crop?: { x: number; y: number; width: number; height: number } | null
+  resize?: { width: number; height: number } | null
+  volume?: number | null
+}
+export interface ExportRequest {
+  revision: string; filename: string; format: OutputFormat; quality: 'compact' | 'balanced' | 'high'
+  stream_copy: boolean; acknowledge_omissions: boolean; edits?: QuickEdits | null
+}
+export interface ProcessingCapabilities {
+  revision: string; duration_seconds: number; video: boolean; audio: boolean
+  width: number | null; height: number | null; formats: OutputFormat[]; copy_formats: OutputFormat[]; notices: string[]
+}
+export interface ProcessingJob {
+  id: string; kind: 'conversion' | 'edit' | 'metadata'; source_file_id: string; output_file_id: string | null
+  title: string; state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+  stage: string; progress_percent: number | null; eta_seconds: number | null
+  created_at: string; started_at: string | null; updated_at: string; finished_at: string | null; error: string | null
+}
+export function getProcesses(): Promise<ProcessingJob[]> { return jsonRequest('/api/processes') }
+export function processingCapabilities(id: string): Promise<ProcessingCapabilities> { return jsonRequest(`/api/files/${id}/processing`) }
+export function startExport(id: string, request: ExportRequest): Promise<ProcessingJob> { return jsonRequest(`/api/files/${id}/processes`, { method: 'POST', body: JSON.stringify(request) }) }
+export function processAction(id: string, action: 'cancel' | 'retry'): Promise<ProcessingJob> { return jsonRequest(`/api/processes/${id}/${action}`, { method: 'POST' }) }

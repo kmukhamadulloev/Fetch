@@ -255,7 +255,7 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 - [x] 2. Implement persistent FFmpeg processing and integrate safe metadata saves.
   Shared FIFO worker, managed adapter, cancellation/recovery, safe publication,
   metadata queue, opaque-ID API/SSE and real-runtime evidence are delivered.
-- [ ] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
+- [x] 3. Deliver Processes for downloads/metadata, filters, SSE, and route compatibility.
 - [ ] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
 - [ ] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
 - [ ] 6. Add crop/resize/volume and validate supported edit combinations.

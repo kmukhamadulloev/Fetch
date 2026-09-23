@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, LayoutGrid, CircleCheck, FileVideo, ListVideo, LoaderCircle, Music2, Trash2, TriangleAlert, X } from '@lucide/vue'
@@ -54,6 +54,16 @@ const libraryEntries = computed<LibraryEntry[]>(() => {
 })
 
 onMounted(() => Promise.all([library.refresh(), settings.refresh()]))
+
+watch([() => route.query.file, () => library.completed.length], async () => {
+  const file = library.completed.find(item => item.id === route.query.file)
+  if (!file) return
+  mediaFilter.value = 'all'
+  if (file.playlist && route.query.playlist !== file.playlist.id) await router.replace({ name: 'completed', query: { file: file.id, playlist: file.playlist.id } })
+  await nextTick()
+  const card = document.getElementById(`completed-${file.id}`)
+  card?.focus(); card?.scrollIntoView({ block: 'center' })
+}, { immediate: true })
 
 function bytes(value: number) { return formatBytes(value, locale.value) }
 function playlistThumbnailFailed(id: string) {

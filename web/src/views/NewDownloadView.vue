@@ -77,7 +77,7 @@ async function addDownload() {
         duration_seconds: media.result.duration_seconds,
       })
     }
-    await router.push('/downloads')
+    await router.push('/processes')
   } catch (cause) {
     addError.value = cause instanceof Error ? cause.message : t('newDownload.addError')
   } finally { adding.value = false }

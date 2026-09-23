@@ -3,6 +3,22 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Processes UI checkpoint — Local verification (2026-09-23)
+
+- PASS — Desktop/mobile navigation uses Processes; old download URLs redirect.
+- PASS — Real download rows retain Stop/Resume/Retry, filters and progress;
+  persisted processing rows show only valid cancel/retry actions and metadata
+  indeterminate progress. Type/status filters and elapsed/output links work.
+- PASS — Initial/reconnect reads and process.updated dispatch are integrated;
+  late snapshots preserve newer process/download/library updates.
+- PASS — English/Russian/Tajik message structures and frontend checks pass.
+- NOT APPLICABLE to checkpoint 3 — Conversion/edit modals and card menu are next.
+
+Commands: in web, `npm run typecheck`, `npm run lint`, `npm test` (43 passed),
+`npm run build`, and `FETCH_E2E_PRODUCTION=1 npm run test:e2e -- --grep 'Processes|downloads status|analyze, configure|playlist entries|runtime summary|one primary'`
+(12 passed on desktop/mobile). `git diff --check` passed. No Rust execution
+logic changed in this checkpoint; backend evidence is recorded below.
+
 ## Processing execution checkpoint — Local verification (2026-09-23)
 
 - PASS — One persisted FIFO worker executes metadata, conversions and edits;

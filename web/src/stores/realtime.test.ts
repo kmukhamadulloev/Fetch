@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useProcessesStore } from './processes'
 import { useDownloadsStore } from './downloads'
 import { useLibraryStore } from './library'
 import { useRealtimeStore } from './realtime'
@@ -139,6 +140,8 @@ describe('realtime coordinator', () => {
 
     expect(realtime.connection).toBe('connected')
     expect(downloads.jobs[0]?.progress_percent).toBe(42)
+    source.dispatchEvent(new MessageEvent('process.updated', { data: JSON.stringify({ id: 'conversion', kind: 'conversion', state: 'running', progress_percent: 30, updated_at: '2026-09-23T00:00:00Z' }) }))
+    expect(useProcessesStore().jobs[0]?.progress_percent).toBe(30)
     expect(telegram.value?.status.state).toBe('connected')
     expect(telegram.value?.status.bot_username).toBe('fetch_bot')
     expect(telegram.value?.settings.allowed_user_ids).toEqual([123])

@@ -35,6 +35,7 @@ async function mockApi(
     const path = new URL(request.url()).pathname
     if (!path.startsWith('/api/')) return route.fallback()
     if (path === '/api/events') return route.fulfill({ status: 204 })
+    if (path === '/api/processes') return route.fulfill({ json: [] })
     if (path === '/api/status') return route.fulfill({ json: { version: '0.1.0', server: 'ready', runtime_ready: runtime.every((item) => item.status === 'ready'), storage_ready: true } })
     if (path === '/api/runtime/javascript') return route.fulfill({ json: [
       { name: 'deno', detected: false, version: null },
@@ -119,7 +120,7 @@ test('analyze, configure, queue, and save settings', async ({ page }) => {
   await page.getByLabel('Maximum quality').selectOption('720p')
   await page.getByLabel('Video codec').selectOption('h264')
   await page.getByRole('button', { name: 'Add to downloads' }).click()
-  await expect(page).toHaveURL(/\/downloads$/)
+  await expect(page).toHaveURL(/\/processes$/)
   await expect(page.getByText('Fixture media')).toBeVisible()
   await expect(page.getByText('25.0%')).toBeVisible()
   await expect(page.getByText('0:12')).toBeVisible()
@@ -322,7 +323,7 @@ test('playlist entries retain shared folder context and item order', async ({ pa
   await expect(page.getByRole('heading', { name: 'Fixture playlist' })).toBeVisible()
   await expect(page.getByText('Saved in an ordered folder')).toBeVisible()
   await page.getByRole('button', { name: 'Add 2 items' }).click()
-  await expect(page).toHaveURL(/\/downloads$/)
+  await expect(page).toHaveURL(/\/processes$/)
   expect(requests).toHaveLength(2)
   expect(requests.map((request) => request.playlist)).toEqual([
     { id: 'fixture-list', title: 'Fixture playlist', index: 1 },
@@ -627,6 +628,7 @@ test('downloads status filters include queued jobs and reset empty results', asy
   await mockApi(page)
   const statuses = ['created', 'analyzing', 'ready', 'queued', 'downloading', 'postprocessing', 'completed', 'failed', 'stopped']
   await page.route('**/api/downloads', (route) => route.fulfill({ json: statuses.map((status, index) => ({
+    created_at: '2026-09-23T00:00:00Z', updated_at: '2026-09-23T00:00:00Z',
     id: String(index), status, title: status, url: 'https://example.com/media', mode: 'video',
     total_bytes: null, downloaded_bytes: null, progress_percent: null, duration_seconds: null,
   })) }))
@@ -755,3 +757,29 @@ for (const [locale, edit, title, advanced, save] of [
     await expect(dialog).not.toContainText('metadata.')
   })
 }
+
+test('Processes merges job types and preserves the old downloads route', async ({ page }) => {
+  await mockApi(page)
+  const base = { source_file_id: completedFixture[0].id, output_file_id: null, stage: 'processing', progress_percent: null, eta_seconds: null, created_at: '2026-09-23T00:00:00Z', started_at: '2026-09-23T00:00:00Z', updated_at: '2026-09-23T00:00:01Z', finished_at: null, error: null }
+  const jobs = [
+    { ...base, id: 'conversion', kind: 'conversion', title: 'Converting media', state: 'running', progress_percent: 25 },
+    { ...base, id: 'metadata', kind: 'metadata', title: 'Saving tags', state: 'running' },
+    { ...base, id: 'edit', kind: 'edit', title: 'Edited media', state: 'failed', stage: 'failed', error: 'Export failed' },
+  ]
+  await page.route('**/api/processes', route => route.fulfill({ json: jobs }))
+  await page.route('**/api/processes/conversion/cancel', route => { jobs[0] = { ...jobs[0], state: 'cancelled', stage: 'cancelled' }; return route.fulfill({ json: jobs[0] }) })
+  await page.goto('/downloads')
+  await expect(page).toHaveURL(/\/processes$/)
+  await expect(page.locator('article')).toHaveCount(3)
+  await expect(page.locator('#process-metadata button')).toHaveCount(0)
+  await expect(page.locator('#process-metadata [role="progressbar"]')).not.toHaveAttribute('aria-valuenow')
+  await page.getByRole('button', { name: 'Conversions', exact: true }).click()
+  await expect(page.locator('article')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.locator('#process-conversion')).toContainText('Cancelled')
+  await expect(page.getByRole('button', { name: 'Retry from start' })).toBeVisible()
+  await page.getByRole('button', { name: 'All types', exact: true }).click()
+  await page.getByRole('button', { name: 'Error', exact: true }).click()
+  await expect(page.locator('article')).toHaveCount(1)
+  await expect(page.locator('article')).toContainText('Edited media')
+})

@@ -239,3 +239,18 @@ the content scrolls within the viewport. Dirty dismissal requires confirmation,
 keyboard focus stays inside the modal and returns to the invoking pencil, and
 loading/saving/failure states are announced. All form labels and actions are
 translated in English, Russian, and Tajik. Unsupported formats are read-only.
+
+## Processes (active local-media goal)
+
+The navigation formerly called Downloads is now Processes at `/processes`;
+`/downloads` redirects with query/hash preserved. Its merged list retains the
+existing download row and controls, and adds persisted metadata/conversion/edit
+rows, type and status filters, elapsed time, real/unknown progress and output
+links. Metadata has no cancellation/retry button; exports cancel or retry from
+scratch. A `process` query focuses a job. Output links focus the completed card,
+including navigating into a source playlist for metadata results.
+
+Reconnect and secondary-tab snapshots refresh jobs and the completed library.
+Late snapshots retain newer SSE state instead of reverting progress or dropping
+an export that finished during the request. The new menu/forms follow in the
+next checkpoints; no placeholder export action is exposed.

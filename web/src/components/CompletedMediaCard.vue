@@ -29,7 +29,7 @@ function playLabel() {
 </script>
 
 <template>
-  <article class="media-card card min-w-0 w-full max-w-full overflow-hidden">
+  <article :id="`completed-${file.id}`" tabindex="-1" class="media-card card min-w-0 w-full max-w-full overflow-hidden">
     <div class="relative">
       <button v-if="file.browser_playable" class="media-cover group w-full" type="button" :aria-label="t('mediaCard.playNamed', { name: file.title ?? file.filename })" @click="emit('play', file)">
         <img v-if="file.thumbnail_available && !thumbnailFailed" class="size-full object-cover" :src="library.thumbnailUrl(file)" alt="" loading="lazy" @error="thumbnailFailed = true" />

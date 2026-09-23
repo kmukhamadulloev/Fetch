@@ -11,7 +11,7 @@ describe('AppNavigation', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
-        { path: '/downloads', component: { template: '<div />' } },
+        { path: '/processes', component: { template: '<div />' } },
         { path: '/completed', component: { template: '<div />' } },
         { path: '/history', component: { template: '<div />' } },
         { path: '/settings', component: { template: '<div />' } },
@@ -22,7 +22,7 @@ describe('AppNavigation', () => {
     await router.isReady()
     const wrapper = mount(AppNavigation, { props: { variant: 'desktop' }, global: { plugins: [router, i18n] } })
     expect(wrapper.text()).toContain('New download')
-    expect(wrapper.text()).toContain('Downloads')
+    expect(wrapper.text()).toContain('Processes')
     expect(wrapper.text()).not.toContain('2')
     expect(wrapper.find('.mobile-bar').exists()).toBe(false)
   })
@@ -33,7 +33,7 @@ describe('AppNavigation', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div />' } },
-        { path: '/downloads', component: { template: '<div />' } },
+        { path: '/processes', component: { template: '<div />' } },
         { path: '/completed', component: { template: '<div />' } },
         { path: '/settings', component: { template: '<div />' } },
       ],

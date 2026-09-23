@@ -9,7 +9,7 @@ defineProps<{
 const { t } = useI18n()
 const items = [
   { to: '/', label: 'nav.newDownload', short: 'nav.newShort', icon: PlusCircle },
-  { to: '/downloads', label: 'nav.downloads', short: 'nav.downloads', icon: Activity },
+  { to: '/processes', label: 'processing.title', short: 'processing.title', icon: Activity },
   { to: '/completed', label: 'nav.completed', short: 'nav.files', icon: CircleCheck },
   { to: '/history', label: 'nav.history', icon: History, desktopOnly: true },
   { to: '/settings', label: 'nav.settings', short: 'nav.settings', icon: Settings, system: true },

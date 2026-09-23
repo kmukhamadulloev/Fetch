@@ -37,3 +37,15 @@ describe('downloads store', () => {
     vi.unstubAllGlobals()
   })
 })
+
+it('preserves progress received while a reconnect snapshot is pending', async () => {
+  let respond!: (response: Response) => void
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { respond = resolve })))
+  const store = useDownloadsStore()
+  const pending = store.refresh()
+  store.applyEvent(job('downloading', 60))
+  respond(new Response(JSON.stringify([job('queued')])))
+  await pending
+  expect(store.jobs[0].progress_percent).toBe(60)
+  vi.unstubAllGlobals()
+})

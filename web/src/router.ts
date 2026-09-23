@@ -1,14 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NewDownloadView from '@/views/NewDownloadView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import DownloadsView from '@/views/DownloadsView.vue'
+import ProcessesView from '@/views/ProcessesView.vue'
 import CompletedView from '@/views/CompletedView.vue'
 import HistoryView from '@/views/HistoryView.vue'
 import LogsView from '@/views/LogsView.vue'
 
 export const routeMeta = {
   new: ['routes.newTitle', 'routes.newSubtitle'],
-  downloads: ['routes.downloadsTitle', 'routes.downloadsSubtitle'],
+  downloads: ['processing.title', 'processing.subtitle'],
   completed: ['routes.completedTitle', 'routes.completedSubtitle'],
   history: ['routes.historyTitle', 'routes.historySubtitle'],
   settings: ['routes.settingsTitle', 'routes.settingsSubtitle'],
@@ -19,7 +19,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'new', component: NewDownloadView, meta: { ...meta('new') } },
-    { path: '/downloads', name: 'downloads', component: DownloadsView, meta: { ...meta('downloads') } },
+    { path: '/processes', name: 'downloads', component: ProcessesView, meta: { ...meta('downloads') } },
+    { path: '/downloads', redirect: to => ({ path: '/processes', query: to.query, hash: to.hash }) },
     { path: '/completed', name: 'completed', component: CompletedView, meta: { ...meta('completed') } },
     { path: '/history', name: 'history', component: HistoryView, meta: { ...meta('history') } },
     { path: '/settings', name: 'settings', component: SettingsView, meta: { ...meta('settings') } },

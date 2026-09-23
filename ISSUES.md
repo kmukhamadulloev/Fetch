@@ -9,8 +9,8 @@ subsystem, expected behavior, actual behavior, and notes.
 Status: IN PROGRESS — see GOAL.md and docs/PROCESSING.md.
 
 The shared scheduler, managed export adapter, processing API/SSE, and metadata
-queue integration are implemented. Processes navigation and conversion/edit UI
-remain pending. Filesystems without hard-link support reject publication with
+queue integration are implemented. Processes navigation, filters, actions and realtime snapshots are implemented.
+Conversion/edit modals and the card menu remain pending. Filesystems without hard-link support reject publication with
 an actionable disk/permissions error and preserve the source. Native-platform
 verification remains separate from local Linux evidence.
 
