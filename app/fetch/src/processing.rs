@@ -505,6 +505,7 @@ impl ProcessingManager {
                 }
                 .into();
                 job.error = Some(error.public_message());
+                job.error_code = Some(error.code());
                 tracing::warn!(process_id=%job.id,reason=%error.public_message(),"processing stopped");
             }
         }
@@ -780,6 +781,15 @@ mod tests {
         let failed = wait(&manager, retry.id).await;
         assert_eq!(failed.state, ProcessingState::Failed);
         assert!(failed.error.unwrap().contains("changed"));
+        assert_eq!(failed.error_code, Some(fetch_core::ErrorCode::Conflict));
+        let guard = metadata.lock.lock().await;
+        let missing_job = manager.retry(retry.id).await.unwrap();
+        tokio::fs::remove_file(&file.path).await.unwrap();
+        drop(guard);
+        assert_eq!(
+            wait(&manager, missing_job.id).await.state,
+            ProcessingState::Failed
+        );
         manager.shutdown().await;
     }
     #[tokio::test]

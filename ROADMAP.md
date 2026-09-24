@@ -245,10 +245,10 @@ Approved scope and acceptance criteria: `docs/METADATA.md`.
 - [x] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
 - [x] Synchronize documentation and pass repository checks.
 
-## Processes, conversion, and quick edits — Approved active scope (unversioned)
+## Processes, conversion, and quick edits — Implementation complete (unversioned)
 
 The complete agreed UX, architecture boundaries, ordered steps, and acceptance
-criteria are in [GOAL.md](GOAL.md). Implementation is in progress.
+criteria are in [GOAL.md](GOAL.md). Local implementation and acceptance are complete.
 The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.md).
 
 - [x] 1. Define contracts, capabilities/presets, lifecycle, recovery, and migrations.
@@ -259,7 +259,7 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 - [x] 4. Deliver conversion/extraction, Converted outputs, card menu, and Convert modal.
 - [x] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
 - [x] 6. Add crop/resize/volume and validate supported edit combinations.
-- [ ] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
+- [x] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
 
 Explicit user-requested local exports are approved. Playback/preview transcoding,
 external-file imports, batch jobs, and multi-track editing remain outside scope.

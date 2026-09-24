@@ -1,12 +1,14 @@
 # Local media processing
 
-Status: implementation contract for the active unversioned goal. This document
-separates planned behavior from delivered acceptance evidence. See GOAL.md.
+Status: implemented and locally verified (2026-09-24), unversioned.
+See GOAL.md and the individual evidence in ACCEPTANCE.md.
 
 Delivered backend: persistent FIFO worker shared by metadata and exports,
 managed FFmpeg execution/progress and FFprobe validation, cancellation/retry,
 no-clobber publication and startup recovery, and opaque-ID HTTP/SSE contracts.
-The Processes page merges these jobs with downloads. The separate Convert form and card menu are implemented; Quick edit supports trim, rotate, mute, crop, resize, and volume in one export.
+The Processes page merges these jobs with downloads. The separate Convert form
+and card menu are implemented; Quick edit supports trim, rotate, mute, crop,
+resize, and volume in one export.
 
 ## Supported output matrix
 
@@ -51,7 +53,8 @@ Trim after decoding, with output duration bounded to end minus start; allow one
 video frame plus audio encoder delay in tests. Reset timestamps consistently
 for audio and video. Stream copy is never offered for edits.
 
-Apply display orientation, then crop, then requested rotation (0/90/180/270),
+Apply display orientation and normalize non-square pixels (nearest even pixel
+on the original horizontal axis), then crop, then requested rotation (0/90/180/270),
 then resize. Remove obsolete rotation metadata. Crops are integer rectangles
 inside the display-oriented source; output H.264 dimensions must be positive
 even integers, at most 7680 per axis. Resize defaults to source dimensions and
@@ -66,7 +69,7 @@ Persistent kinds: conversion, edit, metadata. States: queued, running,
 completed, failed, cancelled, interrupted. Stages identify inspection,
 processing, validation, publication. Percent and ETA are nullable; parse actual
 FFmpeg `-progress` output, cap processing progress below 100 until publication.
-Persist timestamps and terminal errors; expose sanitized errors, not local paths.
+Persist timestamps and terminal errors with nullable stable error codes; expose sanitized errors, not local paths.
 
 A single application-owned FIFO scheduler executes these jobs. Metadata's
 existing replacement journal stays authoritative. Downloads retain their own

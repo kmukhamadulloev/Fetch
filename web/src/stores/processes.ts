@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getProcesses, processAction, type ProcessingJob } from '@/app/api/client'
+import { processingErrorKey } from '@/app/processing/errors'
 import { i18n } from '@/i18n'
 
 export const useProcessesStore = defineStore('processes', () => {
@@ -40,7 +41,7 @@ export const useProcessesStore = defineStore('processes', () => {
     if (acting.value) return
     acting.value = job.id
     try { const result = await processAction(job.id, action); applyEvent(result); error.value = null; return result }
-    catch (cause) { error.value = cause instanceof Error ? cause.message : i18n.global.t('processing.actionFailed') }
+    catch (cause) { error.value = i18n.global.t(processingErrorKey(cause)) }
     finally { acting.value = null }
   }
   return { jobs, loading, error, acting, refresh, applyEvent, act }

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { processingCapabilities, startExport, type CompletedFile, type ProcessingCapabilities, type OutputFormat, type ProcessingJob } from '@/app/api/client'
 import { useProcessesStore } from '@/stores/processes'
 import { safeOutputName } from '@/app/processing/validation'
+import { processingErrorKey } from '@/app/processing/errors'
 import ExportDialogFrame from './ExportDialogFrame.vue'
 const props = defineProps<{ file: CompletedFile }>()
 const emit = defineEmits<{ close: []; accepted: [job: ProcessingJob] }>()
@@ -21,7 +22,7 @@ watch(type, () => { if (!formats.value.includes(format.value)) format.value = fo
 watch(format, () => { copy.value = !!caps.value && !caps.value.formats.includes(format.value) && !!canCopy.value })
 async function load() {
   loading.value = true; error.value = ''
-  try { caps.value = await processingCapabilities(props.file.id); type.value = caps.value.video ? 'video' : 'audio'; format.value = formats.value[0] ?? 'mp4'; await Promise.resolve(); baseline.value = snapshot.value }
+  try { caps.value = await processingCapabilities(props.file.id); type.value = caps.value.video ? 'video' : 'audio'; format.value = formats.value[0] ?? 'mp4'; copy.value = !caps.value.formats.includes(format.value) && !!canCopy.value; await Promise.resolve(); baseline.value = snapshot.value }
   catch { error.value = t('exports.loadFailed') }
   finally { loading.value = false }
 }
@@ -29,7 +30,7 @@ async function submit() {
   if (disabled.value || busy.value || !caps.value) return
   busy.value = true; error.value = ''
   try { const job = await startExport(props.file.id, { revision: caps.value.revision, filename: filename.value.trim(), format: format.value, quality: quality.value, stream_copy: copy.value, acknowledge_omissions: ack.value }); processes.applyEvent(job); emit('accepted', job); emit('close') }
-  catch { error.value = t('exports.failed') }
+  catch (cause) { error.value = t(processingErrorKey(cause)) }
   finally { busy.value = false }
 }
 onMounted(load)
@@ -49,7 +50,7 @@ onMounted(load)
       <label v-if="canCopy" class="flex items-center gap-2 text-sm"><input v-model="copy" type="checkbox" :disabled="!caps.formats.includes(format)" />{{ t('exports.copy') }}</label>
       <p class="text-xs leading-5 text-muted">{{ t(copy ? 'exports.copyHelp' : 'exports.encode') }}</p>
       <label v-if="!copy && !['flac', 'wav'].includes(format)" class="grid gap-2 text-sm">{{ t('exports.quality') }}<select v-model="quality" :aria-label="t('exports.quality')" class="input min-w-0 w-full"><option v-for="item in ['compact', 'balanced', 'high']" :key="item" :value="item">{{ t(`exports.${item}`) }}</option></select></label>
-      <label class="grid gap-2 text-sm">{{ t('exports.filename') }}<input v-model="filename" :aria-label="t('exports.filename')" class="input min-w-0 w-full" required maxlength="180" autocomplete="off" /><span class="text-xs text-muted">.{{ format }}</span></label>
+      <label class="grid gap-2 text-sm">{{ t('exports.filename') }}<input v-model="filename" :aria-label="t('exports.filename')" class="input min-w-0 w-full" required maxlength="180" autocomplete="off" /><span class="text-xs text-muted">.{{ format }} · {{ t('exports.nameHelp') }}</span></label>
       <p class="text-xs text-muted">{{ t('exports.destination', { folder: 'Converted/' }) }}</p>
       <template v-if="caps.notices.length"><p class="text-xs leading-5 text-muted">{{ t('exports.limits') }}</p><label class="flex items-start gap-2 text-sm"><input v-model="ack" type="checkbox" class="mt-1" />{{ t('exports.acknowledge') }}</label></template>
     </fieldset>

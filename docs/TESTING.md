@@ -225,4 +225,18 @@ Run `cargo test -p fetch processing` for deterministic queue, missing-runtime,
 stale-source and publication recovery checks. With managed FFmpeg installed,
 run `FETCH_METADATA_RUNTIME=/tmp/fetch-metadata-runtime cargo test -p fetch real_managed_processing -- --ignored --nocapture`.
 This exercises real conversion/copy/edit output and queue/collision/cancel behavior.
-Full UI acceptance remains tracked separately in GOAL.md and ACCEPTANCE.md.
+The expanded real suite also verifies rotated anamorphic inputs, retained
+artwork/chapters and decoded audio volume. Point FETCH_METADATA_RUNTIME at an
+installed managed runtime root containing ffmpeg/ffmpeg and ffmpeg/ffprobe (or
+platform equivalents). Metadata smoke tests can prepare the temporary runtime;
+processing tests require it to exist. To exercise both suites together:
+
+```bash
+FETCH_METADATA_RUNTIME="$HOME/.local/share/fetch/runtime" cargo test -p fetch real_managed_ -- --ignored --nocapture
+```
+
+Run `FETCH_RUN_E2E=1 ./scripts/check.sh` for all mandatory local checks including
+production desktop/mobile browser tests. Export browser scenarios cover all
+three languages, copy-only runtimes, failure retention, duplicate submission,
+keyboard/dirty guards, six edit controls, and unsupported preview/format fallback.
+Native platform and interactive release checks remain separate.

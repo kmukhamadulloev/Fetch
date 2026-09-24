@@ -178,7 +178,7 @@ export interface DiagnosticsReport {
 }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(public readonly status: number, message: string, public readonly code?: string) {
     super(message)
   }
 }
@@ -216,8 +216,8 @@ async function jsonRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
   })
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-    throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.requestFailed', { status: response.status }))
+    const payload = await response.json().catch(() => null) as { error?: { message?: string; code?: string } } | null
+    throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.requestFailed', { status: response.status }), payload?.error?.code)
   }
   return response.json() as Promise<T>
 }
@@ -257,7 +257,7 @@ export function getCompleted(): Promise<CompletedFile[]> {
 export async function revealCompleted(id: string): Promise<void> {
   const response = await fetchApi(`/api/files/${id}/reveal`, { method: 'POST' })
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    const payload = await response.json().catch(() => null) as { error?: { message?: string; code?: string } } | null
     throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.openFolderStatus', { status: response.status }))
   }
 }
@@ -265,7 +265,7 @@ export async function revealCompleted(id: string): Promise<void> {
 export async function deleteCompleted(id: string): Promise<void> {
   const response = await fetchApi(`/api/files/${id}`, { method: 'DELETE' })
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+    const payload = await response.json().catch(() => null) as { error?: { message?: string; code?: string } } | null
     throw new ApiError(response.status, payload?.error?.message ?? i18n.global.t('errors.deleteFileStatus', { status: response.status }))
   }
 }
@@ -367,7 +367,7 @@ export interface ProcessingJob {
   id: string; kind: 'conversion' | 'edit' | 'metadata'; source_file_id: string; output_file_id: string | null
   title: string; state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
   stage: string; progress_percent: number | null; eta_seconds: number | null
-  created_at: string; started_at: string | null; updated_at: string; finished_at: string | null; error: string | null
+  created_at: string; started_at: string | null; updated_at: string; finished_at: string | null; error: string | null; error_code?: string | null
 }
 export function getProcesses(): Promise<ProcessingJob[]> { return jsonRequest('/api/processes') }
 export function processingCapabilities(id: string): Promise<ProcessingCapabilities> { return jsonRequest(`/api/files/${id}/processing`) }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Activity, CircleCheck, LayoutGrid, TriangleAlert } from '@lucide/vue'
+import { processingErrorKey } from '@/app/processing/errors'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -74,7 +75,7 @@ watch([() => route.query.process, () => rows.value.length], async () => {
               <p v-if="elapsed(row.process)" class="mt-2 text-[11px] text-muted">{{ t('processing.elapsed', { duration: elapsed(row.process) }) }}</p>
               <p v-if="row.process.eta_seconds != null" class="mt-1 text-[11px] text-muted">{{ t('common.remaining', { duration: `${Math.ceil(row.process.eta_seconds)}s` }) }}</p>
             </div>
-            <p v-if="row.process.error" class="error-panel mt-3">{{ row.process.error }}</p>
+            <div v-if="row.process.error" class="error-panel mt-3">{{ t(processingErrorKey(row.process.error_code)) }}<details class="mt-2 text-xs"><summary>{{ t('common.details') }}</summary>{{ row.process.error }}</details></div>
           </div></div>
           <div class="mt-4 flex justify-end gap-2"><RouterLink v-if="row.process.output_file_id" class="secondary-btn" :to="{ path: '/completed', query: { file: row.process.output_file_id } }">{{ t('processing.viewFile') }}</RouterLink><button v-if="action(row.process)" class="secondary-btn" type="button" :disabled="!!processes.acting" @click="act(row.process)">{{ t(`processing.${action(row.process)}`) }}</button></div>
         </article>

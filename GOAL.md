@@ -4,7 +4,9 @@ Implement separate **Convert** and **Quick edit** workflows for completed media,
 and evolve **Downloads** into **Processes** so users can follow downloads,
 conversions, edits, and metadata saves in one place.
 
-Status: in progress; backend, Processes, and conversion workflow verified; quick-edit UI and final hardening remain. This goal is unversioned.
+Status: implementation complete and locally verified (2026-09-24). All seven
+checkpoints and A1–A10 pass; evidence is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+This goal is unversioned. Native-platform release gates remain separate.
 Release numbering, tagging, pushing, and publication are separate work.
 
 ## Read first
@@ -190,7 +192,7 @@ acceptance based only on compilation or mocked process output.
 
 ## Acceptance criteria
 
-All items below are pending until verified and recorded in `docs/ACCEPTANCE.md`.
+All items below are verified PASS in `docs/ACCEPTANCE.md` (local Linux evidence).
 
 - A1: Three-dot menu opens the correct separate tool without triggering playback;
   metadata editing retains all previously accepted behavior.

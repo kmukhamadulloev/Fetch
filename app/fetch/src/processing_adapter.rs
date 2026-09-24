@@ -59,6 +59,37 @@ fn dimensions(i: &Inspection) -> (Option<u32>, Option<u32>) {
     }
     (w, h)
 }
+// Normalize non-square pixels before applying edits so displayed crop/resize
+// coordinates and the resulting square-pixel export have the same aspect ratio.
+fn export_dimensions(i: &Inspection) -> (Option<u32>, Option<u32>) {
+    let (w, h) = dimensions(i);
+    let Some(v) = video(i) else {
+        return (w, h);
+    };
+    let ratio = v["sample_aspect_ratio"]
+        .as_str()
+        .and_then(|s| s.split_once(':'))
+        .and_then(|(n, d)| Some((n.parse::<f64>().ok()?, d.parse::<f64>().ok()?)))
+        .filter(|(n, d)| n.is_finite() && d.is_finite() && *n > 0. && *d > 0.)
+        .map(|(n, d)| n / d)
+        .unwrap_or(1.);
+    let rotated = v["side_data_list"]
+        .as_array()
+        .and_then(|a| a.iter().find_map(|s| s["rotation"].as_i64()))
+        .is_some_and(|r| r.rem_euclid(180) == 90);
+    // Extend the original horizontal axis, even when orientation swaps axes.
+    let scale = |value: Option<u32>| {
+        value.map(|n| ((f64::from(n) * ratio / 2.).round().max(1.) * 2.) as u32)
+    };
+    if (ratio - 1.).abs() < 0.000001 {
+        (w, h)
+    } else if rotated {
+        (w, scale(h))
+    } else {
+        (scale(w), h)
+    }
+}
+
 fn copy_supported(i: &Inspection, f: OutputFormat) -> bool {
     use OutputFormat::*;
     let a = audio(i).and_then(|s| s["codec_name"].as_str());
@@ -125,7 +156,7 @@ impl ProcessingAdapter {
         .into_iter()
         .filter(|f| copy_supported(i, *f))
         .collect();
-        let (width, height) = dimensions(i);
+        let (width, height) = export_dimensions(i);
         // Container-specific tag mappings are not universal; acknowledgement is explicit.
         let mut notices = vec!["container_metadata".into()];
         if streams(i).iter().filter(|s| !cover(s)).count()
@@ -351,7 +382,11 @@ fn plan(
         .into(),
     );
     let mut dims = if has_video {
-        let (w, h) = dimensions(i);
+        let (w, h) = if r.stream_copy {
+            dimensions(i)
+        } else {
+            export_dimensions(i)
+        };
         Some((
             w.ok_or_else(|| invalid("Missing video dimensions"))?,
             h.ok_or_else(|| invalid("Missing video dimensions"))?,
@@ -381,6 +416,12 @@ fn plan(
             add("-pix_fmt", "yuv420p".into());
             let (mut w, mut h) = dims.unwrap();
             let mut filters = Vec::new();
+            if dimensions(i) != export_dimensions(i) {
+                if w > 7680 || h > 7680 {
+                    return Err(invalid("Normalized video dimensions exceed 7680 pixels"));
+                }
+                filters.push(format!("scale={w}:{h},setsar=1"));
+            }
             if let Some(e) = e {
                 if let Some(c) = &e.crop {
                     if c.x.checked_add(c.width).is_none_or(|n| n > w)
@@ -534,6 +575,219 @@ pub(crate) mod tests {
             acknowledge_omissions: true,
         }
     }
+    #[tokio::test]
+    #[ignore = "requires installed managed FFmpeg/FFprobe"]
+    async fn real_managed_processing_orientation_and_pixel_aspect() {
+        let adapter = real_adapter();
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("source.mp4");
+        source(&adapter, &input).await;
+        for rotated in [false, true] {
+            let anamorphic = dir.path().join(format!("anamorphic-{rotated}.mp4"));
+            adapter
+                .media
+                .run(
+                    adapter.media.paths.ffmpeg_executable(),
+                    &[
+                        "-v".into(),
+                        "error".into(),
+                        "-i".into(),
+                        input.to_string_lossy().into_owned(),
+                        "-vf".into(),
+                        "setsar=2/1".into(),
+                        "-c:v".into(),
+                        "libx264".into(),
+                        "-c:a".into(),
+                        "copy".into(),
+                        anamorphic.to_string_lossy().into_owned(),
+                    ],
+                    Duration::from_secs(20),
+                )
+                .await
+                .unwrap();
+            let source = if rotated {
+                let path = dir.path().join("oriented.mp4");
+                adapter
+                    .media
+                    .run(
+                        adapter.media.paths.ffmpeg_executable(),
+                        &[
+                            "-v".into(),
+                            "error".into(),
+                            "-display_rotation:v:0".into(),
+                            "90".into(),
+                            "-i".into(),
+                            anamorphic.to_string_lossy().into_owned(),
+                            "-c".into(),
+                            "copy".into(),
+                            path.to_string_lossy().into_owned(),
+                        ],
+                        Duration::from_secs(20),
+                    )
+                    .await
+                    .unwrap();
+                path
+            } else {
+                anamorphic
+            };
+            let original = tokio::fs::read(&source).await.unwrap();
+            let caps = adapter.capabilities(&source).await.unwrap();
+            let expected = if rotated {
+                (Some(64), Some(192))
+            } else {
+                (Some(192), Some(64))
+            };
+            assert_eq!((caps.width, caps.height), expected);
+            let r = request(&adapter, &source).await;
+            let output = dir.path().join(format!("normalized-{rotated}.mp4"));
+            let (tx, _rx) = mpsc::channel(128);
+            let result = adapter
+                .export(&source, &output, &r, &CancellationToken::new(), tx)
+                .await
+                .unwrap();
+            assert_eq!(dimensions(&result), expected);
+            assert_eq!(video(&result).unwrap()["sample_aspect_ratio"], "1:1");
+            assert_eq!(tokio::fs::read(&source).await.unwrap(), original);
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires installed managed FFmpeg/FFprobe"]
+    async fn real_managed_processing_artwork_chapters_and_volume() {
+        let adapter = real_adapter();
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("source.mp4");
+        source(&adapter, &input).await;
+        let cover_path = dir.path().join("cover.png");
+        let metadata = dir.path().join("chapters.txt");
+        tokio::fs::write(&metadata, ";FFMETADATA1\ntitle=Keep this title\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=3000\ntitle=Chapter one\n").await.unwrap();
+        adapter
+            .media
+            .run(
+                adapter.media.paths.ffmpeg_executable(),
+                &[
+                    "-v".into(),
+                    "error".into(),
+                    "-f".into(),
+                    "lavfi".into(),
+                    "-i".into(),
+                    "color=red:size=32x32".into(),
+                    "-frames:v".into(),
+                    "1".into(),
+                    cover_path.to_string_lossy().into_owned(),
+                ],
+                Duration::from_secs(20),
+            )
+            .await
+            .unwrap();
+        let decorated = dir.path().join("decorated.mp4");
+        adapter
+            .media
+            .run(
+                adapter.media.paths.ffmpeg_executable(),
+                &[
+                    "-v".into(),
+                    "error".into(),
+                    "-i".into(),
+                    input.to_string_lossy().into_owned(),
+                    "-i".into(),
+                    cover_path.to_string_lossy().into_owned(),
+                    "-i".into(),
+                    metadata.to_string_lossy().into_owned(),
+                    "-map".into(),
+                    "0:v:0".into(),
+                    "-map".into(),
+                    "0:a:0".into(),
+                    "-map".into(),
+                    "1:v:0".into(),
+                    "-map_metadata".into(),
+                    "2".into(),
+                    "-map_chapters".into(),
+                    "2".into(),
+                    "-c".into(),
+                    "copy".into(),
+                    "-disposition:v:1".into(),
+                    "attached_pic".into(),
+                    decorated.to_string_lossy().into_owned(),
+                ],
+                Duration::from_secs(20),
+            )
+            .await
+            .unwrap();
+        let original = tokio::fs::read(&decorated).await.unwrap();
+        for format in [
+            OutputFormat::Mp4,
+            OutputFormat::Mkv,
+            OutputFormat::M4a,
+            OutputFormat::Mp3,
+            OutputFormat::Flac,
+            OutputFormat::Wav,
+        ] {
+            let mut r = request(&adapter, &decorated).await;
+            r.format = format;
+            let output = dir.path().join(format!("tags.{}", format.extension()));
+            let (tx, _rx) = mpsc::channel(128);
+            let result = adapter
+                .export(&decorated, &output, &r, &CancellationToken::new(), tx)
+                .await
+                .unwrap();
+            assert_eq!(
+                streams(&result).iter().any(cover),
+                !matches!(format, OutputFormat::Mkv | OutputFormat::Wav)
+            );
+            assert_eq!(
+                result.raw["chapters"]
+                    .as_array()
+                    .is_some_and(|c| !c.is_empty()),
+                format.video()
+            );
+        }
+        async fn rms(adapter: &ProcessingAdapter, path: &Path) -> f64 {
+            let pcm = adapter
+                .media
+                .run(
+                    adapter.media.paths.ffmpeg_executable(),
+                    &[
+                        "-v".into(),
+                        "error".into(),
+                        "-i".into(),
+                        path.to_string_lossy().into_owned(),
+                        "-map".into(),
+                        "0:a:0".into(),
+                        "-f".into(),
+                        "f32le".into(),
+                        "-".into(),
+                    ],
+                    Duration::from_secs(20),
+                )
+                .await
+                .unwrap();
+            let count = pcm.len() / 4;
+            (pcm.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|bytes| f64::from(f32::from_le_bytes(*bytes)).powi(2))
+                .sum::<f64>()
+                / count as f64)
+                .sqrt()
+        }
+        let mut r = request(&adapter, &decorated).await;
+        r.format = OutputFormat::Wav;
+        r.edits = Some(QuickEdits {
+            volume: Some(0.5),
+            ..Default::default()
+        });
+        let output = dir.path().join("quiet.wav");
+        let (tx, _rx) = mpsc::channel(128);
+        adapter
+            .export(&decorated, &output, &r, &CancellationToken::new(), tx)
+            .await
+            .unwrap();
+        let ratio = rms(&adapter, &output).await / rms(&adapter, &decorated).await;
+        assert!((ratio - 0.5).abs() < 0.01, "volume ratio {ratio}");
+        assert_eq!(tokio::fs::read(&decorated).await.unwrap(), original);
+    }
+
     async fn packet_hash(adapter: &ProcessingAdapter, path: &Path) -> Vec<u8> {
         adapter
             .media

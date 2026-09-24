@@ -96,8 +96,8 @@ Date is a text field so users may retain a year or fuller date. Technical
 information is read-only. The modal traps keyboard focus, restores focus to the
 menu trigger, locks background scrolling, guards route/tab dismissal, and keeps its
 footer visible on phones. Save status uses SSE plus a bounded REST polling
-fallback; no percentage is fabricated. Latest operation status is session-local
-(bounded to 256 entries); after restart clients reopen the recovered file.
+fallback; no percentage is fabricated. Latest operation status is read from persistent processing history and survives
+restart; clients reopen the recovered file after an interrupted save.
 
 FFmpeg behavior references: [stream copy and metadata](https://ffmpeg.org/ffmpeg.html)
 and [container formats](https://ffmpeg.org/ffmpeg-formats.html).

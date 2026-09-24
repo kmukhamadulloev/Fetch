@@ -965,6 +965,7 @@ mod tests {
             updated_at: now,
             finished_at: None,
             error: None,
+            error_code: None,
         };
         storage
             .insert_processing_job(&job, r#"{"root":"/media"}"#)

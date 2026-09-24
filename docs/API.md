@@ -219,3 +219,10 @@ ID; filesystem paths and arbitrary FFmpeg arguments are not accepted. Output
 records contain no private paths. `process.updated` SSE carries ProcessingJob;
 metadata also retains `library.metadata`, and success emits `library.completed`.
 Metadata has no cancel/retry action; reopen its editor after interruption.
+
+Processing jobs additionally expose nullable `error_code` (the standard Fetch
+error code), defaulting to null when reading older records. Clients localize
+recovery guidance from that code and may show the sanitized `error` as details.
+Capabilities report display-oriented, square-pixel export dimensions; non-square
+source pixels are normalized before crop/rotation/resize. Stream copy preserves
+original encoded dimensions and pixel aspect ratio.

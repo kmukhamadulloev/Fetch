@@ -3,6 +3,51 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Processes, Convert and Quick edit — Final local acceptance (2026-09-24)
+
+- A1: **PASS** — Three-dot menu opens separate tools without playback; keyboard,
+  placeholder and playlist-child integration retain metadata regression behavior.
+- A2: **PASS** — Real MP4/MKV/M4A/MP3/FLAC/WAV conversion/extraction; MP4/MKV
+  copy hashes retain encoded streams; copy-only capability UI works.
+- A3: **PASS** — Six individual edits and combinations, trim duration and A/V sync,
+  normalized pixel aspect/orientation/dimensions, mute and decoded volume checks.
+- A4: **PASS** — Original bytes preserved, independent source-linked entries,
+  origin badges, captured output root, lazy folders and no-clobber publication;
+  actual artwork/chapters retained according to the acknowledged matrix.
+- A5: **PASS** — Unified rows, real/unknown progress, filters, elapsed time,
+  valid actions, retained attempts, result focus and old Downloads redirect.
+- A6: **PASS** — Queued/running cancellation, fresh retry, missing/changed source,
+  missing runtime, invalid requests, output collisions, serialized work,
+  migration/transaction rollback and owned-publication restart recovery.
+- A7: **PASS** — SSE dispatch and late-snapshot protection, primary/secondary
+  reconnect and LAN authorization regressions; all file URLs remain opaque IDs.
+- A8: **PASS** — Desktop/mobile forms, focus/dirty guards, duplicate-submit
+  protection, failure retention/feedback and English/Russian/Tajik coverage.
+  Screenshots reviewed for mobile containment and fixed action footer.
+- A9: **PASS** — Seven real managed-runtime tests with synthetic media, alongside
+  deterministic tests; API/schema/UI/security/recovery/testing docs aligned.
+- A10: **PASS** — Full mandatory local suite, real-runtime suite and diff checks.
+
+Exact final commands and results:
+
+- `FETCH_RUN_E2E=1 ./scripts/check.sh` — PASS: release-note checks, npm clean
+  install/typecheck/lint, 45 frontend unit tests, production build, Rust fmt,
+  strict all-target/all-feature Clippy, 122 Rust tests, workspace build, and
+  72 production desktop/mobile Playwright tests. Eight opt-in Rust tests are
+  excluded from the normal suite (seven media tests run below; live Telegram
+  remains secret-backed and outside this goal).
+- `FETCH_METADATA_RUNTIME=/home/mkomron/.local/share/fetch/runtime cargo test -p fetch real_managed_ -- --ignored --nocapture`
+  — PASS: seven actual managed FFmpeg/FFprobe tests, including metadata,
+  all-format/combined edits, FIFO/root capture, cancellation/collision,
+  rotated anamorphic inputs, artwork/chapters and measured audio volume.
+- `git diff --check` — PASS.
+
+No known local goal blocker remains. Native archive/interactive Windows, macOS
+and Linux release checks were **not executed**; versioning/publication are not
+part of this goal. Filesystems without hard links fail exports safely.
+Earlier checkpoint reports below are historical evidence at their respective
+commit and do not override this final matrix.
+
 ## Processes UI checkpoint — Local verification (2026-09-23)
 
 - PASS — Desktop/mobile navigation uses Processes; old download URLs redirect.
@@ -78,18 +123,7 @@ Exact final checks:
   — PASS: 22 desktop/mobile browser tests.
 - Relative documentation links and `git diff --check` — PASS.
 
-Full-goal gates remain unchecked individually:
-
-- [ ] A1 — New menu and metadata regression together: pending menu implementation.
-- [ ] A2 — Application conversion matrix/copy: pending adapter integration.
-- [ ] A3 — Six edits and synchronization: pending implementation.
-- [ ] A4 — Complete filesystem/library output safety: schema portion verified only.
-- [ ] A5 — Processes view, actions, history: pending UI/API/scheduler.
-- [ ] A6 — Runtime cancellation, recovery and consistency: pending execution layer.
-- [ ] A7 — Processing snapshots/SSE/LAN convergence: pending integration.
-- [ ] A8 — New forms/accessibility/localization: pending UI.
-- [ ] A9 — Application export real-runtime tests and aligned final docs: pending.
-- [ ] A10 — Full final goal suite/export smoke: pending; native/release unexecuted.
+The initial pending full-goal gates are superseded by the final matrix above.
 
 ## Runtime summary recovery — Local verification (2026-09-23)
 

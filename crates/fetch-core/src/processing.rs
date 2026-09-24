@@ -183,6 +183,8 @@ pub struct ProcessingJob {
     pub updated_at: DateTime<Utc>,
     pub finished_at: Option<DateTime<Utc>>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<crate::ErrorCode>,
 }
 impl ProcessingJob {
     pub fn new(kind: ProcessingKind, source_file_id: Uuid, title: String) -> Self {
@@ -202,6 +204,7 @@ impl ProcessingJob {
             updated_at: now,
             finished_at: None,
             error: None,
+            error_code: None,
         }
     }
 

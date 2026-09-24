@@ -28,10 +28,13 @@ managed tools, SQLite database, realtime updates, and embedded Vue interface.
   directly inside the selected download directory.
 - Manage `yt-dlp`, FFmpeg, and FFprobe with checksum verification, health
   checks, atomic updates, rollback, and repair.
-- Filter Downloads by status and Completed by media type or playlist; sort
+- Filter Processes by operation/status and Completed by media type or playlist; sort
   completed entries by name/date with a reversible order.
 - Check backend/runtime bulbs and, on the host, enabled Telegram status and
   Custom proxy configuration from the sidebar.
+- Convert completed files or export trim, rotate, mute, crop, resize, and volume
+  edits from separate card-menu dialogs. Originals stay intact; copies appear in
+  `Converted/` or `Edits/` and progress appears in Processes.
 - Edit completed audio/video tags and embedded cover artwork from a card modal,
   with basic/advanced fields, safe background saves, and crash recovery.
 - Browse cached artwork and completed files without exposing filesystem paths

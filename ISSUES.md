@@ -4,15 +4,16 @@ Maintained by implementation agents. Record real defects, architecture
 mismatches, and missing mandatory behavior with an ID, status, affected
 subsystem, expected behavior, actual behavior, and notes.
 
-## Active processing development
+## Processing exports — Verified scope and platform limitation
 
-Status: IN PROGRESS — see GOAL.md and docs/PROCESSING.md.
+Status: IMPLEMENTED — GOAL.md A1–A10 pass locally; see docs/ACCEPTANCE.md.
 
-The shared scheduler, managed export adapter, processing API/SSE, and metadata
-queue integration are implemented. Processes navigation, filters, actions and realtime snapshots are implemented.
-The card menu and Convert modal are implemented. All six quick-edit controls are implemented. Final hardening and full acceptance remain. Filesystems without hard-link support reject publication with
-an actionable disk/permissions error and preserve the source. Native-platform
-verification remains separate from local Linux evidence.
+Processes, the card menu, separate Convert/Quick edit dialogs, all six edits,
+persistence, cancellation/recovery, and localization are implemented and tested.
+No known blocker remains in the approved local scope. Publication uses a
+same-directory hard link: filesystems without hard-link support reject the
+export and preserve the source. Native-platform/package and interactive desktop
+verification remain separate release gates, not locally executed evidence.
 
 ## BUG-033 — Runtime summary stays stale until backend activity
 

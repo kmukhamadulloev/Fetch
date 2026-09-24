@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { processingCapabilities, startExport, type CompletedFile, type ProcessingCapabilities, type OutputFormat, type ProcessingJob, type QuickEdits } from '@/app/api/client'
 import { useProcessesStore } from '@/stores/processes'
 import { safeOutputName, evenDimension, validCrop, proportionalHeight } from '@/app/processing/validation'
+import { processingErrorKey } from '@/app/processing/errors'
 import ExportDialogFrame from './ExportDialogFrame.vue'
 const props = defineProps<{ file: CompletedFile }>()
 const emit = defineEmits<{ close: []; accepted: [job: ProcessingJob] }>()
@@ -38,7 +39,7 @@ const validEdits = computed(() => (!trim.value || (Number.isFinite(start.value) 
 const disabled = computed(() => loading.value || !caps.value || !format.value || !formats.value.includes(format.value) || !safeOutputName(filename.value) || (!!caps.value.notices.length && !ack.value) || !hasEdits.value || !validEdits.value)
 async function load() {
   loading.value = true; error.value = ''
-  try { caps.value = await processingCapabilities(props.file.id); end.value = caps.value.duration_seconds; crop.width = caps.value.width ?? 0; crop.height = caps.value.height ?? 0; const source = props.file.filename.split('.').at(-1)?.toLowerCase() as OutputFormat; format.value = formats.value.includes(source) ? source : ''; baseline.value = snapshot.value }
+  try { caps.value = await processingCapabilities(props.file.id); end.value = caps.value.duration_seconds; crop.width = caps.value.width ?? 0; crop.height = caps.value.height ?? 0; const source = props.file.filename.split('.').at(-1)?.toLowerCase() as OutputFormat; format.value = formats.value.includes(source) ? source : ''; await nextTick(); baseline.value = snapshot.value }
   catch { error.value = t('exports.loadFailed') }
   finally { loading.value = false }
 }
@@ -46,7 +47,7 @@ async function submit() {
   if (disabled.value || busy.value || !caps.value || !format.value) return
   busy.value = true; error.value = ''
   try { const job = await startExport(props.file.id, { revision: caps.value.revision, filename: filename.value.trim(), format: format.value, quality: quality.value, stream_copy: false, acknowledge_omissions: ack.value, edits: edits.value }); processes.applyEvent(job); emit('accepted', job); emit('close') }
-  catch { error.value = t('exports.failed') }
+  catch (cause) { error.value = t(processingErrorKey(cause)) }
   finally { busy.value = false }
 }
 onMounted(load)
@@ -80,7 +81,7 @@ onMounted(load)
         <label class="grid gap-2 text-sm">{{ t('exports.format') }}<select v-model="format" class="input min-w-0 w-full" :aria-label="t('exports.format')"><option disabled value="">{{ t('quickEdit.chooseFormat') }}</option><option v-for="item in formats" :key="item" :value="item">{{ item.toUpperCase() }}</option></select></label>
         <p v-if="!formats.length" class="error-panel">{{ t('exports.unavailable') }}</p>
         <label v-if="!['flac', 'wav'].includes(format)" class="grid gap-2 text-sm">{{ t('exports.quality') }}<select v-model="quality" class="input min-w-0 w-full" :aria-label="t('exports.quality')"><option v-for="item in ['compact', 'balanced', 'high']" :key="item" :value="item">{{ t(`exports.${item}`) }}</option></select></label>
-        <label class="grid gap-2 text-sm">{{ t('exports.filename') }}<input v-model="filename" class="input min-w-0 w-full" :aria-label="t('exports.filename')" required maxlength="180" autocomplete="off" /><span class="text-xs text-muted">.{{ format }}</span></label>
+        <label class="grid gap-2 text-sm">{{ t('exports.filename') }}<input v-model="filename" class="input min-w-0 w-full" :aria-label="t('exports.filename')" required maxlength="180" autocomplete="off" /><span class="text-xs text-muted">.{{ format }} · {{ t('exports.nameHelp') }}</span></label>
         <p class="text-xs text-muted">{{ t('exports.destination', { folder: 'Edits/' }) }}</p>
         <template v-if="caps.notices.length"><p class="text-xs leading-5 text-muted">{{ t('exports.limits') }}</p><label class="flex items-start gap-2 text-sm"><input v-model="ack" type="checkbox" class="mt-1" />{{ t('exports.acknowledge') }}</label></template>
       </fieldset>

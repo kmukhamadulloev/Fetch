@@ -716,6 +716,7 @@ components:
         updated_at: {type: string, format: date-time}
         finished_at: {type: [string, "null"], format: date-time}
         error: {type: [string, "null"]}
+        error_code: {type: [string, "null"], description: Stable Fetch error code for localized recovery guidance; absent in older persisted records.}
     ProcessingCapabilities:
       type: object
       required: [revision, duration_seconds, video, audio, width, height, formats, copy_formats, notices]
