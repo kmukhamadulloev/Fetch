@@ -962,16 +962,11 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn javascript_runtime_inspection_reports_detected_versions() {
-        use std::os::unix::fs::PermissionsExt;
-
         let directory = tempfile::tempdir().unwrap();
         let executable = directory.path().join("node");
-        tokio::fs::write(&executable, b"#!/bin/sh\nprintf 'v25.9.0\\n'\n")
-            .await
-            .unwrap();
-        let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&executable, permissions).unwrap();
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/fake-node.sh");
+        std::os::unix::fs::symlink(fixture, &executable).unwrap();
 
         let runtime =
             inspect_javascript_runtime(JavaScriptRuntimeName::Node, Some(&executable)).await;
@@ -986,24 +981,14 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn failed_update_keeps_an_existing_healthy_ytdlp_ready() {
-        use std::os::unix::fs::PermissionsExt;
-
         let directory = tempfile::tempdir().unwrap();
         let paths = RuntimePaths::new(directory.path());
-        tokio::fs::create_dir_all(paths.ytdlp_directory())
-            .await
-            .unwrap();
-        tokio::fs::write(
-            paths.ytdlp_executable(),
-            b"#!/bin/sh\nprintf 'working-version\\n'\n",
-        )
-        .await
-        .unwrap();
-        let mut permissions = std::fs::metadata(paths.ytdlp_executable())
-            .unwrap()
-            .permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(paths.ytdlp_executable(), permissions).unwrap();
+        std::fs::create_dir_all(paths.ytdlp_directory()).unwrap();
+        // Execute an immutable fixture: writing an executable while other tests
+        // spawn processes can intermittently produce ETXTBSY on Linux.
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/fake-ytdlp.sh");
+        std::os::unix::fs::symlink(fixture, paths.ytdlp_executable()).unwrap();
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let unreachable = format!("http://{}", listener.local_addr().unwrap());
@@ -1020,6 +1005,9 @@ mod tests {
             client,
         );
 
+        let previous = manager.inspect_component(RuntimeComponentName::YtDlp).await;
+        assert_eq!(previous.status, RuntimeStatus::Ready, "{previous:?}");
+        assert_eq!(previous.version.as_deref(), Some("2026.08.09-test"));
         assert!(manager.update_ytdlp().await.is_err());
         let component = manager
             .components()
@@ -1028,7 +1016,7 @@ mod tests {
             .find(|component| component.name == RuntimeComponentName::YtDlp)
             .unwrap();
         assert_eq!(component.status, RuntimeStatus::Ready);
-        assert_eq!(component.version.as_deref(), Some("working-version"));
+        assert_eq!(component.version.as_deref(), Some("2026.08.09-test"));
         assert_eq!(
             manager.ytdlp_path().await.unwrap(),
             manager.paths().ytdlp_executable()

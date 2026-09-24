@@ -4,6 +4,31 @@ Maintained by implementation agents. Record real defects, architecture
 mismatches, and missing mandatory behavior with an ID, status, affected
 subsystem, expected behavior, actual behavior, and notes.
 
+## BUG-038 — Runtime tests intermittently fail on Linux CI
+
+Status: RESOLVED
+
+Affected: fetch-runtime unit tests.
+
+Expected: A failed update preserves the existing healthy yt-dlp Ready state,
+and JavaScript runtime inspection consistently reads the fixture version.
+
+Actual: Repeated local runs reproduced the CI assertion and exposed Linux
+`Text file busy` (ETXTBSY) while spawning freshly written test executables.
+The JavaScript version test also failed intermittently with the same setup.
+
+Resolution: Symlink immutable executable fixtures under `tests/fixtures` into
+the isolated runtime directories instead of writing executable scripts while
+parallel tests spawn processes. Assert yt-dlp health before attempting the
+failed update, with component diagnostics on failure. Production behavior is
+unchanged.
+
+Validation: 3,000 consecutive runtime-suite runs passed (24,000 test executions).
+`./scripts/check.sh` passed: 122 Rust tests (8 opt-in tests ignored), 49 frontend
+tests, formatting, Clippy, frontend typecheck/lint/build, release-note checks,
+and workspace build. Browser and real-runtime smoke tests were not rerun for
+this test-fixture-only change.
+
 ## UX-037 — History lacks operation filtering
 
 Status: RESOLVED
