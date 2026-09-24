@@ -21,9 +21,6 @@ developer-visible behavior, compatibility, and release operations.
   an actionable exhausted state, and host runtime restart controls.
 - Fixed idle runtime status updates through immediate SSE initialization and
   reconnect/visibility snapshots with stale-response protection.
-
-### Compatibility
-
 - Existing SQLite databases migrate automatically through migrations 0007 and
   0008. Original media, download history, playlist order and playback progress
   are preserved; converted and edited outputs receive independent library IDs.
@@ -31,16 +28,10 @@ developer-visible behavior, compatibility, and release operations.
   supporting hard links. Unsupported exports fail without replacing originals.
 - Playback and previews use browser-compatible source files; unsupported media
   remains available through Download/Open without live transcoding.
-
-### CI reliability
-
 - Fixed intermittent Linux runtime-test failures caused by `Text file busy`
   when launching freshly written yt-dlp and JavaScript-runtime test scripts.
   Tests now use immutable executable fixtures and verify yt-dlp health before
   checking failed-update recovery. Production runtime behavior is unchanged.
-
-### Metadata editor
-
 - Added a top-left card menu action opening a responsive audio/video metadata
   modal, with basic fields, collapsed Advanced fields, file information, and
   required cover preview/upload/replacement/removal.
