@@ -3,7 +3,30 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
-## Current local checkpoint — 2026-09-24
+## Runtime CI fixture correction — 2026-09-25
+
+BUG-038 reproduced locally as Linux `ETXTBSY` (Text file busy) when a runtime
+health test spawned a freshly written script. Both affected tests now symlink
+immutable checked-in fixtures into their temporary directories.
+
+- Failed-update recovery preserves a verified yt-dlp version/path/Ready state:
+  **PASS**.
+- JavaScript-runtime fixture version detection: **PASS**.
+- Parallel runtime-suite stability: **PASS** — 3,000 consecutive runs of the
+  compiled runtime unit-test binary, 24,000 test executions with no failures.
+- `cargo test -p fetch-runtime --lib`: **PASS**, 8 tests.
+- `./scripts/check.sh`: **PASS** — release-note checks; frontend typecheck,
+  lint, 49 tests and production build; Rust formatting, Clippy, 122 tests
+  (8 opt-in tests ignored) and workspace build.
+- `./scripts/test-release-notes.sh` and `git diff --check` after documentation
+  alignment: **PASS**.
+- Production behavior, API/schema and UI changes: **NOT APPLICABLE**.
+
+Browser and real-runtime smoke tests were not rerun for this fixture-only fix.
+These are local results; a new GitHub CI run, native release gates and publication
+are not claimed. The change is recorded under Unreleased in `RELEASE.md`.
+
+## Prior local checkpoint — 2026-09-24
 
 `FETCH_RUN_E2E=1 ./scripts/check.sh` passes after the interactive editor and
 unified/filterable History follow-ups: release-note checks, frontend typecheck,

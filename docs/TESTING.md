@@ -91,6 +91,14 @@ It must never ship in production.
 
 Use it to test API -> manager -> adapter, progress events, stop/resume/retry, persistence and failures.
 
+Runtime health tests symlink the checked-in executable `fake-ytdlp.sh` and
+`fake-node.sh` from `tests/fixtures` into isolated temporary directories. Do not
+rewrite those executables while tests run: concurrent process spawning can make
+freshly written scripts intermittently fail with Linux `ETXTBSY` (Text file
+busy). The failed-update test first asserts that the existing runtime is Ready,
+then verifies that a provider failure preserves its version, path and Ready
+state. Run these tests with `cargo test -p fetch-runtime --lib`.
+
 ## Real smoke tests
 
 Separate opt-in/CI job using real managed yt-dlp and FFmpeg. This verifies actual command compatibility without making every PR dependent on external websites.

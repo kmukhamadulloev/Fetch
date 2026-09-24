@@ -24,6 +24,13 @@ These additions are implemented locally but have no new release version or tag.
 - Fixed idle runtime status updates through immediate SSE initialization and
   reconnect/visibility snapshots with stale-response protection.
 
+### CI reliability
+
+- Fixed intermittent Linux runtime-test failures caused by `Text file busy`
+  when launching freshly written yt-dlp and JavaScript-runtime test scripts.
+  Tests now use immutable executable fixtures and verify yt-dlp health before
+  checking failed-update recovery. Production runtime behavior is unchanged.
+
 ### Metadata editor
 
 - Added a top-left card menu action opening a responsive audio/video metadata
