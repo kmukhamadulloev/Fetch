@@ -235,7 +235,22 @@ Objective: improve Downloads/Completed browsing and sidebar system visibility.
 - [ ] Pass native archive matrix and interactive tray/startup/visual acceptance.
 - [ ] Tag and publish approved release artifacts.
 
-## Metadata editor — Implementation complete (unversioned)
+## 0.1.7 — Release candidate
+
+Objective: release the completed media tools, metadata editor, unified process
+history and runtime-recovery improvements with the Linux CI fixture correction.
+
+### Release preparation gates
+
+- [x] Align workspace/frontend/OpenAPI versions, lockfiles and curated 0.1.7 notes.
+- [x] Pass full Rust/frontend/production-browser checks and real managed-media tests.
+- [x] Build, smoke-test, package and checksum the local Linux x86_64 release.
+- [x] Record acceptance evidence in the local release-preparation commit.
+- [ ] Pass all five native archive builds and packaged startup smoke tests.
+- [ ] Verify interactive tray/startup behavior on Windows, macOS and Linux.
+- [ ] Tag and publish approved 0.1.7 artifacts.
+
+### Metadata editor — Implementation complete
 
 Approved scope and acceptance criteria: `docs/METADATA.md`.
 
@@ -245,7 +260,7 @@ Approved scope and acceptance criteria: `docs/METADATA.md`.
 - [x] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
 - [x] Synchronize documentation and pass repository checks.
 
-## Processes, conversion, and quick edits — Implementation complete (unversioned)
+### Processes, conversion, and quick edits — Implementation complete
 
 The complete agreed UX, architecture boundaries, ordered steps, and acceptance
 criteria are in [GOAL.md](GOAL.md). Local implementation and acceptance are complete.
@@ -272,12 +287,12 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 - [x] Add a compact History type dropdown and reset for unmatched filters.
 - [x] Verify desktop/mobile, keyboard, localization and regression coverage.
 
-The local implementation checkpoint is complete. Version metadata remains 0.1.6;
-the additions are unreleased. Native release gates above remain open.
+The completed implementation is assigned to 0.1.7. Release-preparation and
+native verification gates are tracked above.
 
 Explicit user-requested local exports are approved. Playback/preview transcoding,
 external-file imports, batch jobs, and multi-track editing remain outside scope.
-Release numbering and publication are not part of these implementation steps.
+Release preparation is approved for 0.1.7; publication remains a separate action.
 
 ## Candidate ideas
 

@@ -1,29 +1,33 @@
-# Current Goal — Completed
+# Current Goal — 0.1.7 locally prepared
 
-Implement separate **Convert** and **Quick edit** workflows for completed media,
-and evolve **Downloads** into **Processes** so users can follow downloads,
-conversions, edits, and metadata saves in one place.
+Prepare the completed media-tools and runtime-recovery scope as version 0.1.7.
+The implementation specification below remains the approved product scope;
+this release-preparation goal adds no features.
 
-Status: implementation complete and locally verified (2026-09-24). All seven
-checkpoints and A1–A10 pass; evidence is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
-This goal is unversioned. Native-platform release gates remain separate.
-Release numbering, tagging, pushing, and publication are separate work.
+## Release preparation checkpoint (2026-09-25)
 
-## Current project checkpoint (2026-09-24)
+- Align Rust, frontend, lockfiles and OpenAPI on 0.1.7.
+- Promote the existing unreleased notes into the curated 0.1.7 release section.
+- Run full repository checks including production desktop/mobile browser tests,
+  real managed-media tests, and local Linux release build/package/startup checks.
+- Record exact acceptance evidence and outstanding native-platform gates in
+  `docs/ACCEPTANCE.md`, `ROADMAP.md`, and `ISSUES.md`.
+- Create a local release-preparation commit. Tagging, pushing and publication
+  remain separate actions.
 
-The approved implementation and requested UX follow-ups are complete:
+Status: local release preparation verified (2026-09-25). Version alignment,
+full checks, real managed-media tests and the Linux x86_64 release archive pass;
+evidence is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). The five-target native
+archive matrix and interactive tray/startup verification remain open release
+gates in `ROADMAP.md`. No tag, push or publication is claimed.
 
-- Interactive Quick edit with native source playback, trim selection, draggable
-  crop, rotation/resize presets, audio controls, reset and export review.
-- Compact Processes type dropdown before the status filters.
-- Unified History for downloads, conversions, edits and metadata saves, with
-  type filtering, live updates, loading/error states and existing-record recovery.
-- English, Russian and Tajik UI, desktop/mobile coverage, and aligned docs.
+## Completed implementation scope
 
-No implementation step remains open in this goal. Version metadata remains
-0.1.6; these additions are unreleased and unversioned. Native package and
-interactive tray/startup gates remain open in ROADMAP.md. Future scope requires
-a new approved goal; the specification below records the completed scope.
+Separate **Convert** and **Quick edit** workflows operate on completed media.
+**Processes** follows downloads, conversions, edits and metadata saves; unified
+History includes all operation types. The interactive editor, compact filters,
+English/Russian/Tajik UI and desktop/mobile behavior are implemented. The
+following specification records that completed scope, now assigned to 0.1.7.
 
 ## Read first
 

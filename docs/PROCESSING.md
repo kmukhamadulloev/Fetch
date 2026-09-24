@@ -1,6 +1,6 @@
 # Local media processing
 
-Status: implemented and locally verified (2026-09-24), unversioned.
+Status: implemented and locally verified (2026-09-24), assigned to 0.1.7.
 See GOAL.md and the individual evidence in ACCEPTANCE.md.
 
 Delivered backend: persistent FIFO worker shared by metadata and exports,

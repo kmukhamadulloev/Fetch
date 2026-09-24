@@ -3,9 +3,7 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## Unreleased — Media tools and runtime recovery
-
-These additions are implemented locally but have no new release version or tag.
+## 0.1.7 — Media tools and runtime recovery
 
 - Added separate Convert and Quick edit workflows from a completed-file menu.
   Saved copies go to Converted/ and Edits/ while preserving originals.
@@ -23,6 +21,16 @@ These additions are implemented locally but have no new release version or tag.
   an actionable exhausted state, and host runtime restart controls.
 - Fixed idle runtime status updates through immediate SSE initialization and
   reconnect/visibility snapshots with stale-response protection.
+
+### Compatibility
+
+- Existing SQLite databases migrate automatically through migrations 0007 and
+  0008. Original media, download history, playlist order and playback progress
+  are preserved; converted and edited outputs receive independent library IDs.
+- Exports require the managed FFmpeg/FFprobe runtime and a destination filesystem
+  supporting hard links. Unsupported exports fail without replacing originals.
+- Playback and previews use browser-compatible source files; unsupported media
+  remains available through Download/Open without live transcoding.
 
 ### CI reliability
 

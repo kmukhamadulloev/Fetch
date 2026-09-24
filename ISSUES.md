@@ -125,19 +125,19 @@ Live operation through the user's proxy has not been reproduced locally.
 
 ## Release verification
 
-Status: LOCAL VERIFICATION COMPLETE FOR 0.1.6
+Status: LOCAL RELEASE PREPARATION VERIFIED FOR 0.1.7
 
-Phases 01 through 09 were audited against their acceptance criteria. No known
-release-blocking implementation defect remains. The authoritative evidence
-matrix is `docs/ACCEPTANCE.md`.
+The completed media tools, metadata editor, unified Processes/History, runtime
+recovery and BUG-038 fixture fix are assigned to 0.1.7. The authoritative
+verification evidence is in `docs/ACCEPTANCE.md`; release gates are tracked in
+`ROADMAP.md`. Full checks pass against 0.1.7: 122 Rust, 49 frontend and 76
+production browser tests, plus seven real managed-media tests. The Linux
+x86_64 optimized build, startup smoke, archive checksum and extracted-package
+version/frontend/storage checks pass.
 
-Fetch 0.1.4 is published. Its interactive tray/startup evidence remains marked
-as pending in `docs/ACCEPTANCE.md`; do not retroactively claim that manual gate
-without evidence. Fetch 0.1.6 browsing and system-check implementation passes
-local Rust/frontend/production-browser verification. Native archive and
-interactive acceptance gates remain for publication. The current Clippy
-fixed-size chunk warning in Linux tray pixel conversion was resolved using
-typed four-byte chunks without changing the conversion.
+The five-target native archive matrix and interactive tray/startup acceptance
+remain release gates. Prior release status does not establish evidence for
+these checks on 0.1.7. Tagging and publication remain separate actions.
 
 ## UX-031 — Sidebar runtime summary omits connection checks
 

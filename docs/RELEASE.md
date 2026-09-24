@@ -1,5 +1,14 @@
 # Release
 
+## 0.1.7 preparation status
+
+Version metadata and curated release notes are aligned on 0.1.7. Full local
+checks, real managed-media tests and Linux x86_64 release packaging pass; exact
+commands and results are in [ACCEPTANCE.md](ACCEPTANCE.md). The local archive is
+`target/release-artifacts/fetch-v0.1.7-linux-x86_64.tar.gz` with a SHA-256 sidecar.
+The five-target native matrix and interactive tray/startup gates remain pending
+in [ROADMAP.md](../ROADMAP.md). This is preparation evidence, not publication.
+
 ## Supported archives
 
 - Windows x86_64 (`.zip`)
@@ -36,7 +45,7 @@ release information committed before the tag is created. Preview the exact
 notes locally with:
 
 ```bash
-./scripts/release-notes.sh v0.1.4
+./scripts/release-notes.sh v0.1.7
 ```
 
 Local Linux packaging:

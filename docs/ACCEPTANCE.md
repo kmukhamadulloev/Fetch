@@ -3,6 +3,40 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## 0.1.7 — Release preparation (2026-09-25)
+
+- **PASS** — All seven Rust workspace packages, frontend, both lockfiles and
+  OpenAPI identify 0.1.7; dependency versions are unchanged.
+- **PASS** — Curated 0.1.7 release notes include media tools, metadata saves,
+  Processes/History, recovery fixes, CI reliability and migration compatibility.
+- **PASS** — `FETCH_RUN_E2E=1 ./scripts/check.sh`: release-note tests, frontend
+  typecheck/lint, 49 unit tests and production build; Rust formatting, Clippy,
+  122 tests and workspace build; 76 production desktop/mobile browser tests.
+  Eight opt-in Rust tests are excluded from the normal workspace run.
+- **PASS** — `FETCH_METADATA_RUNTIME=/home/mkomron/.local/share/fetch/runtime
+  cargo test -p fetch real_managed_ -- --ignored --nocapture`: all seven
+  managed-FFmpeg/FFprobe metadata and processing tests pass using synthetic
+  local media and the installed managed runtime.
+- **PASS** — `./scripts/test-release-notes.sh` and
+  `./scripts/release-notes.sh v0.1.7` validate and extract the intended notes.
+- **PASS** — `cargo build --release --locked --target x86_64-unknown-linux-gnu`.
+- **PASS** — `./scripts/smoke-release.sh
+  target/x86_64-unknown-linux-gnu/release/fetch`.
+- **PASS** — `./scripts/package.sh x86_64-unknown-linux-gnu linux-x86_64` creates
+  `target/release-artifacts/fetch-v0.1.7-linux-x86_64.tar.gz` and its SHA-256 sidecar.
+- **PASS** — From `target/release-artifacts`,
+  `sha256sum -c fetch-v0.1.7-linux-x86_64.tar.gz.sha256`.
+- **PASS** — Extracted archive reruns `scripts/smoke-release.sh`; an isolated
+  launch returns API version 0.1.7, Ready server/storage, and embedded HTML.
+  Archive inspection confirms only the binary, README, license and third-party
+  notices under the versioned directory; no test fixtures are packaged.
+- **PASS** — `git diff --check` after final documentation alignment.
+
+Local release preparation is verified.
+The five-target native archive matrix and interactive tray/startup acceptance
+remain pending. Live Telegram and fresh-provider yt-dlp download smoke were not
+rerun; no publication or tag is claimed.
+
 ## Runtime CI fixture correction — 2026-09-25
 
 BUG-038 reproduced locally as Linux `ETXTBSY` (Text file busy) when a runtime
@@ -24,7 +58,8 @@ immutable checked-in fixtures into their temporary directories.
 
 Browser and real-runtime smoke tests were not rerun for this fixture-only fix.
 These are local results; a new GitHub CI run, native release gates and publication
-are not claimed. The change is recorded under Unreleased in `RELEASE.md`.
+are not claimed. The change was recorded under Unreleased and is now included
+in the 0.1.7 section of `RELEASE.md`.
 
 ## Prior local checkpoint — 2026-09-24
 
