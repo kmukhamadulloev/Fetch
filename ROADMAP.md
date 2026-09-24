@@ -241,7 +241,7 @@ Approved scope and acceptance criteria: `docs/METADATA.md`.
 
 - [x] Document the approved basic/advanced fields, required artwork, and modal.
 - [x] Implement real metadata/artwork inspection and safe background saves.
-- [x] Integrate the top-left card pencil and localized responsive modal.
+- [x] Integrate the metadata action in the top-left card menu and localized modal.
 - [x] Verify runtime, persistence/recovery, API, and desktop/mobile behavior.
 - [x] Synchronize documentation and pass repository checks.
 
@@ -260,6 +260,20 @@ The capability and persistence contract is [docs/PROCESSING.md](docs/PROCESSING.
 - [x] 5. Deliver trim/rotate/mute, Edits outputs, and Quick edit modal.
 - [x] 6. Add crop/resize/volume and validate supported edit combinations.
 - [x] 7. Pass full checks and real-runtime tests; record acceptance and align docs.
+
+### Completed UX follow-ups (2026-09-24)
+
+- [x] Replace the extra Processes type-button row with a compact dropdown before
+  the existing status filters.
+- [x] Make Quick edit interactive with source playback, selection playback,
+  trim handles, draggable crop, tool tabs, presets, reset and export review.
+- [x] Include persisted conversion/edit/metadata records in History alongside
+  downloads, with truthful terminal states, ordering and realtime updates.
+- [x] Add a compact History type dropdown and reset for unmatched filters.
+- [x] Verify desktop/mobile, keyboard, localization and regression coverage.
+
+The local implementation checkpoint is complete. Version metadata remains 0.1.6;
+the additions are unreleased. Native release gates above remain open.
 
 Explicit user-requested local exports are approved. Playback/preview transcoding,
 external-file imports, batch jobs, and multi-track editing remain outside scope.

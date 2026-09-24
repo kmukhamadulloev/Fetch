@@ -163,7 +163,7 @@ export const en = {
   },
   common: {
     video: 'Video', audio: 'Audio', download: 'Download', openFile: 'Open file', openFolder: 'Open folder',
-    cancel: 'Cancel', retry: 'Retry', details: 'Details', deleting: 'Deleting…', deletePermanently: 'Delete permanently',
+    close: 'Close', cancel: 'Cancel', retry: 'Retry', details: 'Details', deleting: 'Deleting…', deletePermanently: 'Delete permanently',
     unknownSize: 'Unknown size', unknownDuration: 'Unknown duration', remaining: '{duration} remaining',
   },
   errors: {
@@ -218,8 +218,8 @@ export const en = {
     shortcuts: 'Keyboard shortcuts', seekShortcut: 'seek 5s', volumeShortcut: 'volume', fullscreenShortcut: 'fullscreen', startOver: 'Start over',
   },
   historyView: {
-    eyebrow: 'Activity', title: 'History', description: 'Completed, failed, and stopped jobs persisted across restarts.',
-    media: 'Media', mode: 'Mode', status: 'Status', updated: 'Updated', noHistory: 'No history yet',
+    eyebrow: 'Activity', title: 'History', description: 'Download, conversion, edit, and metadata history, saved across restarts.',
+    media: 'Media', operation: 'Operation', mode: 'Mode', status: 'Status', updated: 'Updated', noHistory: 'No history yet',
   },
   logsView: {
     eyebrow: 'Diagnostics', title: 'Logs', description: 'Retained yt-dlp, FFmpeg, and application diagnostics.', refresh: 'Refresh', clear: 'Clear',
@@ -378,7 +378,7 @@ export const ru = {
   },
   common: {
     video: 'Видео', audio: 'Аудио', download: 'Скачать', openFile: 'Открыть файл', openFolder: 'Открыть папку',
-    cancel: 'Отмена', retry: 'Повторить', details: 'Подробнее', deleting: 'Удаление…', deletePermanently: 'Удалить навсегда',
+    close: 'Закрыть', cancel: 'Отмена', retry: 'Повторить', details: 'Подробнее', deleting: 'Удаление…', deletePermanently: 'Удалить навсегда',
     unknownSize: 'Размер неизвестен', unknownDuration: 'Длительность неизвестна', remaining: 'Осталось {duration}',
   },
   errors: {
@@ -433,8 +433,8 @@ export const ru = {
     shortcuts: 'Клавиатурные сочетания', seekShortcut: 'перемотка 5 с', volumeShortcut: 'громкость', fullscreenShortcut: 'полный экран', startOver: 'Начать сначала',
   },
   historyView: {
-    eyebrow: 'Активность', title: 'История', description: 'Завершённые, неудачные и остановленные задания сохраняются после перезапуска.',
-    media: 'Медиа', mode: 'Режим', status: 'Состояние', updated: 'Обновлено', noHistory: 'Истории пока нет',
+    eyebrow: 'Активность', title: 'История', description: 'История загрузок, конвертации, правок и метаданных сохраняется после перезапуска.',
+    media: 'Медиа', operation: 'Операция', mode: 'Режим', status: 'Состояние', updated: 'Обновлено', noHistory: 'Истории пока нет',
   },
   logsView: {
     eyebrow: 'Диагностика', title: 'Журналы', description: 'Сохранённая диагностика yt-dlp, FFmpeg и приложения.', refresh: 'Обновить', clear: 'Очистить',
@@ -593,7 +593,7 @@ export const tg = {
   },
   common: {
     video: 'Видео', audio: 'Аудио', download: 'Боргирӣ', openFile: 'Кушодани файл', openFolder: 'Кушодани ҷузвдон',
-    cancel: 'Бекор кардан', retry: 'Такрор', details: 'Тафсилот', deleting: 'Ҳазф…', deletePermanently: 'Ҳамеша ҳазф кардан',
+    close: 'Пӯшидан', cancel: 'Бекор кардан', retry: 'Такрор', details: 'Тафсилот', deleting: 'Ҳазф…', deletePermanently: 'Ҳамеша ҳазф кардан',
     unknownSize: 'Андоза номаълум', unknownDuration: 'Давомнокӣ номаълум', remaining: '{duration} боқӣ мондааст',
   },
   errors: {
@@ -648,8 +648,8 @@ export const tg = {
     shortcuts: 'Миёнбурҳои клавиатура', seekShortcut: 'гузариши 5 с', volumeShortcut: 'садо', fullscreenShortcut: 'экрани пурра', startOver: 'Аз аввал',
   },
   historyView: {
-    eyebrow: 'Фаъолият', title: 'Таърих', description: 'Вазифаҳои анҷомшуда, ноком ва боздошташуда пас аз бозоғозӣ мемонанд.',
-    media: 'Медиа', mode: 'Ҳолат', status: 'Вазъ', updated: 'Навшуда', noHistory: 'Ҳоло таърих нест',
+    eyebrow: 'Фаъолият', title: 'Таърих', description: 'Таърихи боргирӣ, табдил, таҳрир ва метамаълумот пас аз бозоғозӣ мемонад.',
+    media: 'Медиа', operation: 'Амал', mode: 'Ҳолат', status: 'Вазъ', updated: 'Навшуда', noHistory: 'Ҳоло таърих нест',
   },
   logsView: {
     eyebrow: 'Ташхис', title: 'Гузоришҳо', description: 'Ташхиси нигоҳдоштаи yt-dlp, FFmpeg ва барнома.', refresh: 'Навсозӣ', clear: 'Пок кардан',

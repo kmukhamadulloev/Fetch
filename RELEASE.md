@@ -3,9 +3,30 @@
 Update this file for every Fetch version. Keep entries short and focused on
 developer-visible behavior, compatibility, and release operations.
 
-## Unreleased — Metadata editor
+## Unreleased — Media tools and runtime recovery
 
-- Added a rounded top-left card pencil opening a responsive audio/video metadata
+These additions are implemented locally but have no new release version or tag.
+
+- Added separate Convert and Quick edit workflows from a completed-file menu.
+  Saved copies go to Converted/ and Edits/ while preserving originals.
+- Added six combinable quick edits: trim, rotate, mute, crop, resize and volume.
+  The editor includes native source playback, trim selection, draggable crop,
+  tool tabs, presets, reset and a separate export review.
+- Renamed Downloads to Processes, retaining the old route and adding persisted
+  conversion/edit/metadata jobs, truthful progress, cancellation and retry.
+  A compact type dropdown precedes the existing status filters.
+- Expanded History to all operation types, including existing persisted records,
+  with type filtering, realtime updates and explicit loading/error states.
+- Added SQLite migration 0008 for processing jobs and independent derived files;
+  downloads and metadata saves retain their existing identities and recovery.
+- Added bounded Telegram recovery attempts with 10- and 60-second retry delays,
+  an actionable exhausted state, and host runtime restart controls.
+- Fixed idle runtime status updates through immediate SSE initialization and
+  reconnect/visibility snapshots with stale-response protection.
+
+### Metadata editor
+
+- Added a top-left card menu action opening a responsive audio/video metadata
   modal, with basic fields, collapsed Advanced fields, file information, and
   required cover preview/upload/replacement/removal.
 - Added managed FFprobe inspection and FFmpeg stream-copy saves for tested MP3,

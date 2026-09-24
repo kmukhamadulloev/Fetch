@@ -283,3 +283,46 @@ an even pixel); changing it requires the explicit stretching checkbox. Both
 output axes must be even and at most 7680 pixels. Volume is 0–400%, with 100%
 unchanged, and is hidden/excluded when muted. Video-only controls are hidden
 for audio. Invalid combinations keep export disabled and explain the constraint.
+
+The Processes type filter is a compact select before the connected status
+filters in the heading control row. On narrow screens the shared control row
+scrolls horizontally; there is no separate row of process-type buttons.
+
+
+### Interactive quick editor
+
+Quick edit uses a preview-first workspace: sticky source viewer on desktop,
+stacked viewer/tools on phones, and focused Trim, Frame, and Audio tabs. Tabs
+support arrow-key navigation. A real playback scrubber and Play selection seek
+and play the chosen source range; there is no generated waveform or processed
+preview. The source label explains that visual/audio edits apply on export.
+
+Trim uses two draggable/keyboard-adjustable range handles, current-position
+markers, and precise times. Frame offers rotation buttons, centered aspect-ratio
+crop presets, an on-video draggable crop area with a resize corner, and resize
+scale presets. Crop also supports 2 px arrow-key adjustments (20 px with Shift)
+and exact bounds in a disclosure. Crop coordinates remain in oriented source
+space before rotation; unsupported previews retain Open/Download and presets.
+Audio offers mute, a volume slider and level presets. An output summary shows
+selected duration, dimensions, rotation and the number of enabled edits.
+
+Reset edits clears editing operations. Review export reveals filename, format,
+quality and preservation acknowledgement before the existing final export.
+The footer stays visible, and dirty/focus/error/duplicate-submit guarantees apply
+through both steps. English, Russian and Tajik cover all new controls.
+
+### Unified History
+
+History retains its compact table and combines download history with persisted
+conversion, quick-edit and metadata operations. The Operation column identifies
+the kind; downloads also retain their video/audio mode. Only terminal records
+appear, newest first by finish/update time, including failed, stopped, cancelled
+and interrupted attempts. Active work remains in Processes. Existing records
+load on entry/reload and update through the shared SSE stores. Read failures are
+shown explicitly, with available rows retained; pending reads show a loading
+state instead of an empty-history message.
+
+A compact operation-type select in the History header filters All types,
+Downloads, Conversions, Edits or Metadata updates, using the Processes styling.
+Filtering preserves date order and live updates. An unmatched filter shows a
+no-matches message with an All types reset button.

@@ -27,6 +27,11 @@ are retained in Logs where available.
 - `POST /api/downloads/{job_id}/retry`
 - `GET /api/history`
 
+`/api/history` retains its download-only response contract (completed, failed,
+stopped). The History UI combines it with persisted `/api/processes` records in
+completed, failed, cancelled or interrupted states, sorted by terminal/update
+time. Both stores receive the existing SSE events and reconnect snapshots.
+
 A create request contains `url`, `mode` (`video` or `audio`), and optional
 `title`, `format_id`, `quality`, `container`, `video_codec`, `audio_codec`,
 nullable analyzed `duration_seconds`, metadata/thumbnail/subtitle booleans, and

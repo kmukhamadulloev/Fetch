@@ -3,7 +3,50 @@
 This matrix records the implemented evidence for every phase criterion. Exact
 commands and live-smoke observations are recorded in the completion report.
 
+## Current local checkpoint — 2026-09-24
+
+`FETCH_RUN_E2E=1 ./scripts/check.sh` passes after the interactive editor and
+unified/filterable History follow-ups: release-note checks, frontend typecheck,
+lint, 49 unit tests and production build; Rust format, Clippy, 122 tests and
+workspace build; 76 desktop/mobile production browser tests. Eight opt-in Rust
+tests are skipped by this command (seven managed-media tests and live Telegram);
+the earlier explicit managed-media evidence remains below. No backend code
+changed in this UI checkpoint. `./scripts/test-release-notes.sh` was rerun after
+the release-note update and passes; `git diff --check` passes.
+
+- Interactive Quick edit and export regressions: **PASS**.
+- Compact Processes type filter and existing status filters: **PASS**.
+- Unified History, type filter/reset, terminal states, live updates and reload:
+  **PASS**.
+- Desktop/mobile containment, keyboard controls and locale coverage: **PASS**.
+- Goal/roadmap/unreleased notes and issue status alignment: **PASS**.
+- New API/schema/backend changes: **NOT APPLICABLE**.
+
+This records local implementation completion. Native archive/tray/startup gates,
+live Telegram verification and release publication are not claimed by this run.
+
 ## Processes, Convert and Quick edit — Final local acceptance (2026-09-24)
+
+History follow-up BUG-036 (2026-09-24): **PASS** for displaying existing download,
+conversion, edit and metadata records; terminal-state filtering and newest-first
+ordering; live completion updates without duplicate rows; reload retention;
+error reporting; desktop/mobile layout. From `web/`, `npm run typecheck`,
+`npm run lint`, `npm test` (49 tests), `npm run build`, and
+`FETCH_E2E_PRODUCTION=1 npm run test:e2e` (76 tests) pass. From the repository
+root, `cargo test -p fetch-storage processing_history_and_private_recovery_options_survive_reopen`
+(1 test) and `git diff --check` pass. No API/schema migration was needed: History
+now reads the already-persisted processing snapshot alongside download history.
+
+Quick edit UX follow-up (2026-09-24): **PASS** for native source playback and
+selection playback, timeline boundaries, pointer/keyboard crop movement and
+resizing, presets, reset, export review/validation, localization and desktop/mobile
+containment. Source preview remains explicitly unprocessed; saved outputs use the
+existing processing API. Backend/API/persistence changes: **NOT APPLICABLE**.
+Validation from `web/`: `npm run typecheck`, `npm run lint`, `npm test`
+(47 tests), `npm run build`, and `FETCH_E2E_PRODUCTION=1 npm run test:e2e`
+(74 desktop/mobile Chromium tests) all pass. `git diff --check` passes.
+The browser playback/drag test uses a synthetic WebM fixture with Range responses;
+it does not replace the managed-runtime evidence below.
 
 - A1: **PASS** — Three-dot menu opens separate tools without playback; keyboard,
   placeholder and playlist-child integration retain metadata regression behavior.

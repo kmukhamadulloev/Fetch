@@ -4,6 +4,42 @@ Maintained by implementation agents. Record real defects, architecture
 mismatches, and missing mandatory behavior with an ID, status, affected
 subsystem, expected behavior, actual behavior, and notes.
 
+## UX-037 — History lacks operation filtering
+
+Status: RESOLVED
+
+History now provides a compact operation-type dropdown matching Processes,
+with All types, Downloads, Conversions, Edits and Metadata updates. Empty
+matches offer a reset; filtering preserves ordering and live completion updates.
+
+## BUG-036 — History omits conversions, edits and metadata saves
+
+Status: RESOLVED
+
+Affected: History page. Processing operations were persisted in SQLite but the
+page read only download history. History now merges both persisted snapshots,
+shows operation types and terminal states in newest-first order, and follows
+process SSE updates. Active jobs stay in Processes. Loading and failed reads
+no longer appear as an empty history. Existing processing records become visible
+without migration or repeating operations.
+
+## UX-035 — Quick edit is presented as a long settings form
+
+Status: RESOLVED
+
+Affected: Quick edit modal. Editing controls were a long sequence of fields.
+The modal now has a source viewer, focused tool tabs, interactive trim/crop,
+rotation and resize presets, volume controls, an output summary and a separate
+export review. Precise values remain available without dominating the layout.
+
+## BUG-034 — Process-type filters disrupt the page layout
+
+Status: RESOLVED
+
+Affected: Processes header. The added type buttons occupied a separate row.
+The type filter now uses a compact select immediately before the existing
+status filters, reusing the responsive browse-control row.
+
 ## Processing exports — Verified scope and platform limitation
 
 Status: IMPLEMENTED — GOAL.md A1–A10 pass locally; see docs/ACCEPTANCE.md.

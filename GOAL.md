@@ -1,4 +1,4 @@
-# Active Goal
+# Current Goal — Completed
 
 Implement separate **Convert** and **Quick edit** workflows for completed media,
 and evolve **Downloads** into **Processes** so users can follow downloads,
@@ -8,6 +8,22 @@ Status: implementation complete and locally verified (2026-09-24). All seven
 checkpoints and A1–A10 pass; evidence is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
 This goal is unversioned. Native-platform release gates remain separate.
 Release numbering, tagging, pushing, and publication are separate work.
+
+## Current project checkpoint (2026-09-24)
+
+The approved implementation and requested UX follow-ups are complete:
+
+- Interactive Quick edit with native source playback, trim selection, draggable
+  crop, rotation/resize presets, audio controls, reset and export review.
+- Compact Processes type dropdown before the status filters.
+- Unified History for downloads, conversions, edits and metadata saves, with
+  type filtering, live updates, loading/error states and existing-record recovery.
+- English, Russian and Tajik UI, desktop/mobile coverage, and aligned docs.
+
+No implementation step remains open in this goal. Version metadata remains
+0.1.6; these additions are unreleased and unversioned. Native package and
+interactive tray/startup gates remain open in ROADMAP.md. Future scope requires
+a new approved goal; the specification below records the completed scope.
 
 ## Read first
 

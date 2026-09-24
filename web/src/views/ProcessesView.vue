@@ -57,11 +57,15 @@ watch([() => route.query.process, () => rows.value.length], async () => {
   <section>
     <div class="browse-header">
       <div class="browse-heading"><p class="eyebrow">{{ t('processing.title') }}</p><h2 class="mt-2 text-2xl font-semibold">{{ t('processing.title') }}</h2><p class="mt-1 text-sm text-muted">{{ t('processing.subtitle') }}</p></div>
-      <div class="browse-filters" role="group" :aria-label="t('browse.statusFilter')">
-        <button v-for="filter in statusFilters" :key="filter" class="browse-filter" :class="{ active: statusFilter === filter }" type="button" :aria-pressed="statusFilter === filter" @click="statusFilter = filter"><component :is="icons[filter]" :size="15" aria-hidden="true" />{{ t(`browse.${filter}`) }}</button>
+      <div class="browse-controls">
+        <select v-model="typeFilter" class="select process-type-select" :aria-label="t('processing.typeFilter')">
+          <option v-for="type in types" :key="type" :value="type">{{ t(`processing.types.${type}`) }}</option>
+        </select>
+        <div class="browse-filters" role="group" :aria-label="t('browse.statusFilter')">
+          <button v-for="filter in statusFilters" :key="filter" class="browse-filter" :class="{ active: statusFilter === filter }" type="button" :aria-pressed="statusFilter === filter" @click="statusFilter = filter"><component :is="icons[filter]" :size="15" aria-hidden="true" />{{ t(`browse.${filter}`) }}</button>
+        </div>
       </div>
     </div>
-    <div class="mt-4 flex flex-wrap gap-2" role="group" :aria-label="t('processing.typeFilter')"><button v-for="type in types" :key="type" type="button" class="browse-filter" :class="{ active: typeFilter === type }" :aria-pressed="typeFilter === type" @click="typeFilter = type">{{ t(`processing.types.${type}`) }}</button></div>
     <p v-if="downloads.error || processes.error" class="error-panel mt-5">{{ downloads.error || processes.error }}</p>
     <div v-if="visible.length" class="mt-6 space-y-3">
       <div v-for="row in visible" :id="`process-${row.id}`" :key="row.id" tabindex="-1" class="rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4">
